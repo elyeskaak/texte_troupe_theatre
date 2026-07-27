@@ -407,6 +407,36 @@ def nettoyer_enveloppe(texte: str) -> str:
     return resultat.strip()
 
 
+def verifier_page_ocr(texte: str) -> list[str]:
+    """
+    Contrôle mécanique d'une page transcrite.
+
+    Les critères diffèrent de ceux de `verifier_sortie()` : l'OCR doit produire
+    du texte **nu**. Un marqueur de page ou une astérisque y sont donc des
+    anomalies, alors que l'édition les produit légitimement. Il n'y a pas non
+    plus de ratio de longueur à calculer, l'entrée étant une image.
+
+    Returns:
+        Liste d'avertissements, vide si la page paraît saine.
+    """
+    avertissements: list[str] = []
+
+    for motif in config.MOTIFS_INTERDITS_OCR:
+        if re.search(motif, texte, flags=re.MULTILINE):
+            avertissements.append(f"motif indésirable détecté : {motif}")
+
+    # La marque d'illisibilité est la seule astérisque autorisée : on la retire
+    # avant de conclure que le modèle a ajouté de la mise en forme.
+    sans_marque = texte.replace(config.MARQUE_ILLISIBLE, "")
+
+    if "*" in sans_marque:
+        avertissements.append(
+            "mise en forme ajoutée : la transcription doit être en texte nu"
+        )
+
+    return avertissements
+
+
 def verifier_sortie(source: str, sortie: str) -> list[str]:
     """
     Contrôle mécanique d'une sortie de modèle.

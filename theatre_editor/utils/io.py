@@ -186,11 +186,13 @@ def ecrire_texte_atomique(chemin: Path, contenu: str) -> None:
 
     with open(temporaire, "w", encoding="utf-8", newline="\n") as flux:
         flux.write(contenu)
-        # Forcer l'écriture jusqu'au disque avant de publier le fichier :
-        # sur Drive, un os.replace() suivi d'une coupure pourrait sinon
-        # publier un contenu encore en mémoire tampon.
-        flux.flush()
-        os.fsync(flux.fileno())
+
+        if config.ECRITURE_SYNCHRONE:
+            # Forcer l'écriture jusqu'au disque avant de publier le fichier :
+            # sur Drive, un os.replace() suivi d'une coupure pourrait sinon
+            # publier un contenu encore en mémoire tampon.
+            flux.flush()
+            os.fsync(flux.fileno())
 
     os.replace(temporaire, chemin)
 

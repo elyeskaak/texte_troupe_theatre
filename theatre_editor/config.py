@@ -142,6 +142,21 @@ MOTIFS_INTERDITS: tuple[str, ...] = (
     r"(?i)as an ai",
 )
 
+# Motifs interdits en sortie d'OCR. La liste diffère de celle de l'édition :
+# l'OCR doit produire du texte NU, donc les marqueurs de page et la mise en
+# forme y sont des anomalies, alors que l'édition les produit légitimement.
+MOTIFS_INTERDITS_OCR: tuple[str, ...] = (
+    r"<<<PAGE_BREAK>>>",
+    r"\[PAGE\s+\d+\]",
+    r"```",
+    r"(?i)voici la transcription",
+    r"(?i)voici le texte",
+    r"(?i)transcription de la page",
+    r"(?i)je ne peux pas",
+    r"(?i)i can't assist",
+    r"(?i)as an ai",
+)
+
 
 # ============================================================
 # CLASSIFICATION STRUCTURELLE (voir ARCHITECTURE.md §9.1)
@@ -411,6 +426,17 @@ SUFFIXE_DOCX = ".docx"
 
 # Extension des fichiers temporaires de l'écriture atomique.
 EXTENSION_TEMPORAIRE = ".tmp"
+
+# Force l'écriture jusqu'au disque (os.fsync) avant de publier un fichier.
+#
+# À conserver à True en production : sur un Google Drive monté en FUSE, un
+# os.replace() suivi d'une coupure pourrait publier un contenu encore en
+# mémoire tampon. Le coût — quelques millisecondes par fichier — est
+# négligeable face aux secondes que dure l'appel API qui l'a produit.
+#
+# La suite de tests le désactive : elle écrit des centaines de fichiers
+# minuscules, sans appel API pour amortir la synchronisation.
+ECRITURE_SYNCHRONE = True
 
 
 # ============================================================
