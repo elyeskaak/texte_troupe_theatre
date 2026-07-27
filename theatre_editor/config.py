@@ -116,6 +116,61 @@ STOCKER_REPONSES = False
 # RASTERISATION PDF (étape 1)
 # ============================================================
 
+# ------------------------------------------------------------
+# Couche texte déjà présente dans le PDF
+# ------------------------------------------------------------
+# Beaucoup de PDF ont déjà été passés à l'OCR par un scanner ou par Acrobat, et
+# portent donc une couche texte. La réutiliser évite un appel API par page.
+#
+# Mais une couche texte n'est pas forcément bonne : un OCR bas de gamme perd les
+# accents, laisse des ligatures et peut fausser l'ordre de lecture. S'en servir à
+# tort dégraderait tout le livre, puisque l'étape 2 a pour consigne de ne pas
+# réécrire l'auteur. L'erreur coûteuse n'est pas de gaspiller des jetons, c'est
+# d'accepter un mauvais texte.
+#
+#   "auto"     couche texte utilisée seulement si elle passe les contrôles
+#              de qualité ci-dessous (recommandé)
+#   "jamais"   toujours l'OCR Vision, quel que soit le PDF
+#   "toujours" couche texte utilisée dès qu'elle existe, sans contrôle
+#              (déconseillé : aucune garantie sur le résultat)
+STRATEGIE_COUCHE_TEXTE = "auto"
+
+STRATEGIES_COUCHE_TEXTE = ("auto", "jamais", "toujours")
+
+# Nombre minimal de caractères pour qu'une page soit tenue pour porteuse de
+# texte. En dessous, c'est une page image, une page de garde ou une couche
+# résiduelle inexploitable.
+MIN_CARACTERES_COUCHE_TEXTE = 200
+
+# Part minimale de lettres parmi les caractères non blancs. Une couche texte
+# dégradée abonde en symboles parasites.
+MIN_RATIO_ALPHABETIQUE = 0.60
+
+# Part minimale de caractères accentués. Un OCR ancien dépouille souvent le
+# texte de ses accents : sur une page de français, leur absence totale est un
+# signal fiable de mauvaise qualité. Seuil volontairement bas — il ne s'agit
+# que d'écarter le zéro.
+MIN_RATIO_ACCENTS = 0.005
+
+# Part maximale de caractères de remplacement ou de contrôle.
+MAX_RATIO_CARACTERES_SUSPECTS = 0.02
+
+# Ligatures typographiques fréquentes dans une couche texte, et leur
+# équivalent. Substitution déterministe et sans perte.
+LIGATURES: dict[str, str] = {
+    "ﬁ": "fi",
+    "ﬂ": "fl",
+    "ﬀ": "ff",
+    "ﬃ": "ffi",
+    "ﬄ": "ffl",
+    "ﬅ": "st",
+    "ﬆ": "st",
+    "Ĳ": "IJ",
+    "ĳ": "ij",
+    "œ": "œ",  # conservé : lettre du français, non une ligature technique
+}
+
+
 DPI_RASTERISATION = 200
 
 # Plancher de dégradation : si l'image dépasse la taille maximale, on réduit

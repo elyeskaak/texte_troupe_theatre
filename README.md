@@ -84,6 +84,47 @@ Ce n'est pas de la prudence excessive. `OCR.txt` reste brut afin de servir de
 **référence de vérité** à l'étape 3 : si l'OCR corrigeait déjà, il n'existerait
 plus aucun texte permettant de détecter ce que l'édition aurait perdu.
 
+#### PDF déjà OCRisés : ne pas payer deux fois
+
+Beaucoup de PDF portent déjà une couche texte, posée par un scanner ou par
+Acrobat. Le pipeline la **réutilise telle quelle** quand elle est de bonne
+qualité : aucun appel API pour ces pages.
+
+Mais une couche texte n'est pas forcément bonne — accents dépouillés, ligatures,
+ordre de lecture faux. Et les deux erreurs possibles n'ont pas le même prix :
+
+| Erreur | Conséquence |
+|---|---|
+| accepter une mauvaise couche texte | **livre dégradé**, faute définitive |
+| rasteriser une bonne couche texte | quelques jetons dépensés |
+
+Les contrôles sont donc **sévères** et le doute renvoie à la vision. Avant de
+lancer quoi que ce soit, le notebook 01 affiche un diagnostic **entièrement
+gratuit** :
+
+```
+Le Malentendu
+   pages totales           289
+   couche texte utilisable 271
+   à passer à l'OCR         18
+   part sans appel API      94 %
+
+   couches texte écartées, par motif :
+     14  couche texte trop courte
+      4  aucun accent ou presque
+```
+
+Trois stratégies, dans `config.py` :
+
+```python
+STRATEGIE_COUCHE_TEXTE = "auto"      # contrôles appliqués — recommandé
+                       # "jamais"    # toujours l'OCR Vision
+                       # "toujours"  # confiance aveugle, PDF de provenance sûre
+```
+
+Le sidecar de chaque page porte `source: "vision"` ou `source: "couche_texte"` :
+la provenance reste vérifiable après coup.
+
 ### Étape 2 — Édition OCR
 
 Deux passes. D'abord l'édition par blocs de 8 pages : correction des erreurs de

@@ -23,6 +23,15 @@ pages parce que la page 96 est illisible serait absurde.
 **Le modèle ne corrige rien.** C'est le prompt qui l'impose, et c'est la
 condition de possibilité de l'étape 3 : `OCR.txt` est la référence de vérité qui
 permettra de détecter ce que l'édition aurait perdu.
+
+**Une couche texte déjà présente est réutilisée si elle est bonne.** Beaucoup de
+PDF ont déjà été passés à l'OCR par un scanner ou par Acrobat : les repasser au
+modèle vision serait payer deux fois. Mais une couche texte n'est pas forcément
+exploitable — accents dépouillés, ligatures, ordre de lecture faux — et s'en
+servir à tort dégraderait tout le livre. Les contrôles de
+`blocks.evaluer_couche_texte()` sont donc sévères, et le doute renvoie à l'OCR
+Vision. `diagnostiquer_couches_texte()` permet de savoir, gratuitement et avant
+de lancer, combien de pages seront réellement facturées.
 """
 
 from __future__ import annotations
@@ -44,6 +53,13 @@ PAGE_SAUTEE = "sautee"
 PAGE_SUSPECTE = "suspecte"
 PAGE_ECHOUEE = "echouee"
 
+# Page dont la couche texte du PDF a été réutilisée : aucun appel API.
+PAGE_COUCHE_TEXTE = "couche_texte"
+
+# Origine du texte d'une page, consignée dans son sidecar.
+SOURCE_VISION = "vision"
+SOURCE_COUCHE_TEXTE = "couche_texte"
+
 
 # ============================================================
 # 1. RÉSULTATS
@@ -60,6 +76,7 @@ class ResultatLivre:
     pages_traitees: int = 0
     pages_sautees: int = 0
     pages_suspectes: int = 0
+    pages_couche_texte: int = 0
     pages_echouees: int = 0
     duree_secondes: float = 0.0
     erreur: str | None = None
@@ -76,6 +93,7 @@ class ResultatLivre:
             "statut": self.statut,
             "pages_totales": self.pages_totales,
             "pages_traitees": self.pages_traitees,
+            "pages_couche_texte": self.pages_couche_texte,
             "pages_sautees": self.pages_sautees,
             "pages_suspectes": self.pages_suspectes,
             "pages_echouees": self.pages_echouees,
@@ -139,6 +157,75 @@ def ouvrir_pdf(chemin: Path):
 def rasteriser_page(page: Any, dpi: int) -> bytes:
     """Rend une page en PNG à la résolution demandée."""
     return page.get_pixmap(dpi=dpi).tobytes("png")
+
+
+# ============================================================
+# 2 bis. COUCHE TEXTE DÉJÀ PRÉSENTE DANS LE PDF
+# ============================================================
+
+
+def extraire_couche_texte(page: Any) -> str:
+    """
+    Extrait la couche texte d'une page, si elle en possède une.
+
+    `sort=True` réordonne les blocs selon leur position sur la page. C'est
+    important au théâtre : les noms de personnages sont souvent centrés ou
+    décalés, et l'ordre interne du PDF ne suit pas toujours l'ordre de lecture.
+
+    Returns:
+        Le texte normalisé, ou une chaîne vide si la page n'a pas de couche
+        texte exploitable.
+    """
+    try:
+        brut = page.get_text("text", sort=True)
+    except TypeError:
+        # Anciennes versions de PyMuPDF, sans le paramètre `sort`.
+        brut = page.get_text("text")
+    except Exception:
+        return ""
+
+    return blocks.normaliser_couche_texte(brut or "")
+
+
+def evaluer_page_couche_texte(page: Any) -> tuple[str, list[str]]:
+    """
+    Extrait et juge la couche texte d'une page.
+
+    Returns:
+        `(texte, raisons de refus)`. Une liste de raisons vide signifie que la
+        couche texte peut être réutilisée telle quelle, sans appel API.
+    """
+    texte = extraire_couche_texte(page)
+
+    return texte, blocks.evaluer_couche_texte(texte)
+
+
+def couche_texte_retenue(texte: str, raisons: list[str]) -> bool:
+    """
+    Applique la stratégie configurée à une couche texte évaluée.
+
+    Trois comportements, selon `config.STRATEGIE_COUCHE_TEXTE` :
+    « jamais » ignore la couche texte, « toujours » l'accepte dès qu'elle
+    existe, « auto » ne l'accepte que si elle passe les contrôles.
+    """
+    strategie = config.STRATEGIE_COUCHE_TEXTE
+
+    if strategie not in config.STRATEGIES_COUCHE_TEXTE:
+        raise ValueError(
+            f"STRATEGIE_COUCHE_TEXTE invalide : « {strategie} ». "
+            f"Valeurs admises : {', '.join(config.STRATEGIES_COUCHE_TEXTE)}."
+        )
+
+    if strategie == "jamais":
+        return False
+
+    if not texte.strip():
+        return False
+
+    if strategie == "toujours":
+        return True
+
+    return not raisons
 
 
 def reduire_dpi(dpi: int) -> int:
@@ -247,6 +334,26 @@ def traiter_page(
     if io.unite_terminee(chemins.page_json(numero)):
         return PAGE_SAUTEE
 
+    # Réutilisation d'une couche texte déjà présente : le seul chemin qui ne
+    # consomme aucun jeton. Tenté avant toute rasterisation.
+    texte_couche, raisons = evaluer_page_couche_texte(page)
+
+    if couche_texte_retenue(texte_couche, raisons):
+        _enregistrer_couche_texte(
+            chemins=chemins,
+            numero=numero,
+            texte=texte_couche,
+            journal=journal,
+            nom_livre=nom_livre,
+        )
+        journalisation.detail(f"{libelle} : couche texte réutilisée, aucun appel")
+        return PAGE_COUCHE_TEXTE
+
+    if texte_couche.strip() and raisons:
+        journalisation.detail(
+            f"{libelle} : couche texte écartée ({raisons[0]}), OCR Vision"
+        )
+
     image, dpi, avertissements = rasteriser_avec_degradation(page, libelle)
 
     try:
@@ -292,6 +399,7 @@ def traiter_page(
             "unite": "page",
             "numero": numero,
             "date_traitement": journalisation.horodatage(),
+            "source": SOURCE_VISION,
             "dpi": dpi,
             "page_vide": page_vide,
             # L'entrée est une image : cette longueur est en octets, non en
@@ -316,6 +424,53 @@ def traiter_page(
         return PAGE_SUSPECTE
 
     return PAGE_TERMINEE
+
+
+def _enregistrer_couche_texte(
+    *,
+    chemins: io.CheminsLivre,
+    numero: int,
+    texte: str,
+    journal: journalisation.Journal,
+    nom_livre: str,
+) -> None:
+    """
+    Enregistre une page issue de la couche texte du PDF.
+
+    Le sidecar porte `source: "couche_texte"`, ce qui rend la provenance de
+    chaque page vérifiable après coup — utile si le résultat final surprend, et
+    indispensable pour savoir ce qui a réellement été payé.
+    """
+    io.ecrire_texte_atomique(chemins.page_txt(numero), texte)
+    io.ecrire_sidecar(
+        chemins.page_json(numero),
+        {
+            "statut": config.STATUT_TERMINE,
+            "unite": "page",
+            "numero": numero,
+            "source": SOURCE_COUCHE_TEXTE,
+            "modele": None,
+            "response_id": None,
+            "date_traitement": journalisation.horodatage(),
+            "duree_secondes": 0.0,
+            "longueur_entree": 0,
+            "longueur_sortie": len(texte),
+            "avertissements": [],
+        },
+    )
+
+    journal.enregistrer_appel(
+        livre=nom_livre,
+        unite="page",
+        numero=numero,
+        source=SOURCE_COUCHE_TEXTE,
+        modele=None,
+        longueur_sortie=len(texte),
+        # Aucun jeton consommé : c'est tout l'intérêt de ce chemin.
+        tokens_entree=0,
+        tokens_sortie=0,
+        avertissements=[],
+    )
 
 
 def _enregistrer_echec(
@@ -465,6 +620,7 @@ def _transcrire_pages(
             PAGE_SAUTEE: 0,
             PAGE_SUSPECTE: 0,
             PAGE_ECHOUEE: 0,
+            PAGE_COUCHE_TEXTE: 0,
         }
 
         for numero in range(1, nombre_pages + 1):
@@ -482,16 +638,21 @@ def _transcrire_pages(
             if statut == PAGE_ECHOUEE:
                 resultat.numeros_echoues.append(numero)
 
-            if statut != PAGE_SAUTEE:
+            if statut not in (PAGE_SAUTEE, PAGE_COUCHE_TEXTE):
                 # Le journal est sauvegardé à chaque page réellement traitée :
                 # une coupure ne doit pas emporter la trace des appels payés.
                 journal.sauvegarder()
                 api.patienter()
+            elif statut == PAGE_COUCHE_TEXTE:
+                # Pas d'appel API, donc pas de pause à respecter — mais le
+                # journal doit tout de même conserver la trace de la page.
+                journal.sauvegarder()
 
             if numero % 10 == 0 or numero == nombre_pages:
                 journalisation.progression(numero, nombre_pages, "pages")
 
         resultat.pages_traitees = compteurs[PAGE_TERMINEE]
+        resultat.pages_couche_texte = compteurs[PAGE_COUCHE_TEXTE]
         resultat.pages_sautees = compteurs[PAGE_SAUTEE]
         resultat.pages_suspectes = compteurs[PAGE_SUSPECTE]
         resultat.pages_echouees = compteurs[PAGE_ECHOUEE]
@@ -523,6 +684,149 @@ def _resumer(resultat: ResultatLivre, chemins: io.CheminsLivre) -> None:
         journalisation.echec(
             f"pages en échec : {resultat.numeros_echoues}"
         )
+
+
+# ============================================================
+# 5 bis. DIAGNOSTIC DES COUCHES TEXTE
+# ============================================================
+
+
+@dataclass
+class DiagnosticLivre:
+    """Ce qu'un PDF coûtera, avant d'avoir dépensé le moindre jeton."""
+
+    nom: str
+    pages_totales: int = 0
+    pages_exploitables: int = 0
+    pages_a_ocriser: int = 0
+    pages_deja_faites: int = 0
+    raisons: dict[str, int] = field(default_factory=dict)
+    erreur: str | None = None
+
+    @property
+    def part_gratuite(self) -> float:
+        """Part des pages qui n'exigeront aucun appel API."""
+        if not self.pages_totales:
+            return 0.0
+
+        return (self.pages_exploitables + self.pages_deja_faites) / self.pages_totales
+
+
+def diagnostiquer_couches_texte(dossier: Path | None = None) -> list[DiagnosticLivre]:
+    """
+    Recense, sans aucun appel API, ce que chaque PDF coûtera réellement.
+
+    Répond à une question concrète : beaucoup de PDF ont déjà été passés à l'OCR
+    par un scanner ou par Acrobat, et il serait absurde de repayer leur
+    transcription. Ce diagnostic est **entièrement local et gratuit** — il
+    n'ouvre les PDF que pour en lire la couche texte.
+
+    Il indique aussi, quand une couche texte est écartée, **pourquoi** elle l'a
+    été : accents dépouillés, trop peu de lettres, page trop courte. C'est ce qui
+    permet de juger s'il faut relâcher un seuil ou accepter de payer.
+
+    Args:
+        dossier: dossier à parcourir. `config.DOSSIER_DRIVE` par défaut.
+    """
+    base = dossier if dossier is not None else config.DOSSIER_DRIVE
+
+    journalisation.titre("Diagnostic des couches texte (aucun appel API)")
+
+    diagnostics: list[DiagnosticLivre] = []
+
+    for chemin in io.lister_pdf(base):
+        diagnostics.append(_diagnostiquer_pdf(chemin))
+
+    _afficher_diagnostic(diagnostics)
+
+    return diagnostics
+
+
+def _diagnostiquer_pdf(chemin_pdf: Path) -> DiagnosticLivre:
+    """Examine la couche texte de chaque page d'un PDF."""
+    nom_livre = io.nom_livre_depuis_pdf(chemin_pdf)
+    chemins = io.resoudre_chemins(nom_livre, chemin_pdf.parent)
+    diagnostic = DiagnosticLivre(nom=nom_livre)
+
+    try:
+        document = ouvrir_pdf(chemin_pdf)
+    except RuntimeError as erreur:
+        diagnostic.erreur = str(erreur)
+        return diagnostic
+
+    try:
+        diagnostic.pages_totales = document.page_count
+
+        for numero in range(1, document.page_count + 1):
+            if io.unite_terminee(chemins.page_json(numero)):
+                diagnostic.pages_deja_faites += 1
+                continue
+
+            texte, raisons = evaluer_page_couche_texte(document.load_page(numero - 1))
+
+            if couche_texte_retenue(texte, raisons):
+                diagnostic.pages_exploitables += 1
+                continue
+
+            diagnostic.pages_a_ocriser += 1
+
+            # On ne retient que la première raison : c'est la plus déterminante,
+            # et un décompte par raison reste lisible.
+            motif = raisons[0].split(" :")[0] if raisons else "couche texte absente"
+            diagnostic.raisons[motif] = diagnostic.raisons.get(motif, 0) + 1
+
+    finally:
+        document.close()
+
+    return diagnostic
+
+
+def _afficher_diagnostic(diagnostics: list[DiagnosticLivre]) -> None:
+    """Présente le diagnostic, livre par livre."""
+    if not diagnostics:
+        journalisation.alerte("aucun PDF dans ce dossier")
+        return
+
+    for diagnostic in diagnostics:
+        journalisation.section(diagnostic.nom)
+
+        if diagnostic.erreur:
+            journalisation.echec(diagnostic.erreur)
+            continue
+
+        journalisation.info(f"   pages totales           {diagnostic.pages_totales}")
+        journalisation.info(
+            f"   couche texte utilisable {diagnostic.pages_exploitables}"
+        )
+        journalisation.info(f"   déjà transcrites        {diagnostic.pages_deja_faites}")
+        journalisation.info(f"   à passer à l'OCR        {diagnostic.pages_a_ocriser}")
+        journalisation.info(
+            f"   part sans appel API     {diagnostic.part_gratuite:.0%}"
+        )
+
+        if diagnostic.raisons:
+            journalisation.info("")
+            journalisation.info("   couches texte écartées, par motif :")
+            for motif, nombre in sorted(
+                diagnostic.raisons.items(), key=lambda item: -item[1]
+            ):
+                journalisation.info(f"      {nombre:>4}  {motif}")
+
+    total_pages = sum(d.pages_totales for d in diagnostics)
+    total_gratuites = sum(
+        d.pages_exploitables + d.pages_deja_faites for d in diagnostics
+    )
+
+    journalisation.recapitulatif(
+        {
+            "Livres examinés": len(diagnostics),
+            "Pages totales": total_pages,
+            "Sans appel API": total_gratuites,
+            "À facturer": total_pages - total_gratuites,
+            "Économie": f"{(100 * total_gratuites / total_pages) if total_pages else 0:.0f} %",
+            "Stratégie": config.STRATEGIE_COUCHE_TEXTE,
+        }
+    )
 
 
 # ============================================================
@@ -579,7 +883,10 @@ def _afficher_recapitulatif(
     journalisation.recapitulatif(
         {
             "Livres traités": len(resultats),
-            "Pages transcrites": sum(r.pages_traitees for r in resultats),
+            "Pages transcrites (API)": sum(r.pages_traitees for r in resultats),
+            "Pages sans appel API": sum(
+                r.pages_couche_texte for r in resultats
+            ),
             "Pages déjà faites": sum(r.pages_sautees for r in resultats),
             "Pages suspectes": sum(r.pages_suspectes for r in resultats),
             "Pages en échec": sum(r.pages_echouees for r in resultats),

@@ -944,7 +944,7 @@ image gigantesque, dépassement de la taille de requête. Trois protections :
 | # | Décision | Alternatives écartées | Raison |
 |---|---|---|---|
 | **D1** | **PyMuPDF** (`pymupdf`) pour rasteriser | `pdf2image` | `pdf2image` exige le binaire système *poppler*, à installer via `apt` dans Colab : lent et fragile. PyMuPDF est un simple `pip install`, très rapide, et donne un contrôle fin du DPI. |
-| **D2** | Rasteriser **toutes** les pages, sans tenter d'extraire une couche texte | extraction `pypdf`/`pdfplumber` si couche texte présente | Sur un scan il n'y a pas de couche texte. Sur un PDF hybride, mélanger deux sources produirait une qualité inégale et non reproductible. Vous demandez explicitement l'OCR Vision. Un chemin unique est un chemin testable. |
+| **D2** | ~~Rasteriser toutes les pages sans jamais lire la couche texte~~ → **révisée**, voir §10.1 | rasterisation systématique | La prémisse d'origine — « sur un scan il n'y a pas de couche texte » — est fausse pour les PDF déjà passés à l'OCR par un scanner ou par Acrobat. La couche texte est désormais réutilisée **si elle passe des contrôles de qualité sévères**. |
 | **D3** | **Responses API** exclusivement, `client.responses.create()` | Chat Completions | Exigence de votre cahier des charges. Bénéfice réel : `output_text` unifié, `instructions` séparé de `input`, et le même code sert le texte et la vision. |
 | **D4** | Une unité de reprise = **une page** à l'étape 1 | un seul appel par PDF, ou par lot de pages | Une page = un appel = une perte maximale d'un appel. C'est aussi la granularité qui rend l'OCR reprenable au sens strict que vous demandez. |
 | **D5** | Un **cache page par page** puis assemblage, plutôt qu'un `OCR.txt` en ajout | append direct dans `OCR.txt` | En mode append, une coupure laisse un fichier dont on ne peut pas savoir si la dernière page est complète. Impossible de reprendre sûrement. Le cache + sidecar lève l'ambiguïté. C'est un ajout au format demandé, justifié en §14. |
@@ -957,6 +957,54 @@ image gigantesque, dépassement de la taille de requête. Trois protections :
 | **D12** | Journaux JSON réécrits atomiquement à chaque ajout | JSONL en append | Vous demandez des `.json`. À l'échelle d'un livre (quelques centaines d'entrées), réécrire un JSON complet coûte quelques millisecondes. Le fichier reste un JSON valide en permanence, y compris après interruption. |
 | **D13** | `temperature` **optionnelle** (`None` ⇒ non transmise) | toujours envoyer `temperature=0` | `temperature=0` est idéal pour la fidélité, mais certains modèles récents rejettent le paramètre. Le rendre omissible évite un plantage à chaque changement de modèle. |
 | **D14** | Le nom du livre dérive du nom du PDF, chemins centralisés | chemins construits sur place | Une seule fonction `resoudre_chemins()` : renommer une convention de fichier devient un changement d'un seul endroit. |
+
+### 10.1 Révision de D2 — réutiliser une couche texte existante
+
+**Ce qui a changé.** D2 écartait toute lecture de la couche texte d'un PDF, au
+motif que « sur un scan il n'y a pas de couche texte ». Cette prémisse est fausse
+pour une partie réelle du corpus : beaucoup de PDF ont déjà été passés à l'OCR
+par un scanner ou par Acrobat. Les repasser au modèle vision, c'est **payer deux
+fois la même transcription**.
+
+**Ce qui n'a pas changé.** La seconde moitié du raisonnement de D2 reste entière,
+et c'est elle qui gouverne l'implémentation : une couche texte **n'est pas
+forcément exploitable**. Un OCR ancien ou bas de gamme produit des accents
+dépouillés, des ligatures non résolues, un ordre de lecture faux. Réutiliser une
+mauvaise couche texte dégraderait tout le livre, puisque l'étape 2 a pour
+consigne de ne pas réécrire l'auteur : une faute d'extraction deviendrait
+définitive.
+
+**L'asymétrie des risques dicte la conception.**
+
+| Erreur | Conséquence |
+|---|---|
+| accepter à tort une mauvaise couche texte | livre dégradé, faute définitive |
+| rasteriser à tort une bonne couche texte | quelques jetons dépensés |
+
+Les contrôles de `blocks.evaluer_couche_texte()` sont donc **sévères**, et le
+doute renvoie à l'OCR Vision : volume minimal par page, part de lettres, part de
+caractères accentués — l'absence totale d'accents sur une page de français étant
+le signal le plus fiable d'un OCR qui a dépouillé le texte — et part de
+caractères de remplacement.
+
+Trois compléments rendent la chose maîtrisable plutôt que magique :
+
+- **`STRATEGIE_COUCHE_TEXTE`** vaut `"auto"` (contrôles appliqués), `"jamais"`
+  (rasterisation systématique, comportement d'avant cette révision) ou
+  `"toujours"` (confiance aveugle, à réserver aux PDF dont on connaît la
+  provenance) ;
+- **`ocr.diagnostiquer_couches_texte()`** recense, **sans aucun appel API**,
+  combien de pages seront réellement facturées et **pourquoi** les autres sont
+  écartées. C'est la réponse directe à « comment ne pas gaspiller de jetons » :
+  on le sait avant de lancer ;
+- le **sidecar de chaque page** porte `source: "vision"` ou
+  `source: "couche_texte"`. La provenance reste donc vérifiable après coup, ce
+  qui compte si le résultat final surprend.
+
+**Un livre hybride est un cas normal**, non une anomalie : les pages à couche
+texte exploitable la réutilisent, les autres passent à la vision. L'homogénéité
+de qualité que D2 cherchait à préserver est garantie non par l'unicité du chemin,
+mais par la sévérité du contrôle à l'entrée du chemin gratuit.
 
 ---
 

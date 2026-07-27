@@ -421,6 +421,105 @@ def nettoyer_enveloppe(texte: str) -> str:
     return resultat.strip()
 
 
+# Caractères trahissant un encodage perdu ou une extraction défaillante.
+CARACTERES_SUSPECTS = frozenset("�\x00\x01\x02\x03\x04\x05\x06\x07\x0b\x0c")
+
+# Voyelles accentuées et cédille du français.
+LETTRES_ACCENTUEES = frozenset("àâäéèêëîïôöùûüÿçÀÂÄÉÈÊËÎÏÔÖÙÛÜŸÇ")
+
+MOTIF_LIGNES_VIDES_EXCESSIVES = re.compile(r"\n{3,}")
+
+
+def normaliser_couche_texte(texte: str) -> str:
+    """
+    Nettoie une couche texte extraite d'un PDF.
+
+    Trois corrections déterministes et sans perte :
+
+    - les **ligatures** typographiques (`ﬁ`, `ﬂ`, `ﬀ`…) sont défaites. Elles sont
+      fréquentes dans une couche texte et casseraient la recherche de mots comme
+      la comparaison de l'étape 3 ;
+    - les espaces en fin de ligne sont retirés ;
+    - les successions de trois lignes vides ou plus sont ramenées à deux, une
+      extraction produisant souvent des blancs surnuméraires.
+
+    Aucun caractère de l'auteur n'est modifié : on ne normalise pas en NFKC, qui
+    transformerait par exemple les points de suspension « … » en trois points et
+    altérerait donc la ponctuation.
+    """
+    resultat = texte
+
+    for ligature, equivalent in config.LIGATURES.items():
+        if ligature != equivalent:
+            resultat = resultat.replace(ligature, equivalent)
+
+    resultat = "\n".join(ligne.rstrip() for ligne in resultat.split("\n"))
+    resultat = MOTIF_LIGNES_VIDES_EXCESSIVES.sub("\n\n", resultat)
+
+    return resultat.strip()
+
+
+def evaluer_couche_texte(texte: str) -> list[str]:
+    """
+    Juge si une couche texte extraite d'un PDF est exploitable.
+
+    Le sens de la prudence est déterminant, et il n'est pas symétrique.
+    Réutiliser à tort une mauvaise couche texte dégrade tout le livre — l'étape 2
+    ayant pour consigne de ne pas réécrire l'auteur, une faute d'extraction
+    devient définitive. Rasteriser à tort une bonne couche texte ne coûte que des
+    jetons. Ces contrôles sont donc **sévères** : le doute renvoie à l'OCR Vision.
+
+    Returns:
+        Les raisons de refuser la couche texte. Liste vide : elle est utilisable.
+    """
+    if not texte or not texte.strip():
+        return ["aucune couche texte"]
+
+    nu = texte.strip()
+
+    if len(nu) < config.MIN_CARACTERES_COUCHE_TEXTE:
+        return [
+            f"couche texte trop courte : {len(nu)} caractères "
+            f"(minimum {config.MIN_CARACTERES_COUCHE_TEXTE})"
+        ]
+
+    raisons: list[str] = []
+
+    non_blancs = [caractere for caractere in nu if not caractere.isspace()]
+
+    if not non_blancs:
+        return ["couche texte sans caractère exploitable"]
+
+    lettres = [caractere for caractere in non_blancs if caractere.isalpha()]
+    ratio_alphabetique = len(lettres) / len(non_blancs)
+
+    if ratio_alphabetique < config.MIN_RATIO_ALPHABETIQUE:
+        raisons.append(
+            f"trop peu de lettres : {ratio_alphabetique:.0%} "
+            f"(minimum {config.MIN_RATIO_ALPHABETIQUE:.0%})"
+        )
+
+    suspects = sum(1 for caractere in nu if caractere in CARACTERES_SUSPECTS)
+    ratio_suspects = suspects / len(nu)
+
+    if ratio_suspects > config.MAX_RATIO_CARACTERES_SUSPECTS:
+        raisons.append(
+            f"caractères de remplacement ou de contrôle : {ratio_suspects:.1%}"
+        )
+
+    if lettres:
+        accents = sum(1 for caractere in lettres if caractere in LETTRES_ACCENTUEES)
+        ratio_accents = accents / len(lettres)
+
+        if ratio_accents < config.MIN_RATIO_ACCENTS:
+            raisons.append(
+                "aucun accent ou presque : l'OCR d'origine a probablement "
+                f"dépouillé le texte ({ratio_accents:.2%})"
+            )
+
+    return raisons
+
+
 def verifier_page_ocr(texte: str) -> list[str]:
     """
     Contrôle mécanique d'une page transcrite.

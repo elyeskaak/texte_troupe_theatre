@@ -20,7 +20,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from theatre_editor import config, ocr
-from theatre_editor.utils import api, io
+from theatre_editor.utils import api, blocks, io
 
 
 # ============================================================
@@ -36,27 +36,60 @@ class PixmapFactice:
         return self._octets
 
 
+# Couche texte de bonne qualité : français accentué, longueur suffisante.
+COUCHE_TEXTE_BONNE = (
+    "ACTE PREMIER\n\n"
+    "Une auberge à la tombée du soir. La pièce est basse, mal éclairée.\n\n"
+    "JAN\n"
+    "Nous y sommes enfin arrivés, après tant d'années d'absence. "
+    "Rien n'a changé, et pourtant je ne reconnais rien.\n\n"
+    "MARIA\n"
+    "Je t'attendais depuis une heure déjà. Tu m'avais promis d'être là "
+    "avant la nuit tombée, et voilà que tu arrives à cette heure.\n\n"
+    "JAN\n"
+    "Le voyage était long. Nous avons dû nous arrêter à deux reprises.\n"
+)
+
+
 class PageFactice:
     """
     Page dont le poids de l'image dépend du DPI.
 
     `poids_par_dpi` permet de simuler une page trop lourde à pleine résolution,
-    afin d'éprouver la boucle de dégradation.
+    afin d'éprouver la boucle de dégradation. `couche_texte` simule un PDF déjà
+    passé à l'OCR ; la chaîne vide simule un scan pur.
     """
 
-    def __init__(self, poids_par_dpi: int = 1000):
+    def __init__(self, poids_par_dpi: int = 1000, couche_texte: str = ""):
         self.poids_par_dpi = poids_par_dpi
+        self.couche_texte = couche_texte
         self.dpi_demandes: list[int] = []
+        self.extractions = 0
 
     def get_pixmap(self, dpi: int) -> PixmapFactice:
         self.dpi_demandes.append(dpi)
         return PixmapFactice(b"\x89PNG" + b"x" * (dpi * self.poids_par_dpi))
 
+    def get_text(self, _format: str = "text", sort: bool = False) -> str:
+        self.extractions += 1
+        return self.couche_texte
+
 
 class DocumentFactice:
-    def __init__(self, nombre_pages: int, poids_par_dpi: int = 1000):
+    def __init__(
+        self,
+        nombre_pages: int,
+        poids_par_dpi: int = 1000,
+        couches_texte: list[str] | None = None,
+    ):
         self.page_count = nombre_pages
-        self.pages = [PageFactice(poids_par_dpi) for _ in range(nombre_pages)]
+        self.pages = [
+            PageFactice(
+                poids_par_dpi,
+                couches_texte[i] if couches_texte else "",
+            )
+            for i in range(nombre_pages)
+        ]
         self.ferme = False
 
     def load_page(self, index: int) -> PageFactice:
@@ -228,8 +261,6 @@ class TestAssemblage(BaseOcr):
         Contrat entre les étapes : ce que l'étape 1 écrit, l'étape 2 doit savoir
         redécouper, et retrouver exactement le même nombre de pages.
         """
-        from theatre_editor.utils import blocks
-
         self.executer(["Page une.", "Page deux.", "Page trois."])
 
         pages = blocks.decouper_en_pages(io.lire_texte(self.chemins.ocr))
@@ -531,6 +562,320 @@ class TestParametresAppel(BaseOcr):
         instructions = appel.call_args.kwargs["instructions"]
 
         self.assertIn("Tu transcris. Tu ne corriges pas.", instructions)
+
+
+# ============================================================
+# 8. COUCHE TEXTE DÉJÀ PRÉSENTE DANS LE PDF
+# ============================================================
+
+
+class TestEvaluationCoucheTexte(unittest.TestCase):
+    """
+    Le jugement porté sur une couche texte, testé sans PDF.
+
+    Le sens de la prudence est l'enjeu : accepter une mauvaise couche texte
+    dégrade tout le livre, puisque l'étape 2 ne réécrit pas l'auteur. Rasteriser
+    à tort ne coûte que des jetons. Les contrôles doivent donc pencher vers le
+    refus.
+    """
+
+    def test_couche_texte_de_qualite_acceptee(self):
+        self.assertEqual(blocks.evaluer_couche_texte(COUCHE_TEXTE_BONNE), [])
+
+    def test_absence_de_couche_texte(self):
+        for vide in ("", "   \n\n  "):
+            with self.subTest(valeur=repr(vide)):
+                self.assertEqual(
+                    blocks.evaluer_couche_texte(vide), ["aucune couche texte"]
+                )
+
+    def test_couche_texte_trop_courte_refusee(self):
+        raisons = blocks.evaluer_couche_texte("JAN\nBonjour.")
+
+        self.assertTrue(any("trop courte" in r for r in raisons))
+
+    def test_accents_depouilles_refuses(self):
+        """
+        Signal le plus fiable d'un OCR ancien : sur une page de français, une
+        absence totale d'accents ne s'explique pas autrement.
+        """
+        raisons = blocks.evaluer_couche_texte(
+            blocks.sans_accents(COUCHE_TEXTE_BONNE)
+        )
+
+        self.assertTrue(any("accent" in r for r in raisons))
+
+    def test_caracteres_de_remplacement_refuses(self):
+        abime = COUCHE_TEXTE_BONNE.replace("e", "�")
+
+        self.assertTrue(blocks.evaluer_couche_texte(abime))
+
+    def test_trop_peu_de_lettres_refuse(self):
+        raisons = blocks.evaluer_couche_texte("### $$$ %%% &&& " * 40)
+
+        self.assertTrue(any("lettres" in r for r in raisons))
+
+    def test_seuils_lus_dans_la_configuration(self):
+        court = "Jérôme entre. " * 5
+
+        with mock.patch.object(config, "MIN_CARACTERES_COUCHE_TEXTE", 10_000):
+            self.assertTrue(blocks.evaluer_couche_texte(court))
+
+        with mock.patch.object(config, "MIN_CARACTERES_COUCHE_TEXTE", 10):
+            self.assertEqual(blocks.evaluer_couche_texte(court), [])
+
+
+class TestNormalisationCoucheTexte(unittest.TestCase):
+    def test_ligatures_defaites(self):
+        """Fréquentes dans une couche texte, elles casseraient les comparaisons."""
+        resultat = blocks.normaliser_couche_texte("La ﬁn de l'aﬀaire, enﬂammé.")
+
+        self.assertEqual(resultat, "La fin de l'affaire, enflammé.")
+
+    def test_espaces_de_fin_de_ligne_retires(self):
+        self.assertEqual(
+            blocks.normaliser_couche_texte("JAN   \nBonjour.  "), "JAN\nBonjour."
+        )
+
+    def test_lignes_vides_excessives_ramenees_a_deux(self):
+        self.assertEqual(
+            blocks.normaliser_couche_texte("A\n\n\n\n\nB"), "A\n\nB"
+        )
+
+    def test_ponctuation_de_l_auteur_preservee(self):
+        """
+        On ne normalise pas en NFKC : cela transformerait les points de
+        suspension en trois points et altérerait la ponctuation.
+        """
+        texte = "Je ne sais pas… peut-être « oui » ?"
+
+        self.assertEqual(blocks.normaliser_couche_texte(texte), texte)
+
+    def test_accents_preserves(self):
+        texte = "Où êtes-vous allé, çà et là ?"
+
+        self.assertEqual(blocks.normaliser_couche_texte(texte), texte)
+
+
+class TestStrategieCoucheTexte(unittest.TestCase):
+    def test_auto_accepte_une_bonne_couche(self):
+        with mock.patch.object(config, "STRATEGIE_COUCHE_TEXTE", "auto"):
+            self.assertTrue(ocr.couche_texte_retenue(COUCHE_TEXTE_BONNE, []))
+
+    def test_auto_refuse_une_couche_douteuse(self):
+        with mock.patch.object(config, "STRATEGIE_COUCHE_TEXTE", "auto"):
+            self.assertFalse(
+                ocr.couche_texte_retenue(COUCHE_TEXTE_BONNE, ["accents dépouillés"])
+            )
+
+    def test_jamais_ignore_meme_une_bonne_couche(self):
+        with mock.patch.object(config, "STRATEGIE_COUCHE_TEXTE", "jamais"):
+            self.assertFalse(ocr.couche_texte_retenue(COUCHE_TEXTE_BONNE, []))
+
+    def test_toujours_accepte_malgre_les_reserves(self):
+        with mock.patch.object(config, "STRATEGIE_COUCHE_TEXTE", "toujours"):
+            self.assertTrue(
+                ocr.couche_texte_retenue(COUCHE_TEXTE_BONNE, ["accents dépouillés"])
+            )
+
+    def test_toujours_ne_peut_rien_inventer(self):
+        """Même en mode « toujours », une page sans texte passe par la vision."""
+        with mock.patch.object(config, "STRATEGIE_COUCHE_TEXTE", "toujours"):
+            self.assertFalse(ocr.couche_texte_retenue("", ["aucune couche texte"]))
+
+    def test_strategie_invalide_leve_une_erreur_explicite(self):
+        with mock.patch.object(config, "STRATEGIE_COUCHE_TEXTE", "peut-etre"):
+            with self.assertRaises(ValueError) as contexte:
+                ocr.couche_texte_retenue(COUCHE_TEXTE_BONNE, [])
+
+        self.assertIn("STRATEGIE_COUCHE_TEXTE", str(contexte.exception))
+
+
+class TestReutilisationCoucheTexte(BaseOcr):
+    """L'intégration : une couche texte exploitable ne coûte aucun appel."""
+
+    NOMBRE_PAGES = 3
+
+    def _document_avec_couches(self, couches: list[str]) -> None:
+        self.document = DocumentFactice(self.NOMBRE_PAGES, couches_texte=couches)
+        mock.patch.object(ocr, "ouvrir_pdf", return_value=self.document).start()
+
+    def test_livre_entierement_deja_ocrise_ne_coute_rien(self):
+        """Le cas qui motive la fonctionnalité : ne pas payer deux fois."""
+        self._document_avec_couches([COUCHE_TEXTE_BONNE] * self.NOMBRE_PAGES)
+
+        resultats, appel = self.executer()
+
+        self.assertEqual(appel.call_count, 0)
+        self.assertEqual(resultats[0].pages_couche_texte, self.NOMBRE_PAGES)
+        self.assertEqual(resultats[0].statut, config.STATUT_TERMINE)
+        self.assertTrue(self.chemins.ocr.exists())
+
+    def test_texte_de_la_couche_ecrit_tel_quel(self):
+        self._document_avec_couches([COUCHE_TEXTE_BONNE] * self.NOMBRE_PAGES)
+
+        self.executer()
+
+        self.assertIn("Nous y sommes enfin arrivés", io.lire_texte(self.chemins.ocr))
+
+    def test_provenance_consignee_dans_le_sidecar(self):
+        """
+        Indispensable : si le résultat final surprend, il faut pouvoir savoir
+        d'où vient chaque page.
+        """
+        self._document_avec_couches([COUCHE_TEXTE_BONNE] * self.NOMBRE_PAGES)
+
+        self.executer()
+
+        sidecar = io.lire_sidecar(self.chemins.page_json(1))
+
+        self.assertEqual(sidecar["source"], ocr.SOURCE_COUCHE_TEXTE)
+        self.assertIsNone(sidecar["modele"])
+        self.assertEqual(sidecar["statut"], config.STATUT_TERMINE)
+
+    def test_provenance_vision_consignee_aussi(self):
+        resultats, _ = self.executer()
+
+        self.assertEqual(
+            io.lire_sidecar(self.chemins.page_json(1))["source"], ocr.SOURCE_VISION
+        )
+
+    def test_livre_hybride(self):
+        """
+        Cas réaliste : un PDF dont seule une partie des pages porte une couche
+        texte exploitable.
+        """
+        self._document_avec_couches([COUCHE_TEXTE_BONNE, "", COUCHE_TEXTE_BONNE])
+
+        resultats, appel = self.executer()
+
+        self.assertEqual(appel.call_count, 1)
+        self.assertEqual([c.kwargs["libelle"] for c in appel.call_args_list], ["page 2"])
+        self.assertEqual(resultats[0].pages_couche_texte, 2)
+        self.assertEqual(resultats[0].pages_traitees, 1)
+
+    def test_couche_texte_douteuse_renvoyee_a_la_vision(self):
+        """Accents dépouillés : on préfère payer plutôt que dégrader le livre."""
+        depouillee = blocks.sans_accents(COUCHE_TEXTE_BONNE)
+        self._document_avec_couches([depouillee] * self.NOMBRE_PAGES)
+
+        resultats, appel = self.executer()
+
+        self.assertEqual(appel.call_count, self.NOMBRE_PAGES)
+        self.assertEqual(resultats[0].pages_couche_texte, 0)
+
+    def test_strategie_jamais_force_la_vision(self):
+        self._document_avec_couches([COUCHE_TEXTE_BONNE] * self.NOMBRE_PAGES)
+
+        with mock.patch.object(config, "STRATEGIE_COUCHE_TEXTE", "jamais"):
+            resultats, appel = self.executer()
+
+        self.assertEqual(appel.call_count, self.NOMBRE_PAGES)
+        self.assertEqual(resultats[0].pages_couche_texte, 0)
+
+    def test_pages_gratuites_journalisees_sans_jetons(self):
+        self._document_avec_couches([COUCHE_TEXTE_BONNE] * self.NOMBRE_PAGES)
+
+        self.executer()
+
+        journal = io.lire_sidecar(self.base / "journal_ocr.json")
+        appels = journal["appels"]
+
+        self.assertEqual(len(appels), self.NOMBRE_PAGES)
+        for entree in appels:
+            with self.subTest(numero=entree["numero"]):
+                self.assertEqual(entree["source"], ocr.SOURCE_COUCHE_TEXTE)
+                self.assertEqual(entree["tokens_entree"], 0)
+                self.assertEqual(entree["tokens_sortie"], 0)
+
+    def test_reprise_saute_les_pages_issues_de_la_couche(self):
+        self._document_avec_couches([COUCHE_TEXTE_BONNE] * self.NOMBRE_PAGES)
+
+        self.executer()
+        resultats, appel = self.executer()
+
+        self.assertEqual(appel.call_count, 0)
+        self.assertEqual(resultats[0].pages_sautees, self.NOMBRE_PAGES)
+
+    def test_sortie_relisible_par_l_etape_2(self):
+        """Le contrat inter-étapes vaut aussi pour ce chemin."""
+        self._document_avec_couches([COUCHE_TEXTE_BONNE] * self.NOMBRE_PAGES)
+
+        self.executer()
+
+        pages = blocks.decouper_en_pages(io.lire_texte(self.chemins.ocr))
+
+        self.assertEqual(len(pages), self.NOMBRE_PAGES)
+
+
+class TestDiagnostic(BaseOcr):
+    """Le diagnostic doit être entièrement gratuit."""
+
+    NOMBRE_PAGES = 4
+
+    def _diagnostiquer(self, couches: list[str]):
+        document = DocumentFactice(self.NOMBRE_PAGES, couches_texte=couches)
+
+        with mock.patch.object(ocr, "ouvrir_pdf", return_value=document), \
+             mock.patch.object(api, "appeler_modele") as appel:
+            diagnostics = ocr.diagnostiquer_couches_texte(self.base)
+
+        return diagnostics, appel
+
+    def test_aucun_appel_api(self):
+        _, appel = self._diagnostiquer([COUCHE_TEXTE_BONNE] * self.NOMBRE_PAGES)
+
+        appel.assert_not_called()
+
+    def test_comptage_exact_sur_un_livre_hybride(self):
+        diagnostics, _ = self._diagnostiquer(
+            [COUCHE_TEXTE_BONNE, "", COUCHE_TEXTE_BONNE, "trop court"]
+        )
+
+        diagnostic = diagnostics[0]
+
+        self.assertEqual(diagnostic.pages_totales, 4)
+        self.assertEqual(diagnostic.pages_exploitables, 2)
+        self.assertEqual(diagnostic.pages_a_ocriser, 2)
+        self.assertAlmostEqual(diagnostic.part_gratuite, 0.5)
+
+    def test_motifs_de_refus_denombres(self):
+        """
+        Savoir *pourquoi* une couche est écartée permet de juger s'il faut
+        relâcher un seuil ou accepter de payer.
+        """
+        diagnostics, _ = self._diagnostiquer(
+            ["", "", blocks.sans_accents(COUCHE_TEXTE_BONNE), "court"]
+        )
+
+        raisons = diagnostics[0].raisons
+
+        self.assertEqual(sum(raisons.values()), 4)
+        self.assertTrue(any("accent" in motif for motif in raisons))
+
+    def test_pages_deja_transcrites_comptees_comme_gratuites(self):
+        io.ecrire_texte_atomique(self.chemins.page_txt(1), "déjà transcrite")
+        io.ecrire_sidecar(
+            self.chemins.page_json(1), {"statut": config.STATUT_TERMINE}
+        )
+
+        diagnostics, _ = self._diagnostiquer([""] * self.NOMBRE_PAGES)
+
+        self.assertEqual(diagnostics[0].pages_deja_faites, 1)
+        self.assertEqual(diagnostics[0].pages_a_ocriser, self.NOMBRE_PAGES - 1)
+
+    def test_pdf_illisible_signale_sans_interrompre(self):
+        with mock.patch.object(
+            ocr, "ouvrir_pdf", side_effect=RuntimeError("PDF corrompu")
+        ):
+            diagnostics = ocr.diagnostiquer_couches_texte(self.base)
+
+        self.assertIn("corrompu", diagnostics[0].erreur)
+        self.assertEqual(diagnostics[0].pages_totales, 0)
+
+    def test_dossier_sans_pdf(self):
+        with tempfile.TemporaryDirectory() as vide:
+            self.assertEqual(ocr.diagnostiquer_couches_texte(Path(vide)), [])
 
 
 if __name__ == "__main__":
