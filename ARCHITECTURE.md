@@ -1222,18 +1222,18 @@ dans un état compréhensible.
 |---|---|---|
 | 1 | ✅ *fait* | Prototype préservé + `.gitignore` + `.gitattributes` |
 | 2 | ✅ *fait* | `ARCHITECTURE.md`, puis révision après validation |
-| 3 | ⬅ **prochain** | `config.py`, `__init__.py`, `requirements.txt` |
-| 4 | Utilitaires | `utils/io.py`, `utils/logging.py` |
-| 5 | **Logique texte** | `utils/blocks.py` + `tests/test_blocks.py` |
-| 6 | Couche API | `utils/api.py` (dont `lister_modeles_disponibles()`) |
-| 7 | Prompts | les 4 fichiers `prompts/*.md` |
-| 8 | Étape 1 | `ocr.py` |
-| 9 | Étape 2 | `edition.py` |
-| 10 | Étape 3 | `validation.py` |
-| 11 | Étape 4 | `docx_export.py` + `tests/test_docx_export.py` |
-| 12 | Orchestration | `main.py` |
-| 13 | Notebooks | les 4 `.ipynb` |
-| 14 | Documentation | `README.md`, déplacement du prototype dans `archive/` |
+| 3 | ✅ *fait* | `config.py`, `__init__.py`, `requirements.txt` |
+| 4 | ✅ *fait* | `utils/io.py`, `utils/logging.py` |
+| 5 | ✅ *fait* | `utils/blocks.py` + `tests/test_blocks.py` |
+| 6 | ✅ *fait* | `utils/api.py` (dont `lister_modeles_disponibles()`) |
+| 7 | ✅ *fait* | les 4 fichiers `prompts/*.md` |
+| 8 | ✅ *fait* | `ocr.py` |
+| 9 | ✅ *fait* | `edition.py` |
+| 10 | ✅ *fait* | `validation.py` |
+| 11 | ✅ *fait* | `docx_export.py` + `tests/test_docx_export.py` |
+| 12 | ✅ *fait* | `main.py` |
+| 13 | ✅ *fait* | les 4 `.ipynb` |
+| 14 | ✅ *fait* | `README.md`, déplacement du prototype dans `archive/` |
 
 L'ordre n'est pas arbitraire : chaque commit ne dépend que des précédents, donc
 le dépôt est cohérent à tout moment.
@@ -1302,5 +1302,5 @@ rattraper.
 
 ---
 
-*Architecture validée le 2026-07-27. L'implémentation commence au commit 3 du*
-*plan de livraison (§16).*
+*Architecture validée le 2026-07-27. Implémentation achevée le 2026-07-28 :*
+*les 14 commits du plan de livraison sont livrés, 346 tests au vert.*
