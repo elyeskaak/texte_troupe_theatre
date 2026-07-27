@@ -139,20 +139,30 @@ def nom_livre_depuis_pdf(chemin: Path) -> str:
     return chemin.stem
 
 
-def nom_livre_depuis_ocr(chemin: Path) -> str:
+def _nom_livre_depuis_suffixe(chemin: Path, suffixe: str) -> str:
     """
-    Déduit le nom du livre du nom de son fichier OCR.
+    Retire un suffixe connu du nom d'un fichier pour retrouver le nom du livre.
 
     Raises:
-        ValueError: si le nom ne porte pas le suffixe OCR attendu.
+        ValueError: si le nom ne porte pas le suffixe attendu.
     """
-    if not chemin.name.endswith(config.SUFFIXE_OCR):
+    if not chemin.name.endswith(suffixe):
         raise ValueError(
-            f"« {chemin.name} » ne se termine pas par "
-            f"« {config.SUFFIXE_OCR} » : impossible d'en déduire le nom du livre."
+            f"« {chemin.name} » ne se termine pas par « {suffixe} » : "
+            "impossible d'en déduire le nom du livre."
         )
 
-    return chemin.name[: -len(config.SUFFIXE_OCR)]
+    return chemin.name[: -len(suffixe)]
+
+
+def nom_livre_depuis_ocr(chemin: Path) -> str:
+    """Déduit le nom du livre du nom de son fichier OCR."""
+    return _nom_livre_depuis_suffixe(chemin, config.SUFFIXE_OCR)
+
+
+def nom_livre_depuis_edit(chemin: Path) -> str:
+    """Déduit le nom du livre du nom de son fichier édité."""
+    return _nom_livre_depuis_suffixe(chemin, config.SUFFIXE_EDIT)
 
 
 # ============================================================
@@ -370,12 +380,20 @@ def lister_pdf(dossier: Path | None = None) -> list[Path]:
 
 def lister_fichiers_ocr(dossier: Path | None = None) -> list[Path]:
     """Liste les fichiers `*_OCR.txt` du dossier de travail, triés par nom."""
+    return _lister_par_suffixe(dossier, config.SUFFIXE_OCR)
+
+
+def lister_fichiers_edit(dossier: Path | None = None) -> list[Path]:
+    """Liste les fichiers `*_EDIT.txt` du dossier de travail, triés par nom."""
+    return _lister_par_suffixe(dossier, config.SUFFIXE_EDIT)
+
+
+def _lister_par_suffixe(dossier: Path | None, suffixe: str) -> list[Path]:
+    """Liste les fichiers du dossier de travail portant un suffixe donné."""
     base = dossier if dossier is not None else config.DOSSIER_DRIVE
     verifier_dossier_travail(base)
 
-    return _trier(
-        [c for c in _parcourir(base) if c.name.endswith(config.SUFFIXE_OCR)]
-    )
+    return _trier([c for c in _parcourir(base) if c.name.endswith(suffixe)])
 
 
 def verifier_dossier_travail(dossier: Path) -> None:

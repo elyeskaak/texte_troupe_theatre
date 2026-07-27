@@ -24,5 +24,11 @@ python-docx>=1.1.0
 
 # ------------------------------------------------------------
 # Aucune dépendance de test : tests/ n'utilise que `unittest`, de la
-# bibliothèque standard, afin de s'exécuter partout sans installation.
+# bibliothèque standard.
+#
+# Les tests s'exécutent sans openai ni pymupdf, remplacés par des
+# doublures. python-docx, en revanche, est utilisé pour de vrai :
+# tests/test_docx_export.py génère de vrais fichiers et les relit, ce
+# qui est bien plus solide que de vérifier des appels sur une doublure.
+# Le module est ignoré si la bibliothèque est absente.
 # ------------------------------------------------------------
