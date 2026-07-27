@@ -258,6 +258,11 @@ DELIM_RACCORD_DROIT_FIN = "<<<FIN_BLOC_DROIT>>>"
 DELIM_SOURCE_DEBUT = "<DEBUT_OCR>"
 DELIM_SOURCE_FIN = "<FIN_OCR>"
 
+# Délimiteurs encadrant le texte édité, à l'étape de validation, qui reçoit
+# les deux versions dans un même message.
+DELIM_EDIT_DEBUT = "<DEBUT_EDIT>"
+DELIM_EDIT_FIN = "<FIN_EDIT>"
+
 # Marque d'un passage réellement illisible.
 MARQUE_ILLISIBLE = "*[texte illisible]*"
 

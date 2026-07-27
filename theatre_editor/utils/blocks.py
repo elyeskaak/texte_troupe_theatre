@@ -270,6 +270,20 @@ def normaliser_pour_comptage(texte: str) -> str:
     return re.sub(r"\s+", " ", resultat).strip()
 
 
+def normaliser_pour_comparaison(texte: str) -> str:
+    """
+    Prépare un texte pour une comparaison **entre étapes** (OCR ↔ EDIT).
+
+    Diffère de `normaliser_pour_comptage()` sur un point décisif : les
+    astérisques sont retirées. L'étape 2 ajoute légitimement `**` autour de
+    chaque nom de personnage et `*` autour de chaque didascalie ; sur un livre
+    comportant deux mille répliques, cela représente près de dix mille
+    caractères. Sans cette neutralisation, `EDIT.txt` paraîtrait plus long que
+    `OCR.txt` alors même qu'il en aurait perdu des passages.
+    """
+    return re.sub(r"\s+", " ", normaliser_pour_comptage(texte).replace("*", "")).strip()
+
+
 # ============================================================
 # 4. DÉCOUPAGE EN PAGES ET EN BLOCS
 # ============================================================
@@ -1268,7 +1282,198 @@ def decouper_en_runs(texte: str) -> list[Run]:
 
 
 # ============================================================
-# 11. RAPPORT D'INSPECTION
+# 11. COMPARAISON OCR ↔ EDIT (contrôles mécaniques de l'étape 3)
+# ------------------------------------------------------------
+# Ces contrôles sont gratuits, instantanés et déterministes. Ils ne remplacent
+# pas la comparaison sémantique par le modèle, mais ils rendent le rapport
+# utile même là où le modèle passerait à côté — et, contrairement à lui, ils
+# ne produisent jamais de faux négatif sur ce qu'ils savent mesurer.
+# ============================================================
+
+
+def comparer_volumes(ocr: str, edit: str) -> list[str]:
+    """
+    Compare les volumes de texte entre transcription et édition.
+
+    Returns:
+        Liste d'avertissements, vide si le volume est conservé.
+    """
+    reference = len(normaliser_pour_comparaison(ocr))
+
+    if not reference:
+        return []
+
+    ratio = len(normaliser_pour_comparaison(edit)) / reference
+
+    if ratio < config.RATIO_MINIMAL_LONGUEUR:
+        return [
+            f"volume réduit : l'édition fait {ratio:.0%} de la transcription "
+            f"(seuil {config.RATIO_MINIMAL_LONGUEUR:.0%})"
+        ]
+
+    return []
+
+
+# Nombre minimal de lettres pour qu'une ligne en capitales soit tenue pour un
+# nom de rôle ou un titre. Écarte les répliques d'une ou deux lettres
+# (« A. », « B. ») qu'un scan peut produire.
+MIN_LETTRES_LABEL = 3
+
+# Longueur maximale : au-delà, c'est une réplique criée, non un intitulé.
+MAX_LONGUEUR_LABEL = 40
+
+
+def _est_label_de_structure(ligne: str) -> bool:
+    """
+    Vrai si une ligne peut être un nom de rôle ou un titre, dans un texte brut.
+
+    Prédicat **volontairement strict**, et distinct de `_ressemble_a_un_nom()`
+    qui sert à lire une distribution. Le contexte n'est pas le même : ici la
+    ligne provient de n'importe où dans un fichier, et la moindre tolérance
+    produit des faux positifs à la chaîne.
+
+    Trois rejets, chacun motivé par un faux positif réellement observé :
+
+    - les marqueurs techniques (`[PAGE 3]`, `<<<PAGE_BREAK>>>`), que l'étape 2
+      supprime légitimement et qui seraient donc signalés comme « disparus » à
+      chaque livre ;
+    - les lignes de moins de trois lettres, une réplique « A. » n'étant pas un
+      rôle ;
+    - les lignes dont les lettres ne sont pas **toutes** en capitales, un seuil
+      partiel laissant passer des bouts de dialogue.
+    """
+    if "<<<" in ligne or MOTIF_MARQUEUR_PAGE_INLINE.search(ligne):
+        return False
+
+    if len(ligne) > MAX_LONGUEUR_LABEL:
+        return False
+
+    lettres = [caractere for caractere in ligne if caractere.isalpha()]
+
+    if len(lettres) < MIN_LETTRES_LABEL:
+        return False
+
+    return all(caractere.isupper() for caractere in lettres)
+
+
+def recenser_labels_capitales(texte: str) -> set[str]:
+    """
+    Relève les intitulés en capitales d'un texte, sous forme normalisée.
+
+    Fonctionne indifféremment sur un OCR brut et sur un texte édité : la
+    normalisation retire les astérisques, si bien que `JAN` dans l'OCR et
+    `**JAN.**` dans l'édition donnent la même clé. C'est ce qui rend les deux
+    ensembles comparables malgré la mise en forme ajoutée par l'étape 2.
+
+    L'extraction est **conservatrice** : elle préfère manquer un rôle plutôt
+    que d'en inventer. Un rapport bruyant ne serait pas lu, et l'étape de
+    comparaison sémantique cherche de son côté les personnages disparus.
+    """
+    labels: set[str] = set()
+
+    for ligne in texte.split("\n"):
+        nue = ligne.strip().strip("*").strip()
+
+        if not nue or not _est_label_de_structure(nue):
+            continue
+
+        label = normaliser_label(nue)
+
+        if label:
+            labels.add(label)
+
+    return labels
+
+
+def comparer_labels(ocr: str, edit: str) -> list[str]:
+    """
+    Signale les noms en capitales présents dans l'OCR et absents de l'édition.
+
+    Détecte la disparition d'un personnage ou d'un titre entier — perte grave
+    qu'un ratio de volume global ne verrait pas sur un livre de 400 pages.
+
+    Le contrôle est **volontairement asymétrique** : un label apparu dans
+    l'édition sans être dans l'OCR n'est pas signalé, car il résulte le plus
+    souvent d'une correction légitime de reconnaissance (« JAN » lu « IAN »).
+    """
+    manquants = recenser_labels_capitales(ocr) - recenser_labels_capitales(edit)
+
+    return [
+        f"présent dans la transcription, absent de l'édition : « {label} »"
+        for label in sorted(manquants)
+    ]
+
+
+def comparer_lignes_non_vides(ocr: str, edit: str) -> list[str]:
+    """
+    Compare le nombre de lignes porteuses de texte.
+
+    L'édition en supprime légitimement quelques-unes — marqueurs de page,
+    numéros isolés, artefacts. Une chute importante signale en revanche une
+    perte de contenu. Le seuil réutilise `RATIO_MINIMAL_LONGUEUR`.
+    """
+    def compter(texte: str) -> int:
+        return sum(
+            1
+            for ligne in texte.split("\n")
+            if ligne.strip() and not MOTIF_MARQUEUR_PAGE.match(ligne)
+        )
+
+    reference = compter(ocr)
+
+    if not reference:
+        return []
+
+    ratio = compter(edit) / reference
+
+    if ratio < config.RATIO_MINIMAL_LONGUEUR:
+        return [
+            f"lignes manquantes : l'édition en compte {ratio:.0%} "
+            f"(seuil {config.RATIO_MINIMAL_LONGUEUR:.0%})"
+        ]
+
+    return []
+
+
+def controler_convention(edit: str) -> list[str]:
+    """
+    Vérifie que le texte édité respecte la convention typographique.
+
+    Une convention cassée n'est pas une perte de contenu, mais elle fera
+    échouer la reconnaissance de structure de l'étape 4 : autant le savoir
+    avant de générer le DOCX.
+    """
+    avertissements: list[str] = []
+
+    if edit.count("*") % 2 != 0:
+        avertissements.append(
+            "nombre impair d'astérisques : la convention typographique est cassée"
+        )
+
+    for motif in (r"<<<PAGE_BREAK>>>", r"^\s*\[PAGE\s+\d+\]\s*$", r"```"):
+        if re.search(motif, edit, flags=re.MULTILINE):
+            avertissements.append(f"artefact non supprimé : {motif}")
+
+    return avertissements
+
+
+def controles_mecaniques(ocr: str, edit: str) -> list[str]:
+    """
+    Applique tous les contrôles déterministes à un couple (OCR, EDIT).
+
+    Returns:
+        Liste d'avertissements, vide si aucun problème mécanique n'est décelé.
+    """
+    return [
+        *comparer_volumes(ocr, edit),
+        *comparer_lignes_non_vides(ocr, edit),
+        *comparer_labels(ocr, edit),
+        *controler_convention(edit),
+    ]
+
+
+# ============================================================
+# 12. RAPPORT D'INSPECTION
 # ============================================================
 
 _ENTETES = ("LABEL", "OCC.", "RÉPL.", "CLASSÉ", "CONFIANCE")

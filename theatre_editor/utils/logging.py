@@ -153,6 +153,17 @@ def horodatage() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def formater_nombre(valeur: int) -> str:
+    """
+    Met en forme un entier avec une espace comme séparateur de milliers.
+
+    Passe par une chaîne intermédiaire plutôt que par un `.replace(",", " ")`
+    appliqué à la phrase entière : ce raccourci mangeait aussi les virgules
+    légitimes du texte environnant, et produisait « 263 caractères  4 pages ».
+    """
+    return f"{valeur:,}".replace(",", " ")
+
+
 def formater_duree(secondes: float) -> str:
     """
     Met en forme une durée pour l'affichage (« 1 h 27 min », « 42 s »).
@@ -172,7 +183,77 @@ def formater_duree(secondes: float) -> str:
 
 
 # ============================================================
-# 3. JOURNAL JSON
+# 3. DÉCOMPTE DES UNITÉS DE TRAVAIL
+# ------------------------------------------------------------
+# Placé ici, aux côtés de `recapitulatif()`, parce que les trois étapes IA
+# partagent exactement ce décompte : le dupliquer dans `edition.py` et
+# `validation.py` serait la duplication que le projet s'interdit.
+# ============================================================
+
+# Issue du traitement d'une unité (page, bloc, jonction).
+UNITE_TERMINEE = "terminee"
+UNITE_SAUTEE = "sautee"
+UNITE_SUSPECTE = "suspecte"
+UNITE_ECHOUEE = "echouee"
+
+
+@dataclass
+class Compteurs:
+    """Décompte des unités d'une passe, et bilan de ce qui reste à reprendre."""
+
+    total: int = 0
+    traitees: int = 0
+    sautees: int = 0
+    suspectes: int = 0
+    echouees: int = 0
+    numeros_echoues: list[int] = field(default_factory=list)
+
+    def enregistrer(self, statut: str, numero: int) -> None:
+        """Incrémente le compteur correspondant au statut d'une unité."""
+        if statut == UNITE_TERMINEE:
+            self.traitees += 1
+        elif statut == UNITE_SAUTEE:
+            self.sautees += 1
+        elif statut == UNITE_SUSPECTE:
+            self.suspectes += 1
+        else:
+            self.echouees += 1
+            self.numeros_echoues.append(numero)
+
+    @property
+    def complet(self) -> bool:
+        """Vrai si aucune unité ne reste à reprendre."""
+        return self.echouees == 0 and self.suspectes == 0
+
+    def en_dict(self) -> dict[str, Any]:
+        """Représentation destinée au journal."""
+        return {
+            "total": self.total,
+            "traitees": self.traitees,
+            "sautees": self.sautees,
+            "suspectes": self.suspectes,
+            "echouees": self.echouees,
+            "numeros_echoues": self.numeros_echoues,
+        }
+
+
+def afficher_reprises(libelle: str, compteurs: Compteurs) -> None:
+    """Affiche ce qui reste à reprendre pour une passe."""
+    if compteurs.sautees:
+        saute(f"{compteurs.sautees} {libelle}(s) déjà traité(s)")
+
+    if compteurs.suspectes:
+        alerte(
+            f"{compteurs.suspectes} {libelle}(s) suspect(s), "
+            "repris au prochain passage"
+        )
+
+    if compteurs.numeros_echoues:
+        echec(f"{libelle}(s) en échec : {compteurs.numeros_echoues}")
+
+
+# ============================================================
+# 4. JOURNAL JSON
 # ============================================================
 
 

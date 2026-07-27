@@ -506,7 +506,8 @@ def _resumer(resultat: ResultatLivre, chemins: io.CheminsLivre) -> None:
     io.ecrire_texte_atomique(chemins.ocr, contenu)
 
     journalisation.succes(
-        f"{chemins.ocr.name} — {len(contenu):,} caractères".replace(",", " ")
+        f"{chemins.ocr.name} — "
+        f"{journalisation.formater_nombre(len(contenu))} caractères"
     )
 
     if resultat.pages_sautees:

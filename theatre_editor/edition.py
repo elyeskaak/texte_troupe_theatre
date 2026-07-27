@@ -41,55 +41,17 @@ from theatre_editor.utils import logging as journalisation
 
 NOM_ETAPE = "edition"
 
-# Statuts d'une unité de travail, tels que remontés à la boucle appelante.
-UNITE_TERMINEE = "terminee"
-UNITE_SAUTEE = "sautee"
-UNITE_SUSPECTE = "suspecte"
-UNITE_ECHOUEE = "echouee"
+# Les statuts d'unité et le décompte sont partagés avec les autres étapes IA.
+UNITE_TERMINEE = journalisation.UNITE_TERMINEE
+UNITE_SAUTEE = journalisation.UNITE_SAUTEE
+UNITE_SUSPECTE = journalisation.UNITE_SUSPECTE
+UNITE_ECHOUEE = journalisation.UNITE_ECHOUEE
+Compteurs = journalisation.Compteurs
 
 
 # ============================================================
 # 1. RÉSULTATS
 # ============================================================
-
-
-@dataclass
-class Compteurs:
-    """Décompte des unités d'une passe."""
-
-    total: int = 0
-    traitees: int = 0
-    sautees: int = 0
-    suspectes: int = 0
-    echouees: int = 0
-    numeros_echoues: list[int] = field(default_factory=list)
-
-    def enregistrer(self, statut: str, numero: int) -> None:
-        """Incrémente le compteur correspondant au statut."""
-        if statut == UNITE_TERMINEE:
-            self.traitees += 1
-        elif statut == UNITE_SAUTEE:
-            self.sautees += 1
-        elif statut == UNITE_SUSPECTE:
-            self.suspectes += 1
-        else:
-            self.echouees += 1
-            self.numeros_echoues.append(numero)
-
-    @property
-    def complet(self) -> bool:
-        """Vrai si aucune unité ne reste à reprendre."""
-        return self.echouees == 0 and self.suspectes == 0
-
-    def en_dict(self) -> dict[str, Any]:
-        return {
-            "total": self.total,
-            "traitees": self.traitees,
-            "sautees": self.sautees,
-            "suspectes": self.suspectes,
-            "echouees": self.echouees,
-            "numeros_echoues": self.numeros_echoues,
-        }
 
 
 @dataclass
@@ -692,29 +654,15 @@ def _ecrire_edit(chemins: io.CheminsLivre, nombre_blocs: int) -> None:
     io.ecrire_texte_atomique(chemins.edit, contenu)
 
     journalisation.succes(
-        f"{chemins.edit.name} — {len(contenu):,} caractères".replace(",", " ")
+        f"{chemins.edit.name} — "
+        f"{journalisation.formater_nombre(len(contenu))} caractères"
     )
 
 
 def _afficher_bilan_livre(resultat: ResultatLivre) -> None:
     """Affiche les reprises restantes pour un livre."""
-    for libelle, compteurs in (
-        ("bloc", resultat.blocs),
-        ("raccord", resultat.raccords),
-    ):
-        if compteurs.sautees:
-            journalisation.saute(f"{compteurs.sautees} {libelle}(s) déjà traité(s)")
-
-        if compteurs.suspectes:
-            journalisation.alerte(
-                f"{compteurs.suspectes} {libelle}(s) suspect(s), "
-                "repris au prochain passage"
-            )
-
-        if compteurs.numeros_echoues:
-            journalisation.echec(
-                f"{libelle}(s) en échec : {compteurs.numeros_echoues}"
-            )
+    journalisation.afficher_reprises("bloc", resultat.blocs)
+    journalisation.afficher_reprises("raccord", resultat.raccords)
 
 
 # ============================================================
