@@ -1,0 +1,15 @@
+# Le projet est édité sous Windows mais exécuté sous Linux (Google Colab).
+# On normalise donc les fins de ligne en LF dans le dépôt pour éviter
+# qu'un \r parasite ne se retrouve dans un prompt ou dans un texte édité.
+* text=auto eol=lf
+
+# Les notebooks sont du JSON : diff textuel, mais pas de fusion automatique
+# (un merge automatique de .ipynb produit presque toujours un JSON invalide).
+*.ipynb text eol=lf merge=binary
+
+# Fichiers binaires
+*.docx binary
+*.pdf  binary
+*.png  binary
+*.jpg  binary
+*.ttf  binary
