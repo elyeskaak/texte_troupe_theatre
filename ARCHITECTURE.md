@@ -726,13 +726,30 @@ statistiques qu'en dernier ressort.
 | # | Condition | Classement | Confiance |
 |---|---|---|---|
 | 0 | Figure dans un override de `config.py` | forcé | **certaine** |
+| 0 bis | Correspond à `ETIQUETTES_DISTRIBUTION` | **DISTRIBUTION** | certaine |
 | 1 | Correspond à `LEXIQUE_ACTE` | **ACTE** | certaine |
 | 2 | Correspond à `LEXIQUE_SCENE` | **SCÈNE** | certaine |
 | 3 | Est un pur jeton de numérotation (`UN`, `II`, `3`, `PREMIÈRE`) | titre → passe C | déduite |
 | 4 | Figure dans la liste de personnages relevée en tête d'ouvrage | **PERSONNAGE** | certaine |
 | 5 | Est suivi au moins une fois d'une ligne de réplique | **PERSONNAGE** | probable |
 | 6 | Apparaît ≥ `SEUIL_OCCURRENCES_PERSONNAGE` fois | **PERSONNAGE** | probable |
-| 7 | Aucun des cas précédents | titre → passe C | **incertaine** ⚠ |
+| 7 | Aucun des cas précédents | **PERSONNAGE** (défaut) | **incertaine** ⚠ |
+
+**La règle 0 bis a été ajoutée après exécution des tests.** Sans elle,
+`**PERSONNAGES**` — l'en-tête d'une distribution — est une ligne en gras suivie
+d'une ligne ayant la forme d'une réplique (`JAN, le frère`) : la règle 5 en
+faisait un rôle, ce qui faussait le décompte des personnages. Le classer comme
+titre d'acte aurait été pire encore : la passe C aurait vu un acte lexical et
+basculé *tous* les titres numérotés en scènes. D'où un type propre, neutre
+vis-à-vis de la hiérarchie, et son propre style (§9.3).
+
+**La règle 7 retient « personnage » et non « titre ».** Une version antérieure
+classait ces labels comme actes — et leur infligeait donc un saut de page, soit
+l'issue la plus voyante possible pour le cas où l'on sait le moins de choses.
+Le cas typique est un rôle dont l'unique intervention est une didascalie
+(`**LA VOIX**` suivi de `*Silence.*`), fréquent au théâtre contemporain. Avec
+« personnage » par défaut, la dégradation est bénigne dans les deux sens : un
+vrai titre reste centré et gras, et aucune page blanche parasite n'apparaît.
 
 - `LEXIQUE_ACTE` : `ACTE`, `PARTIE`, `PROLOGUE`, `ÉPILOGUE`, `MOUVEMENT`,
   `JOURNÉE`, `INTERMÈDE`.
@@ -838,7 +855,7 @@ première alternative, règle le problème proprement.
 
 ### 9.3 Styles DOCX
 
-**Six** styles de paragraphe créés programmatiquement — jamais de mise en forme
+**Sept** styles de paragraphe créés programmatiquement — jamais de mise en forme
 appliquée run par run, afin qu'une modification globale reste un changement d'une
 seule ligne de `config.py`. Le style de titre est scindé en deux, conséquence
 directe de §9.1 et du saut de page réservé aux actes.
@@ -847,10 +864,16 @@ directe de §9.1 et du saut de page réservé aux actes.
 |---|---|---|---|---|---|
 | `Theatre_Titre_Acte` | centré | **gras** | **14 pt** | avant 0, après 24 pt | **oui** |
 | `Theatre_Titre_Scene` | centré | **gras** | **12 pt** | avant 24, après 12 pt | non |
+| `Theatre_Distribution` | centré | **gras** | 12 pt | avant 24, après 12 pt | non |
 | `Theatre_Lieu` | centré | *italique* | 11 pt | avant 12, après 12 pt | non |
 | `Theatre_Personnage` | centré | **gras** | 11 pt | avant 12, après 0 pt | non |
 | `Theatre_Didascalie` | centré | *italique* | 11 pt | avant 6, après 6 pt | non |
 | `Theatre_Texte` | **justifié** | romain | 11 pt | après 6 pt | non |
+
+`Theatre_Distribution` porte les mêmes valeurs que `Theatre_Titre_Scene`, mais
+reste un style distinct : cela évite de fausser le décompte des scènes dans le
+rapport, et permet de composer l'en-tête d'une liste de rôles en petites
+capitales sans toucher aux titres de scène.
 
 Communs à tous : EB Garamond, **aucune couleur** (on ne définit simplement
 jamais `font.color`, la valeur héritée est le noir automatique).

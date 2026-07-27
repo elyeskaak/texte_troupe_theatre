@@ -297,6 +297,21 @@ DEFINITIONS_STYLES: dict[str, dict[str, object]] = {
         "espace_apres_pt": 12,
         "saut_de_page": SAUT_DE_PAGE_AVANT_SCENE,
     },
+    # En-tête d'une liste de rôles (« PERSONNAGES », « DISTRIBUTION »).
+    # Type distinct des titres de scène afin de ne pas fausser le décompte
+    # des scènes, et de rester neutre vis-à-vis de l'inférence de hiérarchie.
+    # Réglable indépendamment : certaines éditions le composent en petites
+    # capitales plutôt qu'en gras.
+    "distribution": {
+        "nom": "Distribution",
+        "alignement": "centre",
+        "gras": True,
+        "italique": False,
+        "taille_pt": TAILLE_TITRE_SCENE_PT,
+        "espace_avant_pt": 24,
+        "espace_apres_pt": 12,
+        "saut_de_page": False,
+    },
     "lieu": {
         "nom": "Lieu",
         "alignement": "centre",

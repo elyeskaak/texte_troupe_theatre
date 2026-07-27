@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import json
 import os
-import unicodedata
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -456,20 +455,3 @@ def charger_cle_api() -> str:
         "En local :\n"
         f"  définir la variable d'environnement {config.NOM_CLE_API}."
     )
-
-
-# ============================================================
-# 7. UTILITAIRE DE NOMMAGE
-# ============================================================
-
-
-def sans_accents(texte: str) -> str:
-    """
-    Retire les diacritiques d'une chaîne (« SCÈNE » → « SCENE »).
-
-    Placé ici et non dans `blocks` : le nommage de fichiers en a besoin autant
-    que la classification structurelle, et dupliquer une décomposition Unicode
-    serait une source de divergence silencieuse.
-    """
-    decompose = unicodedata.normalize("NFD", texte)
-    return "".join(c for c in decompose if not unicodedata.combining(c))
