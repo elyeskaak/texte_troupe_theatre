@@ -306,13 +306,20 @@ def charger_prompt(nom: str) -> str:
     chemin = DOSSIER_PROMPTS / f"{nom}.md"
 
     if not chemin.exists():
-        disponibles = sorted(p.stem for p in DOSSIER_PROMPTS.glob("*.md"))
+        # Le glob est restreint à « prompt_*.md » : le README du dossier ne
+        # doit pas être présenté comme un prompt utilisable.
+        disponibles = sorted(p.stem for p in DOSSIER_PROMPTS.glob("prompt_*.md"))
         raise FileNotFoundError(
             f"Prompt introuvable : {chemin}\n"
             f"Prompts disponibles : {', '.join(disponibles) or 'aucun'}"
         )
 
     return lire_texte(chemin).strip()
+
+
+def lister_prompts() -> list[str]:
+    """Noms des prompts disponibles, sans extension."""
+    return sorted(p.stem for p in DOSSIER_PROMPTS.glob("prompt_*.md"))
 
 
 # ============================================================

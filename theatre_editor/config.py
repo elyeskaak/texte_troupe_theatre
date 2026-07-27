@@ -233,6 +233,30 @@ DELIM_SOURCE_FIN = "<FIN_OCR>"
 # Marque d'un passage réellement illisible.
 MARQUE_ILLISIBLE = "*[texte illisible]*"
 
+# Réponse exacte attendue du modèle de validation lorsqu'un bloc est sain.
+# Sa présence permet de distinguer « bloc vérifié, rien à signaler » de
+# « bloc non vérifié » — deux situations qu'un rapport vide confondrait.
+MENTION_AUCUN_PROBLEME = "AUCUN PROBLEME DETECTE"
+
+# Réponse attendue du modèle OCR pour une page dépourvue de texte.
+# Sans elle, une page blanche produirait une réponse vide, indiscernable
+# d'un échec d'appel.
+MENTION_PAGE_SANS_TEXTE = "[PAGE SANS TEXTE]"
+
+# Catégories de constats admises dans un rapport de validation. Le code s'en
+# sert pour vérifier que le modèle a respecté le format imposé.
+CATEGORIES_VALIDATION: tuple[str, ...] = (
+    "LIGNE DISPARUE",
+    "PERSONNAGE DISPARU",
+    "DIDASCALIE PERDUE",
+    "LIEU PERDU",
+    "SCENE OUBLIEE",
+    "TITRE OUBLIE",
+    "TEXTE RACCOURCI",
+    "PHRASE INACHEVEE",
+    "RACCORD DEFECTUEUX",
+)
+
 
 # ============================================================
 # STATUTS DES SIDECARS
