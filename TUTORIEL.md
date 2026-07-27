@@ -46,56 +46,34 @@ qui garde vos données.
 
 À faire une fois. Cochez au fur et à mesure.
 
-- [ ] Un jeton GitHub (§3)
-- [ ] Une clé API OpenAI (§4)
-- [ ] Les deux enregistrés dans les Secrets de Colab (§6)
-- [ ] Vos PDF déposés dans le bon dossier du Drive (§5)
+- [ ] Une clé API OpenAI (§3)
+- [ ] Enregistrée dans les Secrets de Colab (§5)
+- [ ] Vos PDF déposés dans le bon dossier du Drive (§4)
+
+Le dépôt étant **public**, aucun jeton GitHub n'est nécessaire.
 
 ---
 
-## 3. Créer le jeton GitHub
+## 3. Créer la clé OpenAI
 
-Le dépôt est **privé** : Colab a besoin d'une autorisation pour le lire. C'est ce
-qu'on appelle un jeton — une sorte de mot de passe limité.
-
-1. Allez sur **github.com**, connectez-vous.
-2. Cliquez sur **votre photo de profil**, en haut à droite → **Settings**.
-3. Tout en bas du menu de gauche → **Developer settings**.
-4. **Personal access tokens** → **Fine-grained tokens**.
-5. Bouton **Generate new token**.
-6. Remplissez :
-
-   | Champ | Valeur |
-   |---|---|
-   | **Token name** | `colab-theatre` |
-   | **Expiration** | 90 jours (à renouveler ensuite) |
-   | **Repository access** | cochez **Only select repositories** puis choisissez `texte_troupe_theatre` |
-
-7. Descendez à **Permissions** → **Repository permissions** → cherchez la ligne
-   **Contents** → menu déroulant → choisissez **Read-only**.
-
-   **Ne donnez rien d'autre.** Un jeton qui ne peut que *lire* un *seul* dépôt ne
-   peut rien casser, même s'il fuite.
-
-8. Bouton **Generate token** en bas.
-9. **Copiez immédiatement le jeton affiché** (il commence par `github_pat_`).
-   GitHub ne le montrera plus jamais. Collez-le temporairement dans un bloc-notes.
-
----
-
-## 4. Créer la clé OpenAI
+C'est la seule chose à créer. Elle sert à payer les appels aux modèles.
 
 1. Allez sur **platform.openai.com**, connectez-vous.
 2. Menu de gauche → **API keys**.
 3. **Create new secret key**. Donnez-lui un nom, par exemple `theatre`.
-4. **Copiez la clé** (elle commence par `sk-`). Elle ne sera plus affichée ensuite.
+4. **Copiez la clé** (elle commence par `sk-`). Elle ne sera plus affichée
+   ensuite : collez-la temporairement dans un bloc-notes.
 
-> Vérifiez au passage que votre compte a du crédit : menu **Billing**. Sans
-> crédit, les appels échoueront avec une erreur de facturation.
+> **Vérifiez votre crédit** au passage : menu **Billing**. Sans crédit, les
+> appels échouent avec une erreur de facturation, et le pipeline s'arrête.
+
+Le dépôt de code étant **public**, aucun jeton GitHub n'est nécessaire. Si vous
+le repassiez un jour en privé, la cellule de récupération du code accepte un
+secret `GITHUB_TOKEN` et l'utilise automatiquement, sans rien à modifier.
 
 ---
 
-## 5. Ranger vos PDF sur le Drive
+## 4. Ranger vos PDF sur le Drive
 
 Dans votre Google Drive, créez ou ouvrez le dossier :
 
@@ -118,46 +96,47 @@ maintenant : accents et espaces sont acceptés, mais évitez les caractères
 
 ---
 
-## 6. Ouvrir le premier notebook dans Colab
+## 5. Ouvrir le premier notebook dans Colab
 
-Le dépôt étant privé, il faut autoriser Colab à le voir. **La première fois
-seulement.**
+Le dépôt est public : aucune autorisation à donner.
 
 1. Allez sur **colab.research.google.com**.
 2. Menu **Fichier** → **Ouvrir un notebook**.
 3. Onglet **GitHub**.
-4. Cochez la case **Inclure les dépôts privés** (*Include private repos*).
-   Une fenêtre GitHub s'ouvre et demande l'autorisation → acceptez.
-5. Dans le champ de recherche, tapez `elyeskaak/texte_troupe_theatre`.
-6. La liste des notebooks apparaît. Cliquez sur **`notebooks/01_OCR.ipynb`**.
+4. Dans le champ de recherche, tapez simplement **`elyeskaak`** — le nom
+   d'utilisateur seul, **sans URL**. Validez avec la loupe.
+5. Choisissez `texte_troupe_theatre` dans la liste **Repository**.
+6. Cliquez sur **`notebooks/01_OCR.ipynb`**.
 
-> **Si l'onglet GitHub ne trouve rien**, voici une méthode de secours qui marche
-> toujours : sur github.com, ouvrez le fichier `notebooks/01_OCR.ipynb`, cliquez
-> sur **Download raw file**, puis dans Colab **Fichier → Importer le notebook**
-> et déposez le fichier téléchargé.
+> **Le champ affiche « Could not find organization or user » ?** C'est que vous
+> avez collé une URL complète, souvent avec `.git` à la fin. Ce champ attend le
+> **nom d'utilisateur seul**. Effacez tout et tapez `elyeskaak`.
 
-### Enregistrer les deux secrets
+> **Méthode de secours, qui marche toujours** : sur github.com, ouvrez
+> `notebooks/01_OCR.ipynb`, cliquez sur **Download raw file**, puis dans Colab
+> **Fichier → Importer le notebook** et déposez le fichier téléchargé.
+
+### Enregistrer la clé OpenAI
 
 Le notebook est ouvert. Avant de lancer quoi que ce soit :
 
 1. Dans la **colonne de gauche**, cliquez sur l'icône **clé 🔑** (*Secrets*).
-2. **Ajouter un nouveau secret**, deux fois :
+2. **Ajouter un nouveau secret** :
 
    | Nom | Valeur |
    |---|---|
    | `OPENAI_API_KEY` | votre clé `sk-…` |
-   | `GITHUB_TOKEN` | votre jeton `github_pat_…` |
 
-3. Pour **chacun des deux**, activez l'interrupteur **Accès au notebook**.
-   C'est l'étape qu'on oublie — sans elle, le notebook ne voit pas le secret.
+3. Activez l'interrupteur **Accès au notebook**. C'est l'étape qu'on oublie —
+   sans elle, le notebook ne voit pas le secret.
 
-Les secrets sont liés à votre compte Google, pas au notebook. Vous ne les
-saisirez qu'une fois, et ils n'apparaîtront jamais dans le notebook ni dans ses
-résultats affichés.
+Le secret est lié à votre compte Google, pas au notebook. Vous ne le saisirez
+qu'une fois, et il n'apparaîtra jamais dans le notebook ni dans ses résultats
+affichés.
 
 ---
 
-## 7. Le premier essai : 10 pages
+## 6. Le premier essai : 10 pages
 
 On ne lance jamais un livre de 300 pages du premier coup. On éprouve d'abord la
 chaîne sur 10 pages, pour quelques centimes.
@@ -185,6 +164,7 @@ que si vous préférez ne pas utiliser GitHub.
 Vous devez voir :
 ```
 Code récupéré : /content/texte_troupe_theatre
+Jeton GitHub  : non nécessaire (dépôt public)
 ```
 
 ### Section 3 — Configuration
@@ -207,7 +187,7 @@ Deux vérifications rapides. Vous devez voir `Clé API trouvée.` puis quatre
 lignes `[OK]`.
 
 > **`[ECHEC] ocr … introuvable` ?** Le modèle configuré n'existe pas sur votre
-> compte. Voyez le dépannage en §11.
+> compte. Voyez le dépannage en §10.
 
 ### Section 6 — Aperçu
 
@@ -266,7 +246,7 @@ si la transcription est correcte avant d'aller plus loin.
 
 ---
 
-## 8. Les trois notebooks suivants
+## 7. Les trois notebooks suivants
 
 Retournez dans **Fichier → Ouvrir un notebook → GitHub** et ouvrez le suivant.
 
@@ -314,7 +294,7 @@ colonne `LABEL`. Puis relancez la génération — c'est gratuit et instantané.
 
 ---
 
-## 9. Passer au livre entier
+## 8. Passer au livre entier
 
 L'essai vous a convaincu ? Retournez au notebook **01**, section 8 :
 
@@ -341,7 +321,7 @@ disparaîtraient discrètement.
 
 ---
 
-## 10. Quand Colab se déconnecte
+## 9. Quand Colab se déconnecte
 
 Ça arrivera. Colab coupe les sessions inactives au bout d'environ 90 minutes, et
 limite les sessions à quelques heures.
@@ -364,13 +344,13 @@ Seul ce qui manquait est traité. Aucun appel n'est repayé.
 
 ---
 
-## 11. Dépannage
+## 10. Dépannage
 
 | Message | Ce que ça veut dire | Quoi faire |
 |---|---|---|
-| `Secret GITHUB_TOKEN introuvable` | Le secret n'existe pas, ou l'interrupteur « Accès au notebook » est éteint | Revoyez §6, étape 3 |
-| `Récupération du code impossible` | Jeton invalide, expiré, ou sans accès au dépôt | Recréez le jeton (§3) en vérifiant **Contents : Read-only** et le bon dépôt |
-| `Clé API introuvable` | Idem pour `OPENAI_API_KEY` | §6, étape 3 |
+| `Could not find organization or user` | Une URL a été collée dans l'onglet GitHub de Colab | Tapez le nom d'utilisateur seul : `elyeskaak` |
+| `Récupération du code impossible` | Dépôt injoignable, ou redevenu privé sans jeton | Vérifiez que github.com/elyeskaak/texte_troupe_theatre s'ouvre sans être connecté |
+| `Clé API introuvable` | Le secret `OPENAI_API_KEY` manque, ou son interrupteur « Accès au notebook » est éteint | Revoyez §5 |
 | `Existe : False` | Le dossier Drive n'est pas au chemin indiqué | Corrigez le chemin. Attention aux « Drive partagés », dont le chemin diffère |
 | `Dossier de travail introuvable` | Le Drive n'est pas monté | Relancez la section 1 |
 | `[ECHEC] ocr … introuvable` | Le modèle n'existe pas sur votre compte | Dans la section 3, ajoutez `config.MODEL_OCR = "gpt-4o"` et relancez |
@@ -378,7 +358,7 @@ Seul ce qui manquait est traité. Aucun appel n'est repayé.
 | `insufficient_quota` | Plus de crédit OpenAI | Rechargez sur platform.openai.com → Billing |
 | `aucun fichier « _OCR.txt »` | Vous lancez l'étape 2 avant l'étape 1 | Faites le notebook 01 d'abord |
 | `découpage incohérent` | `PAGES_PAR_BLOC` a changé entre deux étapes | Remettez la valeur d'origine, ou supprimez les dossiers `_EDIT_blocs/` et `_EDIT_raccords/` |
-| Le DOCX a des pages blanches inattendues | Une scène a été prise pour un acte | Table d'inspection, §8 de ce tutoriel |
+| Le DOCX a des pages blanches inattendues | Une scène a été prise pour un acte | Table d'inspection, §7 de ce tutoriel |
 | Les accents s'affichent mal dans le DOCX | La police EB Garamond n'est pas installée sur votre ordinateur | Installez-la gratuitement depuis Google Fonts |
 
 ### Si rien ne marche : repartir de zéro sur un livre
@@ -398,7 +378,7 @@ Attention : cela fera repayer tout l'OCR.
 
 ---
 
-## 12. Où sont mes fichiers
+## 11. Où sont mes fichiers
 
 Tout dans le même dossier Drive, à côté du PDF.
 
@@ -435,7 +415,7 @@ Nous y sommes enfin.      une réplique : rien
 
 ---
 
-## 13. Récupérer une mise à jour du code
+## 12. Récupérer une mise à jour du code
 
 Quand le programme est amélioré sur GitHub, la cellule « Option A » du notebook
 récupère automatiquement la dernière version à chaque exécution. Vous n'avez rien
@@ -451,7 +431,7 @@ jour tout seul.
 
 ---
 
-## 14. Récapitulatif : la routine, une fois tout en place
+## 13. Récapitulatif : la routine, une fois tout en place
 
 1. Déposer le PDF dans `Troupe 122 - 2026-27` sur le Drive.
 2. Ouvrir `01_OCR.ipynb` depuis GitHub.

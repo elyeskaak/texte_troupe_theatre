@@ -115,28 +115,19 @@ drive.mount("/content/drive")
 ## 2. Récupération du code
 
 Le dépôt [`{DEPOT_COMPTE}/{DEPOT_NOM}`](https://github.com/{DEPOT_COMPTE}/{DEPOT_NOM})
-est **privé** : son clone exige un jeton d'accès personnel.
+est **public** : rien à configurer, la cellule suivante suffit. Elle récupère la
+dernière version du code à chaque exécution.
 
-**À faire une fois.**
-
-1. GitHub → *Settings* → *Developer settings* → *Personal access tokens* →
-   *Fine-grained tokens* → **Generate new token**
-   - *Repository access* : **uniquement** `{DEPOT_NOM}`
-   - *Permissions* → *Repository permissions* → **Contents : Read-only**
-
-   Rien de plus. Un jeton limité à la lecture d'un seul dépôt ne peut rien
-   casser s'il fuite.
-
-2. Colab → panneau latéral **🔑 Secrets** → ajouter `{NOM_SECRET_JETON}` →
-   activer « Accès au notebook ».
-
-Si vous préférez ne pas créer de jeton, utilisez l'option B : déposez le dossier
-`theatre_editor/` directement sur votre Drive.
+> **Si vous repassiez le dépôt en privé**, il faudrait un jeton d'accès :
+> GitHub → *Settings* → *Developer settings* → *Personal access tokens* →
+> *Fine-grained tokens*, avec **Contents : Read-only** sur ce seul dépôt. Puis
+> l'enregistrer dans les Secrets de Colab sous le nom `{NOM_SECRET_JETON}`. La
+> cellule le détecte et l'utilise automatiquement — aucune modification à faire.
 """
         ),
         code(
             f"""
-# --- Option A : clone du dépôt privé -----------------------------------
+# --- Option A : récupération depuis GitHub ------------------------------
 DEPOT_COMPTE = "{DEPOT_COMPTE}"
 DEPOT_NOM = "{DEPOT_NOM}"
 DOSSIER_PROJET = f"/content/{{DEPOT_NOM}}"
@@ -145,23 +136,25 @@ import os
 import subprocess
 import sys
 
-from google.colab import userdata
+# Le jeton est OPTIONNEL : inutile sur un dépôt public, utilisé
+# automatiquement s'il est présent. Ainsi la cellule fonctionne dans les deux
+# cas, sans qu'il faille se souvenir de la visibilité du dépôt.
+jeton = None
 
 try:
+    from google.colab import userdata
+
     jeton = userdata.get("{NOM_SECRET_JETON}")
 except Exception:
-    jeton = None
+    pass
 
-if not jeton:
-    raise RuntimeError(
-        "Secret {NOM_SECRET_JETON} introuvable.\\n"
-        "Panneau « 🔑 Secrets » → ajouter {NOM_SECRET_JETON} "
-        "→ activer « Accès au notebook »."
-    )
-
-# L'URL contient le jeton : elle ne doit JAMAIS être affichée, ni figurer dans
-# un message d'erreur. Les sorties de git sont donc capturées, jamais relayées.
-url = f"https://{{jeton}}@github.com/{{DEPOT_COMPTE}}/{{DEPOT_NOM}}.git"
+# Quand un jeton est utilisé, l'URL le contient : elle ne doit JAMAIS être
+# affichée ni figurer dans un message d'erreur. Les sorties de git sont donc
+# capturées, jamais relayées.
+if jeton:
+    url = f"https://{{jeton}}@github.com/{{DEPOT_COMPTE}}/{{DEPOT_NOM}}.git"
+else:
+    url = f"https://github.com/{{DEPOT_COMPTE}}/{{DEPOT_NOM}}.git"
 
 if os.path.isdir(DOSSIER_PROJET):
     commande = ["git", "-C", DOSSIER_PROJET, "pull", "--quiet"]
@@ -173,14 +166,15 @@ resultat = subprocess.run(commande, capture_output=True, text=True)
 if resultat.returncode != 0:
     raise RuntimeError(
         "Récupération du code impossible.\\n"
-        "Vérifiez que le jeton est valide et qu'il donne accès en lecture "
-        f"au dépôt {{DEPOT_COMPTE}}/{{DEPOT_NOM}}."
+        f"Vérifiez que le dépôt {{DEPOT_COMPTE}}/{{DEPOT_NOM}} est accessible.\\n"
+        "S'il est privé, ajoutez un secret {NOM_SECRET_JETON} dans Colab."
     )
 
 if DOSSIER_PROJET not in sys.path:
     sys.path.insert(0, DOSSIER_PROJET)
 
 print("Code récupéré :", DOSSIER_PROJET)
+print("Jeton GitHub  :", "utilisé" if jeton else "non nécessaire (dépôt public)")
 """
         ),
         code(

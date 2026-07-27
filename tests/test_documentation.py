@@ -177,6 +177,57 @@ class TestSectionsDeNotebook(unittest.TestCase):
                 self.assertEqual(sections, list(range(1, len(sections) + 1)))
 
 
+class TestCoherenceDuDiscours(unittest.TestCase):
+    """
+    Le contenu doit correspondre à ses titres, et à la réalité du dépôt.
+
+    Ces contrôles viennent d'un bug réel : en basculant la documentation du
+    dépôt privé vers le dépôt public, le titre « Créer la clé OpenAI » s'est
+    retrouvé au-dessus des instructions du jeton GitHub. Le remplacement avait
+    porté sur l'en-tête, pas sur le corps — et rien ne le signalait.
+    """
+
+    def test_le_depot_n_est_plus_presente_comme_prive(self):
+        for nom in ("TUTORIEL.md", "README.md"):
+            with self.subTest(document=nom):
+                texte = lire(nom)
+
+                self.assertNotIn("Le dépôt est **privé**", texte)
+                self.assertNotIn("dépôt étant privé", texte)
+
+    def test_section_de_la_cle_openai_parle_bien_d_openai(self):
+        tuto = lire("TUTORIEL.md")
+
+        debut = tuto.index("## 3. Créer la clé OpenAI")
+        fin = tuto.index("## 4.")
+        section = tuto[debut:fin]
+
+        self.assertIn("platform.openai.com", section)
+        self.assertIn("sk-", section)
+        # Les étapes de création d'un jeton GitHub n'ont rien à faire ici.
+        self.assertNotIn("Generate new token", section)
+        self.assertNotIn("github_pat_", section)
+
+    def test_checklist_coherente_avec_les_sections(self):
+        """Une checklist qui renvoie à une section disparue égare son lecteur."""
+        tuto = lire("TUTORIEL.md")
+
+        titres = set(re.findall(r"^##\s+(\d+)\.", tuto, re.M))
+        renvois = set(re.findall(r"\(§(\d+)\)", tuto))
+
+        self.assertTrue(renvois)
+        self.assertEqual(renvois - titres, set())
+
+    def test_jeton_github_presente_comme_optionnel(self):
+        """
+        Il reste mentionné — la cellule le gère — mais ne doit plus figurer
+        comme une étape obligatoire.
+        """
+        tuto = lire("TUTORIEL.md")
+
+        self.assertIn("aucun jeton GitHub n'est nécessaire", tuto)
+
+
 class TestLiens(unittest.TestCase):
     def test_liens_relatifs_resolvent(self):
         for nom in DOCUMENTS:
@@ -220,7 +271,6 @@ class TestDepannage(unittest.TestCase):
         tuto = lire("TUTORIEL.md")
 
         sources = {
-            "Secret GITHUB_TOKEN introuvable": "notebooks/01_OCR.ipynb",
             "Récupération du code impossible": "notebooks/01_OCR.ipynb",
             "Clé API introuvable": "theatre_editor/utils/io.py",
             "Dossier de travail introuvable": "theatre_editor/utils/io.py",
