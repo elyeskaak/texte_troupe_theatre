@@ -28,11 +28,26 @@ MyDrive/Troupe 122 - 2026-27/
     Les Justes.pdf
 ```
 
-### 2. Renseigner la clé API dans Colab
+### 2. Renseigner les deux secrets dans Colab
 
-Panneau latéral **🔑 Secrets** → ajouter `OPENAI_API_KEY` → activer
-« Accès au notebook ». La clé n'apparaît ainsi jamais dans le notebook ni dans
-ses sorties.
+Panneau latéral **🔑 Secrets**, puis « Accès au notebook » activé pour chacun :
+
+| Secret | Usage | Nécessaire pour |
+|---|---|---|
+| `OPENAI_API_KEY` | appels aux modèles | étapes 1 à 3 |
+| `GITHUB_TOKEN` | clone de ce dépôt, qui est privé | toutes |
+
+Les secrets Colab n'apparaissent jamais dans le notebook ni dans ses sorties.
+
+Pour le jeton GitHub, créez-en un **strictement limité** : *Fine-grained token*
+→ accès au seul dépôt `texte_troupe_theatre` → permission *Contents : Read-only*.
+Un jeton en lecture seule sur un dépôt unique ne peut rien casser s'il fuite.
+
+La cellule de clone capture les sorties de `git` sans jamais les relayer : l'URL
+contenant le jeton ne peut donc pas se retrouver dans un message d'erreur.
+
+Si vous préférez ne pas créer de jeton, déposez le dossier `theatre_editor/` sur
+votre Drive et utilisez l'option B de la cellule de récupération du code.
 
 ### 3. Ouvrir les notebooks, dans l'ordre
 

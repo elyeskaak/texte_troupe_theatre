@@ -22,7 +22,11 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent.parent
 DOSSIER_NOTEBOOKS = RACINE / "notebooks"
 
-DEPOT_PAR_DEFAUT = "https://github.com/VOTRE-COMPTE/theatre-editor.git"
+DEPOT_COMPTE = "elyeskaak"
+DEPOT_NOM = "texte_troupe_theatre"
+
+# Le dépôt est privé : le clone depuis Colab exige un jeton d'accès personnel.
+NOM_SECRET_JETON = "GITHUB_TOKEN"
 
 
 # ============================================================
@@ -107,33 +111,76 @@ drive.mount("/content/drive")
 """
         ),
         markdown(
-            """
+            f"""
 ## 2. Récupération du code
 
-Deux possibilités. **Si le projet est sur GitHub**, la première cellule le
-clone et se met à jour à chaque exécution. **Si vous avez déposé le dossier
-`theatre_editor/` sur votre Drive**, utilisez la seconde et commentez la
-première.
+Le dépôt [`{DEPOT_COMPTE}/{DEPOT_NOM}`](https://github.com/{DEPOT_COMPTE}/{DEPOT_NOM})
+est **privé** : son clone exige un jeton d'accès personnel.
+
+**À faire une fois.**
+
+1. GitHub → *Settings* → *Developer settings* → *Personal access tokens* →
+   *Fine-grained tokens* → **Generate new token**
+   - *Repository access* : **uniquement** `{DEPOT_NOM}`
+   - *Permissions* → *Repository permissions* → **Contents : Read-only**
+
+   Rien de plus. Un jeton limité à la lecture d'un seul dépôt ne peut rien
+   casser s'il fuite.
+
+2. Colab → panneau latéral **🔑 Secrets** → ajouter `{NOM_SECRET_JETON}` →
+   activer « Accès au notebook ».
+
+Si vous préférez ne pas créer de jeton, utilisez l'option B : déposez le dossier
+`theatre_editor/` directement sur votre Drive.
 """
         ),
         code(
             f"""
-# --- Option A : dépôt Git (recommandé) ---------------------------------
-DEPOT = "{DEPOT_PAR_DEFAUT}"
-DOSSIER_PROJET = "/content/theatre-editor"
+# --- Option A : clone du dépôt privé -----------------------------------
+DEPOT_COMPTE = "{DEPOT_COMPTE}"
+DEPOT_NOM = "{DEPOT_NOM}"
+DOSSIER_PROJET = f"/content/{{DEPOT_NOM}}"
 
 import os
 import subprocess
+import sys
+
+from google.colab import userdata
+
+try:
+    jeton = userdata.get("{NOM_SECRET_JETON}")
+except Exception:
+    jeton = None
+
+if not jeton:
+    raise RuntimeError(
+        "Secret {NOM_SECRET_JETON} introuvable.\\n"
+        "Panneau « 🔑 Secrets » → ajouter {NOM_SECRET_JETON} "
+        "→ activer « Accès au notebook »."
+    )
+
+# L'URL contient le jeton : elle ne doit JAMAIS être affichée, ni figurer dans
+# un message d'erreur. Les sorties de git sont donc capturées, jamais relayées.
+url = f"https://{{jeton}}@github.com/{{DEPOT_COMPTE}}/{{DEPOT_NOM}}.git"
 
 if os.path.isdir(DOSSIER_PROJET):
-    subprocess.run(["git", "-C", DOSSIER_PROJET, "pull", "--quiet"], check=False)
+    commande = ["git", "-C", DOSSIER_PROJET, "pull", "--quiet"]
 else:
-    subprocess.run(["git", "clone", "--quiet", DEPOT, DOSSIER_PROJET], check=True)
+    commande = ["git", "clone", "--quiet", url, DOSSIER_PROJET]
 
-import sys
+resultat = subprocess.run(commande, capture_output=True, text=True)
+
+if resultat.returncode != 0:
+    raise RuntimeError(
+        "Récupération du code impossible.\\n"
+        "Vérifiez que le jeton est valide et qu'il donne accès en lecture "
+        f"au dépôt {{DEPOT_COMPTE}}/{{DEPOT_NOM}}."
+    )
 
 if DOSSIER_PROJET not in sys.path:
     sys.path.insert(0, DOSSIER_PROJET)
+
+print("Code récupéré :", DOSSIER_PROJET)
 """
         ),
         code(
@@ -142,7 +189,7 @@ if DOSSIER_PROJET not in sys.path:
 # Décommentez ces lignes et ajustez le chemin, puis n'exécutez PAS l'option A.
 
 # import sys
-# DOSSIER_PROJET = "/content/drive/MyDrive/theatre-editor"
+# DOSSIER_PROJET = "/content/drive/MyDrive/texte_troupe_theatre"
 # if DOSSIER_PROJET not in sys.path:
 #     sys.path.insert(0, DOSSIER_PROJET)
 """
