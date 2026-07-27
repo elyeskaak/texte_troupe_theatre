@@ -32,6 +32,29 @@ sans modifier `config.py` casserait le pipeline **silencieusement** — d'où
   vide, sinon une page blanche produirait une réponse vide — indiscernable
   d'un échec d'appel.
 
+## Provenance des prompts, et le seul écart assumé
+
+`prompt_edition.md` et `prompt_raccord.md` proviennent du prototype
+`archive/Édition_OCR.ipynb`, repris mot pour mot. Seuls les titres de section,
+déjà en capitales, ont reçu un marqueur `##`.
+
+**Un unique ajout de fond**, dans `prompt_raccord.md` : la section
+« PLACEMENT D'UNE RESSOUDURE ».
+
+Motif. Le prompt d'origine autorisait à « ressouder un mot coupé entre les deux
+blocs » sans dire **où** poser le résultat. Or les extraits sont réassemblés avec
+un saut de ligne, et la convention veut qu'une ligne devienne un paragraphe. Un
+mot laissé à cheval sur les deux extraits restait donc coupé en deux dans
+l'édition finale — le tiret disparaissait, mais la coupure demeurait :
+
+    Tu as fait bon
+
+    voyage ?
+
+C'est un défaut observé sur une exécution réelle du pipeline, non une
+supposition. La section ajoutée impose de placer la ressoudure entièrement d'un
+seul côté.
+
 ## Répartition des rôles entre l'OCR et l'édition
 
 C'est la décision la plus importante que ces prompts traduisent, et elle mérite

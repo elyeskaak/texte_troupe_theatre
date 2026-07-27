@@ -85,6 +85,17 @@ class TestContratRaccord(unittest.TestCase):
     def test_portee_limitee_a_la_jonction(self):
         self.assertIn("éloignée de la jonction", self.prompt)
 
+    def test_placement_de_la_ressoudure_impose(self):
+        """
+        Sans cette règle, un mot ressoudé mais laissé à cheval sur les deux
+        extraits reste coupé en deux dans l'édition finale : les extraits sont
+        réassemblés avec un saut de ligne, et chaque ligne devient un
+        paragraphe. Défaut observé sur une exécution réelle.
+        """
+        self.assertIn("PLACEMENT D'UNE RESSOUDURE", self.prompt)
+        self.assertIn("entièrement dans l'un des deux extraits", self.prompt)
+        self.assertIn("jamais à cheval", self.prompt)
+
 
 class TestContratValidation(unittest.TestCase):
     def setUp(self):
