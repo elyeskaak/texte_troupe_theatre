@@ -1,0 +1,28 @@
+# ============================================================
+# Dépendances du pipeline theatre_editor
+# ------------------------------------------------------------
+# Installation dans Colab :
+#     !pip install -q -r requirements.txt
+#
+# Les bornes sont des minimums, non des versions figées : Colab impose
+# régulièrement ses propres versions, et un pin strict provoquerait des
+# conflits de résolution plutôt que de la stabilité.
+# ============================================================
+
+# Client OpenAI. La borne 1.66 garantit la présence de la Responses API
+# (client.responses.create) utilisée exclusivement par ce projet.
+openai>=1.66.0
+
+# Rasterisation des pages PDF en images pour l'OCR Vision.
+# Choisi contre pdf2image, qui exige le binaire système poppler.
+# Le module s'importe sous le nom `pymupdf` (ou `fitz` sur les versions
+# anciennes) ; utils/api.py et ocr.py gèrent les deux cas.
+pymupdf>=1.24.0
+
+# Génération du document final. Aucune IA à cette étape.
+python-docx>=1.1.0
+
+# ------------------------------------------------------------
+# Aucune dépendance de test : tests/ n'utilise que `unittest`, de la
+# bibliothèque standard, afin de s'exécuter partout sans installation.
+# ------------------------------------------------------------
