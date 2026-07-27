@@ -1,0 +1,789 @@
+"""
+Génère les quatre notebooks Colab de `notebooks/`.
+
+Pourquoi un générateur plutôt que des `.ipynb` écrits à la main : le format
+Jupyter est un JSON verbeux où la moindre virgule manquante rend le fichier
+illisible, et où le contenu utile est noyé dans les métadonnées. Décrire les
+cellules en Python garantit un JSON valide, rend les quatre notebooks
+rigoureusement homogènes, et permet de corriger le préambule des quatre en une
+seule édition.
+
+    python outils/generer_notebooks.py
+
+À relancer après toute modification de ce fichier. Les notebooks produits sont
+versionnés : c'est eux que l'on ouvre dans Colab.
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+RACINE = Path(__file__).resolve().parent.parent
+DOSSIER_NOTEBOOKS = RACINE / "notebooks"
+
+DEPOT_PAR_DEFAUT = "https://github.com/VOTRE-COMPTE/theatre-editor.git"
+
+
+# ============================================================
+# FABRIQUES DE CELLULES
+# ============================================================
+
+
+def markdown(texte: str) -> dict:
+    """Crée une cellule Markdown."""
+    return {
+        "cell_type": "markdown",
+        "metadata": {},
+        "source": texte.strip().split("\n"),
+    }
+
+
+def code(texte: str) -> dict:
+    """Crée une cellule de code, non exécutée."""
+    return {
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "outputs": [],
+        "source": texte.strip().split("\n"),
+    }
+
+
+def notebook(titre: str, cellules: list[dict]) -> dict:
+    """Assemble un notebook complet, avec les métadonnées attendues par Colab."""
+    return {
+        "nbformat": 4,
+        "nbformat_minor": 0,
+        "metadata": {
+            "colab": {"name": titre, "provenance": [], "toc_visible": True},
+            "kernelspec": {"display_name": "Python 3", "name": "python3"},
+            "language_info": {"name": "python"},
+        },
+        "cells": cellules,
+    }
+
+
+# ============================================================
+# CELLULES COMMUNES
+# ============================================================
+
+
+def preambule(numero: str, titre: str, description: str) -> list[dict]:
+    """
+    Cellules d'ouverture, identiques pour les quatre notebooks.
+
+    Le notebook n'est qu'une interface : il monte le Drive, installe les
+    dépendances, rend le paquet importable, puis appelle une fonction. Aucune
+    logique métier n'y figure.
+    """
+    return [
+        markdown(
+            f"""
+# {numero} — {titre}
+
+{description}
+
+---
+
+**Ce notebook n'est qu'une interface.** Toute la logique vit dans le paquet
+`theatre_editor`. On y monte le Drive, on installe les dépendances, on surcharge
+éventuellement la configuration, puis on lance l'étape.
+
+**Cette étape est reprenable.** Si Colab coupe, relancez la cellule
+d'exécution : le travail déjà validé ne sera pas refait, et vous ne repaierez
+aucun appel.
+"""
+        ),
+        markdown("## 1. Dépendances et montage du Drive"),
+        code(
+            """
+# Installation des dépendances du pipeline.
+!pip install -q -U openai pymupdf python-docx
+
+from google.colab import drive
+
+drive.mount("/content/drive")
+"""
+        ),
+        markdown(
+            """
+## 2. Récupération du code
+
+Deux possibilités. **Si le projet est sur GitHub**, la première cellule le
+clone et se met à jour à chaque exécution. **Si vous avez déposé le dossier
+`theatre_editor/` sur votre Drive**, utilisez la seconde et commentez la
+première.
+"""
+        ),
+        code(
+            f"""
+# --- Option A : dépôt Git (recommandé) ---------------------------------
+DEPOT = "{DEPOT_PAR_DEFAUT}"
+DOSSIER_PROJET = "/content/theatre-editor"
+
+import os
+import subprocess
+
+if os.path.isdir(DOSSIER_PROJET):
+    subprocess.run(["git", "-C", DOSSIER_PROJET, "pull", "--quiet"], check=False)
+else:
+    subprocess.run(["git", "clone", "--quiet", DEPOT, DOSSIER_PROJET], check=True)
+
+import sys
+
+if DOSSIER_PROJET not in sys.path:
+    sys.path.insert(0, DOSSIER_PROJET)
+"""
+        ),
+        code(
+            """
+# --- Option B : le dossier theatre_editor/ est sur votre Drive ---------
+# Décommentez ces lignes et ajustez le chemin, puis n'exécutez PAS l'option A.
+
+# import sys
+# DOSSIER_PROJET = "/content/drive/MyDrive/theatre-editor"
+# if DOSSIER_PROJET not in sys.path:
+#     sys.path.insert(0, DOSSIER_PROJET)
+"""
+        ),
+        markdown(
+            """
+## 3. Configuration
+
+`config.py` porte toutes les valeurs par défaut. Les surcharges ci-dessous ne
+valent que pour cette session : elles ne modifient pas le fichier.
+
+**Vérifiez le dossier de travail** avant de continuer.
+"""
+        ),
+        code(
+            """
+from pathlib import Path
+
+from theatre_editor import config
+
+# Dossier Drive contenant les PDF et recevant toutes les sorties.
+config.DOSSIER_DRIVE = Path("/content/drive/MyDrive/Troupe 122 - 2026-27")
+
+print("Dossier de travail :", config.DOSSIER_DRIVE)
+print("Existe             :", config.DOSSIER_DRIVE.is_dir())
+"""
+        ),
+    ]
+
+
+CELLULE_CLE_API = code(
+    """
+# La clé API est lue depuis les Secrets de Colab.
+#
+#   panneau latéral « 🔑 Secrets » → ajouter OPENAI_API_KEY
+#   → activer « Accès au notebook »
+#
+# Ainsi la clé n'apparaît jamais dans le notebook ni dans ses sorties.
+
+from theatre_editor.utils import io
+
+try:
+    io.charger_cle_api()
+    print("Clé API trouvée.")
+except RuntimeError as erreur:
+    print(erreur)
+"""
+)
+
+
+CELLULE_VERIFIER_MODELES = code(
+    """
+# Contrôle que les identifiants de config.py existent bien sur ce compte.
+# Deux secondes ici évitent de découvrir une faute de frappe après trois
+# heures de traitement.
+
+from theatre_editor.utils import api
+
+api.verifier_modeles_configures()
+"""
+)
+
+
+def cellule_journal(etape: str) -> dict:
+    """Cellule d'inspection du journal d'une étape."""
+    return code(
+        f"""
+# Journal détaillé de l'étape : un enregistrement par appel API, avec sa
+# date, son modèle, son response_id, sa durée et sa consommation de jetons.
+
+import json
+
+chemin = config.DOSSIER_DRIVE / config.NOM_JOURNAL.format(etape="{etape}")
+
+if chemin.exists():
+    journal = json.loads(chemin.read_text(encoding="utf-8"))
+    print("Dernière exécution :", journal["derniere_execution"])
+    print("Configuration      :", json.dumps(journal["configuration"], ensure_ascii=False))
+    print()
+
+    for nom, bilan in journal["livres"].items():
+        print(f"{{nom}} : {{json.dumps(bilan, ensure_ascii=False)}}")
+
+    jetons = sum(
+        (appel.get("tokens_entree") or 0) + (appel.get("tokens_sortie") or 0)
+        for appel in journal["appels"]
+    )
+    print()
+    print(f"{{len(journal['appels'])}} appel(s) journalisé(s), {{jetons:,}} jetons".replace(",", " "))
+else:
+    print("Aucun journal : l'étape n'a pas encore été lancée.")
+"""
+    )
+
+
+# ============================================================
+# NOTEBOOK 1 — OCR
+# ============================================================
+
+
+def notebook_ocr() -> dict:
+    return notebook(
+        "01_OCR.ipynb",
+        [
+            *preambule(
+                "Étape 1",
+                "OCR Vision",
+                "Transcrit les PDF du dossier Drive en fichiers "
+                "`<Livre>_OCR.txt`, page par page.\n\n"
+                "**Le modèle ne corrige rien.** Il transcrit ce qu'il voit. "
+                "C'est l'étape 2 qui corrigera, et c'est parce que `OCR.txt` "
+                "reste brut qu'il pourra servir de référence à l'étape 3.",
+            ),
+            markdown("## 4. Clé API"),
+            CELLULE_CLE_API,
+            markdown("## 5. Vérification des modèles"),
+            CELLULE_VERIFIER_MODELES,
+            markdown(
+                """
+## 6. Aperçu du travail à faire
+
+Liste les PDF trouvés et l'avancement de chacun, sans lancer aucun appel.
+"""
+            ),
+            code(
+                """
+from theatre_editor.utils import io
+
+for chemin in io.lister_pdf(config.DOSSIER_DRIVE):
+    nom = io.nom_livre_depuis_pdf(chemin)
+    chemins = io.resoudre_chemins(nom, chemin.parent)
+
+    faites = sum(
+        1
+        for fichier in sorted(chemins.dossier_pages.glob("page_*.json"))
+        if io.unite_terminee(fichier)
+    ) if chemins.dossier_pages.is_dir() else 0
+
+    taille_mo = chemin.stat().st_size / (1024 * 1024)
+    print(f"{nom:<40} {taille_mo:>6.1f} Mo   {faites} page(s) déjà transcrite(s)")
+"""
+            ),
+            markdown(
+                """
+## 7. Lancement
+
+Reprenable : relancez cette cellule autant de fois qu'il le faut.
+
+Comptez environ 3 à 6 secondes par page. Un livre de 300 pages demande donc
+entre 20 et 30 minutes, et la session Colab peut couper d'ici là — ce n'est pas
+un problème.
+"""
+            ),
+            code(
+                """
+from theatre_editor import ocr
+
+resultats = ocr.executer(config.DOSSIER_DRIVE)
+"""
+            ),
+            markdown(
+                """
+## 8. Contrôle du résultat
+
+Affiche le début de chaque fichier produit, et signale les pages en échec.
+"""
+            ),
+            code(
+                """
+for resultat in resultats:
+    chemins = io.resoudre_chemins(resultat.nom, config.DOSSIER_DRIVE)
+    print("=" * 72)
+    print(resultat.nom, "—", resultat.statut)
+    print("=" * 72)
+
+    if resultat.numeros_echoues:
+        print("Pages en échec :", resultat.numeros_echoues)
+        print("Relancez la cellule 7 pour les reprendre.")
+        print()
+
+    if chemins.ocr.exists():
+        print(io.lire_texte(chemins.ocr)[:1200])
+"""
+            ),
+            markdown("## 9. Journal"),
+            cellule_journal("ocr"),
+        ],
+    )
+
+
+# ============================================================
+# NOTEBOOK 2 — ÉDITION
+# ============================================================
+
+
+def notebook_edition() -> dict:
+    return notebook(
+        "02_Edition.ipynb",
+        [
+            *preambule(
+                "Étape 2",
+                "Édition OCR",
+                "Transforme `<Livre>_OCR.txt` en `<Livre>_EDIT.txt` : "
+                "correction des erreurs de reconnaissance, puis passe de "
+                "raccord entre les blocs.\n\n"
+                "**Le texte de l'auteur n'est jamais réécrit.** Seules les "
+                "erreurs manifestes d'OCR sont corrigées.",
+            ),
+            markdown("## 4. Clé API"),
+            CELLULE_CLE_API,
+            markdown("## 5. Vérification des modèles"),
+            CELLULE_VERIFIER_MODELES,
+            markdown(
+                """
+## 6. Réglages de l'édition
+
+`PAGES_PAR_BLOC` est le réglage le plus sensible. **Ne le changez pas au milieu
+d'un livre** : les blocs déjà édités ne seraient plus alignés, et l'étape 3
+refuserait de valider.
+"""
+            ),
+            code(
+                """
+config.PAGES_PAR_BLOC = 8          # 6 à 10 est une bonne plage
+config.LIGNES_CONTEXTE_RACCORD = 50
+config.RATIO_MINIMAL_LONGUEUR = 0.80
+
+print("Modèle d'édition :", config.MODEL_EDITION)
+print("Modèle de raccord:", config.MODEL_RACCORD)
+print("Pages par bloc   :", config.PAGES_PAR_BLOC)
+"""
+            ),
+            markdown(
+                """
+## 7. Aperçu du découpage
+
+Montre en combien de blocs chaque livre sera découpé, et ce qui est déjà fait.
+"""
+            ),
+            code(
+                """
+from theatre_editor.utils import blocks, io
+
+for chemin in io.lister_fichiers_ocr(config.DOSSIER_DRIVE):
+    nom = io.nom_livre_depuis_ocr(chemin)
+    chemins = io.resoudre_chemins(nom, chemin.parent)
+
+    pages = blocks.decouper_en_pages(io.lire_texte(chemin))
+    liste = blocks.former_blocs(pages, config.PAGES_PAR_BLOC)
+
+    faits = sum(
+        1 for b in liste if io.unite_terminee(chemins.bloc_json(b.numero))
+    )
+    raccords = sum(
+        1
+        for numero in range(1, max(1, len(liste)))
+        if io.unite_terminee(chemins.raccord_json(numero))
+    )
+
+    print(f"{nom}")
+    print(f"   {len(pages)} pages → {len(liste)} blocs")
+    print(f"   {faits}/{len(liste)} bloc(s) édité(s), "
+          f"{raccords}/{max(0, len(liste) - 1)} raccord(s) fait(s)")
+"""
+            ),
+            markdown(
+                """
+## 8. Lancement
+
+Les deux passes s'enchaînent : édition des blocs, puis raccord des jonctions.
+Reprenable à l'unité près.
+"""
+            ),
+            code(
+                """
+from theatre_editor import edition
+
+resultats = edition.executer(config.DOSSIER_DRIVE)
+"""
+            ),
+            markdown(
+                """
+## 9. Contrôle du résultat
+
+Affiche le début de chaque `EDIT.txt` et la structure que l'étape 4 y verra.
+C'est le moment de vérifier que la convention typographique est bien appliquée.
+"""
+            ),
+            code(
+                """
+for resultat in resultats:
+    chemins = io.resoudre_chemins(resultat.nom, config.DOSSIER_DRIVE)
+    print("=" * 72)
+    print(resultat.nom, "—", resultat.statut)
+    print("=" * 72)
+
+    if not chemins.edit.exists():
+        print("Aucun fichier édité.")
+        continue
+
+    texte = io.lire_texte(chemins.edit)
+    print(texte[:1200])
+    print()
+    print(blocks.rapport_classification(blocks.construire_index_structure(texte)))
+"""
+            ),
+            markdown("## 10. Journal"),
+            cellule_journal("edition"),
+        ],
+    )
+
+
+# ============================================================
+# NOTEBOOK 3 — VÉRIFICATION
+# ============================================================
+
+
+def notebook_verification() -> dict:
+    return notebook(
+        "03_Verification.ipynb",
+        [
+            *preambule(
+                "Étape 3",
+                "Contrôle qualité",
+                "Compare `OCR.txt` et `EDIT.txt` pour détecter ce que "
+                "l'édition aurait perdu, et produit `<Livre>_REPORT.txt`.\n\n"
+                "**Le texte n'est jamais modifié.** Cette étape produit un "
+                "diagnostic, pas une correction : c'est à vous de décider quoi "
+                "faire de ce qu'elle signale.",
+            ),
+            markdown("## 4. Clé API"),
+            CELLULE_CLE_API,
+            markdown(
+                """
+## 5. Contrôles mécaniques d'abord
+
+Ces contrôles sont **gratuits et instantanés** : aucun appel API. Lancez-les
+seuls pour un premier avis, avant d'engager la comparaison par le modèle.
+"""
+            ),
+            code(
+                """
+from theatre_editor.utils import blocks, io
+
+for chemin in io.lister_fichiers_ocr(config.DOSSIER_DRIVE):
+    nom = io.nom_livre_depuis_ocr(chemin)
+    chemins = io.resoudre_chemins(nom, chemin.parent)
+
+    if not chemins.edit.exists():
+        print(f"{nom} : pas encore édité.")
+        continue
+
+    constats = blocks.controles_mecaniques(
+        io.lire_texte(chemin), io.lire_texte(chemins.edit)
+    )
+
+    print(f"{nom} : {len(constats)} constat(s) mécanique(s)")
+    for constat in constats:
+        print("   ", constat)
+"""
+            ),
+            markdown(
+                """
+## 6. Lancement de la comparaison complète
+
+Un appel par bloc. Reprenable.
+"""
+            ),
+            code(
+                """
+from theatre_editor import validation
+
+resultats = validation.executer(config.DOSSIER_DRIVE)
+"""
+            ),
+            markdown(
+                """
+## 7. Lecture du rapport
+
+Le rapport est fait pour être lu par un humain. Il ne détaille que les blocs
+porteurs de constats.
+"""
+            ),
+            code(
+                """
+for resultat in resultats:
+    chemins = io.resoudre_chemins(resultat.nom, config.DOSSIER_DRIVE)
+
+    if chemins.report.exists():
+        print(io.lire_texte(chemins.report))
+    else:
+        print(f"{resultat.nom} : aucun rapport produit.")
+"""
+            ),
+            markdown(
+                """
+## 8. Que faire d'un constat ?
+
+Le rapport signale, il ne corrige pas. Trois façons d'agir, de la plus légère à
+la plus lourde.
+
+**Corriger `EDIT.txt` à la main.** Le plus simple pour quelques constats
+isolés. Le fichier est du texte, ouvrez-le et corrigez. Relancez ensuite
+l'étape 4 seule.
+
+**Refaire un bloc.** Supprimez ses fichiers dans `_EDIT_blocs/` et
+`_EDIT_raccords/`, puis relancez l'étape 2 : seul ce bloc sera repayé.
+
+**Réviser un prompt.** Si le même défaut revient sur beaucoup de blocs, c'est
+le prompt qu'il faut corriger, dans `theatre_editor/prompts/`. Supprimez alors
+`_EDIT_blocs/` en entier pour refaire le livre — et ne changez jamais de prompt
+au milieu d'un livre, cela produirait des blocs hétérogènes.
+"""
+            ),
+            code(
+                """
+# Exemple : refaire le bloc 12 d'un livre.
+# Décommentez et ajustez le nom et le numéro.
+
+# NOM_LIVRE = "Le Malentendu"
+# NUMERO = 12
+#
+# chemins = io.resoudre_chemins(NOM_LIVRE, config.DOSSIER_DRIVE)
+#
+# for chemin in (
+#     chemins.bloc_txt(NUMERO), chemins.bloc_json(NUMERO),
+#     chemins.raccord_txt(NUMERO), chemins.raccord_json(NUMERO),
+#     chemins.report_bloc_txt(NUMERO), chemins.report_bloc_json(NUMERO),
+# ):
+#     if chemin.exists():
+#         chemin.unlink()
+#         print("supprimé :", chemin.name)
+"""
+            ),
+            markdown("## 9. Journal"),
+            cellule_journal("validation"),
+        ],
+    )
+
+
+# ============================================================
+# NOTEBOOK 4 — DOCX
+# ============================================================
+
+
+def notebook_docx() -> dict:
+    return notebook(
+        "04_DOCX.ipynb",
+        [
+            *preambule(
+                "Étape 4",
+                "Génération DOCX",
+                "Transforme `<Livre>_EDIT.txt` en `<Livre>.docx`.\n\n"
+                "**Aucune IA, aucune clé API, aucun coût.** Uniquement "
+                "`python-docx` et la convention typographique. Deux exécutions "
+                "produisent le même document : régénérez autant que vous "
+                "voulez après avoir ajusté un réglage.",
+            ),
+            markdown(
+                """
+## 4. Réglages typographiques
+
+Modifiez librement : cette étape est gratuite et reproductible.
+"""
+            ),
+            code(
+                """
+config.POLICE_TEXTE = "EB Garamond"
+config.TAILLE_TEXTE_PT = 11
+config.TAILLE_TITRE_ACTE_PT = 16
+config.TAILLE_TITRE_SCENE_PT = 14
+config.MARGE_CM = 3.0
+
+config.SAUT_DE_PAGE_AVANT_ACTE = True
+config.SAUT_DE_PAGE_AVANT_SCENE = False
+
+for cle, definition in config.DEFINITIONS_STYLES.items():
+    saut = " + saut de page" if definition["saut_de_page"] else ""
+    graisse = "gras" if definition["gras"] else ("italique" if definition["italique"] else "romain")
+    print(f"   {definition['nom']:<14} {definition['taille_pt']:>2} pt  "
+          f"{definition['alignement']:<9} {graisse}{saut}")
+"""
+            ),
+            markdown(
+                """
+## 5. Table d'inspection de la structure
+
+**À lire avant de générer.** Elle montre comment chaque nom en gras a été
+classé — acte, scène, personnage — et signale d'un `⚠` les classements
+incertains.
+
+C'est ici qu'on repère un acte pris pour un personnage, plutôt que de le
+découvrir à la première page blanche parasite.
+"""
+            ),
+            code(
+                """
+from theatre_editor.utils import blocks, io
+
+for chemin in io.lister_fichiers_edit(config.DOSSIER_DRIVE):
+    nom = io.nom_livre_depuis_edit(chemin)
+    index = blocks.construire_index_structure(io.lire_texte(chemin))
+
+    print("=" * 72)
+    print(nom)
+    print("=" * 72)
+    print(blocks.rapport_classification(index))
+    print()
+"""
+            ),
+            markdown(
+                """
+## 6. Corriger un classement
+
+Si la table ci-dessus se trompe, forcez le classement ici. Écrivez les noms
+**en capitales et sans accents**, tels qu'ils apparaissent dans la colonne
+`LABEL`.
+"""
+            ),
+            code(
+                """
+# Exemples — décommentez et adaptez :
+
+# config.PERSONNAGES_FORCES = frozenset({"LA VOIX", "LE CHOEUR"})
+# config.TITRES_ACTE_FORCES = frozenset({"OUVERTURE"})
+# config.TITRES_SCENE_FORCES = frozenset({"ENTRACTE"})
+
+print("Personnages forcés :", sorted(config.PERSONNAGES_FORCES))
+print("Actes forcés       :", sorted(config.TITRES_ACTE_FORCES))
+print("Scènes forcées     :", sorted(config.TITRES_SCENE_FORCES))
+"""
+            ),
+            markdown("## 7. Génération"),
+            code(
+                """
+from theatre_editor import docx_export
+
+resultats = docx_export.executer(config.DOSSIER_DRIVE)
+"""
+            ),
+            markdown(
+                """
+## 8. Contrôle du document
+
+Relit le DOCX produit et affiche le style appliqué à chaque paragraphe. Le
+meilleur moyen de vérifier qu'actes, scènes et personnages sont bien distingués.
+"""
+            ),
+            code(
+                """
+import docx
+
+for resultat in resultats:
+    chemins = io.resoudre_chemins(resultat.nom, config.DOSSIER_DRIVE)
+
+    if not chemins.docx.exists():
+        print(f"{resultat.nom} : aucun document produit.")
+        continue
+
+    document = docx.Document(str(chemins.docx))
+
+    print("=" * 72)
+    print(f"{resultat.nom} — {len(document.paragraphs)} paragraphes")
+    print("=" * 72)
+
+    for paragraphe in document.paragraphs[:40]:
+        style = paragraphe.style.name.replace(config.PREFIXE_STYLE, "")
+        saut = "  [PAGE NEUVE]" if paragraphe.style.paragraph_format.page_break_before else ""
+        print(f"  {style:<14} | {paragraphe.text[:60]}{saut}")
+
+    if len(document.paragraphs) > 40:
+        print(f"  … {len(document.paragraphs) - 40} paragraphes de plus")
+"""
+            ),
+            markdown(
+                """
+## 9. Téléchargement
+
+Le document est déjà sur votre Drive. Cette cellule permet de le récupérer
+directement sur votre machine.
+"""
+            ),
+            code(
+                """
+from google.colab import files
+
+for resultat in resultats:
+    chemins = io.resoudre_chemins(resultat.nom, config.DOSSIER_DRIVE)
+
+    if chemins.docx.exists():
+        files.download(str(chemins.docx))
+"""
+            ),
+            markdown(
+                """
+## 10. À propos de la police
+
+`python-docx` inscrit le **nom** de la police dans le document, il ne
+l'incorpore pas. EB Garamond n'a donc pas à être installée dans Colab pour que
+la génération réussisse.
+
+En revanche, si elle est absente de la machine qui **ouvre** le fichier, Word
+substituera une autre police. Pour un rendu conforme, installez EB Garamond sur
+votre poste — elle est gratuite et disponible sur Google Fonts.
+"""
+            ),
+            markdown("## 11. Journal"),
+            cellule_journal("docx"),
+        ],
+    )
+
+
+# ============================================================
+# ÉCRITURE
+# ============================================================
+
+
+NOTEBOOKS = {
+    "01_OCR.ipynb": notebook_ocr,
+    "02_Edition.ipynb": notebook_edition,
+    "03_Verification.ipynb": notebook_verification,
+    "04_DOCX.ipynb": notebook_docx,
+}
+
+
+def main() -> None:
+    """Écrit les quatre notebooks."""
+    DOSSIER_NOTEBOOKS.mkdir(parents=True, exist_ok=True)
+
+    for nom, fabrique in NOTEBOOKS.items():
+        chemin = DOSSIER_NOTEBOOKS / nom
+        contenu = json.dumps(fabrique(), ensure_ascii=False, indent=1)
+
+        # Fin de ligne LF explicite : le dépôt est normalisé, et un CRLF dans
+        # un .ipynb produit des diffs illisibles.
+        with open(chemin, "w", encoding="utf-8", newline="\n") as flux:
+            flux.write(contenu + "\n")
+
+        cellules = len(fabrique()["cells"])
+        print(f"écrit : notebooks/{nom} ({cellules} cellules)")
+
+
+if __name__ == "__main__":
+    main()
