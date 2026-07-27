@@ -479,6 +479,108 @@ def verifier_sortie(source: str, sortie: str) -> list[str]:
 
 
 # ============================================================
+# 5 bis. PASSE DE RACCORD
+# ============================================================
+
+# Réponse attendue du modèle de raccord. Le `.*?` central absorbe un éventuel
+# retour à la ligne ou commentaire entre les deux blocs.
+MOTIF_RACCORD = re.compile(
+    re.escape(config.DELIM_RACCORD_GAUCHE)
+    + r"(?P<gauche>.*?)"
+    + re.escape(config.DELIM_RACCORD_GAUCHE_FIN)
+    + r".*?"
+    + re.escape(config.DELIM_RACCORD_DROIT)
+    + r"(?P<droit>.*?)"
+    + re.escape(config.DELIM_RACCORD_DROIT_FIN),
+    re.DOTALL,
+)
+
+
+def extraire_blocs_raccord(texte: str) -> tuple[str, str]:
+    """
+    Extrait les deux extraits corrigés d'une réponse de raccord.
+
+    Args:
+        texte: réponse brute du modèle.
+
+    Returns:
+        `(extrait gauche, extrait droit)`, débarrassés de leurs délimiteurs.
+
+    Raises:
+        ValueError: si le format délimité n'est pas respecté. L'appelant doit
+            alors conserver les extraits d'origine : mieux vaut une jonction non
+            corrigée qu'une jonction corrompue.
+    """
+    correspondance = MOTIF_RACCORD.search(texte)
+
+    if correspondance is None:
+        raise ValueError(
+            "format de raccord non respecté : délimiteurs "
+            f"{config.DELIM_RACCORD_GAUCHE} / {config.DELIM_RACCORD_DROIT} "
+            "introuvables dans la réponse"
+        )
+
+    return (
+        correspondance.group("gauche").strip(),
+        correspondance.group("droit").strip(),
+    )
+
+
+def verifier_raccord(avant: str, apres: str) -> list[str]:
+    """
+    Vérifie qu'un extrait raccordé n'a pas dérivé de son original.
+
+    Garde-fou essentiel : la passe de raccord réécrit les fichiers **en place**.
+    Un modèle qui résumerait, réécrirait ou ne rendrait qu'une partie de
+    l'extrait détruirait donc du texte définitivement, sans possibilité de
+    retour.
+
+    Un raccord légitime ne fait que ressouder un mot, rétablir une ponctuation
+    ou supprimer un doublon : la longueur bouge à peine. Hors des bornes
+    configurées, la correction doit être refusée.
+
+    Returns:
+        Liste d'avertissements. Vide si la correction est acceptable.
+    """
+    avertissements: list[str] = []
+
+    if not apres.strip():
+        return ["extrait raccordé vide"]
+
+    reference = len(avant.strip())
+
+    if reference:
+        ratio = len(apres.strip()) / reference
+
+        if ratio < config.RATIO_MINIMAL_RACCORD:
+            avertissements.append(
+                f"extrait raccourci au raccord : ratio {ratio:.2f} "
+                f"(minimum {config.RATIO_MINIMAL_RACCORD:.2f})"
+            )
+        elif ratio > config.RATIO_MAXIMAL_RACCORD:
+            avertissements.append(
+                f"extrait allongé au raccord : ratio {ratio:.2f} "
+                f"(maximum {config.RATIO_MAXIMAL_RACCORD:.2f})"
+            )
+
+    return avertissements
+
+
+def recoller_gauche(prefixe: str, extrait: str) -> str:
+    """Reconstitue un bloc gauche à partir de son préfixe et de son extrait corrigé."""
+    parties = [partie for partie in (prefixe.rstrip(), extrait.strip()) if partie]
+
+    return "\n".join(parties).strip() + "\n"
+
+
+def recoller_droite(extrait: str, suffixe: str) -> str:
+    """Reconstitue un bloc droit à partir de son extrait corrigé et de son suffixe."""
+    parties = [partie for partie in (extrait.strip(), suffixe.lstrip()) if partie]
+
+    return "\n".join(parties).strip() + "\n"
+
+
+# ============================================================
 # 6. FORME DES LIGNES
 # ============================================================
 

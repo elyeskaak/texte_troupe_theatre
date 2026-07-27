@@ -126,6 +126,18 @@ RATIO_MINIMAL_LONGUEUR = 0.80
 # Si True, un bloc déjà produit mais porteur d'avertissements est refait.
 RETRAITER_BLOCS_SUSPECTS = True
 
+# Bornes de variation admises pour un extrait passé en raccord.
+#
+# Garde-fou important : la passe de raccord réécrit les fichiers EN PLACE.
+# Une réponse aberrante — modèle qui résume, qui réécrit, ou qui ne rend
+# qu'une partie de l'extrait — détruirait donc du texte définitivement.
+#
+# Un raccord légitime ne fait que ressouder un mot, rétablir une ponctuation
+# ou supprimer un doublon : la longueur ne doit quasiment pas bouger. Hors de
+# ces bornes, la correction est refusée et l'extrait d'origine conservé.
+RATIO_MINIMAL_RACCORD = 0.90
+RATIO_MAXIMAL_RACCORD = 1.10
+
 # Motifs dont la présence en sortie signale un problème : marqueur non
 # supprimé, bavardage du modèle, refus, ou balise de code.
 MOTIFS_INTERDITS: tuple[str, ...] = (
@@ -231,9 +243,10 @@ TITRES_SCENE_FORCES: frozenset[str] = frozenset()
 MARQUEUR_PAGE = "[PAGE {numero}]"
 SEPARATEUR_PAGE = "\n\n<<<PAGE_BREAK>>>\n\n"
 
-# Marqueur inséré à la place d'une page dont l'OCR a définitivement échoué,
-# afin que le trou soit visible dans OCR.txt plutôt que silencieux.
+# Marqueurs insérés à la place d'une unité définitivement échouée, afin que le
+# trou soit visible dans le fichier assemblé plutôt que silencieux.
 MARQUEUR_ECHEC_PAGE = "[PAGE {numero} — ÉCHEC OCR]"
+MARQUEUR_ECHEC_BLOC = "[BLOC {numero} — ÉCHEC ÉDITION]"
 
 # Délimiteurs attendus dans la réponse de la passe de raccord.
 DELIM_RACCORD_GAUCHE = "<<<BLOC_GAUCHE>>>"
