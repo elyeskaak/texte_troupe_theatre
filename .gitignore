@@ -1,0 +1,44 @@
+# ============================================================
+# Artefacts Python
+# ============================================================
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# ============================================================
+# Secrets — ne JAMAIS versionner une clé API
+# ============================================================
+.env
+*.key
+secrets.json
+
+# ============================================================
+# Sorties du pipeline
+# ------------------------------------------------------------
+# Les données de travail vivent sur Google Drive, pas dans le dépôt.
+# On ignore ici les artefacts au cas où un test serait lancé en local.
+# ============================================================
+*_OCR.txt
+*_EDIT.txt
+*_REPORT.txt
+*.docx
+*_OCR_pages/
+*_EDIT_blocs/
+*_EDIT_raccords/
+*_REPORT_blocs/
+journal_*.json
+
+# ============================================================
+# PDF sources (volumineux, et souvent sous droits)
+# ============================================================
+*.pdf
+
+# ============================================================
+# Système
+# ============================================================
+.DS_Store
+Thumbs.db
+desktop.ini
