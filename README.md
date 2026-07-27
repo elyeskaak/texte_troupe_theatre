@@ -18,6 +18,10 @@ travail s'était arrêté : une coupure coûte au maximum **un appel API**.
 
 ---
 
+> **Première utilisation ?** Suivez le [**tutoriel pas à pas**](TUTORIEL.md) :
+> chemins de clics, ce qui doit s'afficher à chaque cellule, et un tableau de
+> dépannage. Aucune connaissance technique supposée.
+
 ## Démarrage rapide
 
 ### 1. Déposer les PDF sur le Drive
