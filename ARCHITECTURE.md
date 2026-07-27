@@ -971,7 +971,7 @@ DOSSIER_DRIVE = Path("/content/drive/MyDrive/Troupe 122 - 2026-27")
 SCAN_RECURSIF = False           # PDF à plat dans le dossier
 
 # ----- Modèles (identifiants vérifiés sur le compte) ------------------
-MODEL_OCR         = "gpt-4o"                    # vision
+MODEL_OCR         = "gpt-5.5-2026-04-23"        # vision
 MODEL_EDITION     = "gpt-5.5-2026-04-23"        # repris du prototype
 MODEL_RACCORD     = "gpt-5.4-mini-2026-03-17"   # léger : voir note ci-dessous
 MODEL_VALIDATION  = "gpt-5.5-2026-04-23"
@@ -1054,12 +1054,47 @@ Deux remarques d'inventaire, pour votre information :
   aucun n'a de variante datée. Je ne les retiens pas sans que vous ayez confirmé
   ce qu'ils sont — changer de modèle d'édition en cours de livre créerait une
   hétérogénéité stylistique entre blocs.
-- `gpt-4o` et `gpt-5.5-2026-04-23` sont bien tous deux présents : vos deux
-  choix principaux sont confirmés valides.
+- `gpt-5.5-2026-04-23` est bien présent : c'est le modèle retenu pour l'OCR,
+  l'édition et la validation. `gpt-4o` reste disponible comme repli pour la
+  vision (§11.2).
 
 Le helper `lister_modeles_disponibles()` est néanmoins inclus dans
 `utils/api.py` et appelable depuis les notebooks, afin que ce contrôle soit
 reproductible sans quitter Colab.
+
+### 11.2 Note sur `MODEL_OCR` — une déférence excessive, corrigée
+
+`MODEL_OCR` valait initialement `gpt-4o`, parce que le cahier des charges
+demandait « utiliser GPT-4o comme modèle OCR ». Cette contrainte a été reprise
+sans être rediscutée, et elle laissait le pipeline dans un état incohérent :
+
+| Étape | Modèle initial |
+|---|---|
+| OCR | `gpt-4o` ← **famille ancienne** |
+| édition | `gpt-5.5-2026-04-23` |
+| raccord | `gpt-5.4-mini-2026-03-17` |
+| validation | `gpt-5.5-2026-04-23` |
+
+L'OCR était le seul point resté sur un modèle ancien — et c'est le plus mal
+choisi pour trois raisons cumulées. C'est l'étape **la plus nombreuse en appels**
+(une par page), **la plus coûteuse**, et **celle dont tout le reste dépend** :
+une erreur de transcription se propage, puisque l'étape 2 a pour consigne de ne
+pas réécrire l'auteur. Une lettre mal lue devient une faute définitive.
+
+`MODEL_OCR` vaut désormais **`gpt-5.5-2026-04-23`**, identifiant daté pour la
+même raison qu'à l'édition : un alias non daté pourrait changer de comportement
+au milieu d'un livre.
+
+**Réserve à lever au premier appel réel.** Rien ici ne prouve que ce modèle
+accepte les entrées `input_image` : `--verifier-modeles` contrôle qu'un
+identifiant existe, non qu'il gère la vision. Si l'entrée image était refusée,
+l'appel échouerait par un code **400**, que `est_reessayable()` classe comme non
+réessayable — l'échec serait donc immédiat et explicite, sans consommer les
+quatre tentatives ni ~38 secondes d'attente. Le repli connu et éprouvé pour la
+vision reste `gpt-4o`.
+
+C'est une raison de plus de commencer par un PDF de dix pages : cette réserve se
+lève au premier appel.
 
 ---
 
@@ -1254,7 +1289,7 @@ relevé de ces décisions ; il n'y a plus de point bloquant.
 
 | # | Question | Décision retenue |
 |---|---|---|
-| 1 | Modèles des étapes IA | `gpt-5.5-2026-04-23` pour l'édition **et** la validation ; modèle léger pour le raccord seul |
+| 1 | Modèles des étapes IA | `gpt-5.5-2026-04-23` pour l'OCR, l'édition **et** la validation ; modèle léger pour le raccord seul |
 | 2 | Identifiant du modèle léger | **`gpt-5.4-mini-2026-03-17`** — `gpt-5.5-mini` n'existe pas (§11.1) |
 | 3 | `RATIO_MINIMAL_LONGUEUR` | **`0.80`**, au lieu de `0.55` dans le prototype |
 | 4 | `STOCKER_REPONSES` | **`False`** — aucune perte de fonctionnalité, plus prudent pour une pièce sous droits |

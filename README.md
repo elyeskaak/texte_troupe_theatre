@@ -227,7 +227,7 @@ ailleurs dans le code.
 ```python
 DOSSIER_DRIVE           = Path("/content/drive/MyDrive/Troupe 122 - 2026-27")
 
-MODEL_OCR               = "gpt-4o"
+MODEL_OCR               = "gpt-5.5-2026-04-23"   # vision
 MODEL_EDITION           = "gpt-5.5-2026-04-23"
 MODEL_RACCORD           = "gpt-5.4-mini-2026-03-17"   # léger : tâche étroite
 MODEL_VALIDATION        = "gpt-5.5-2026-04-23"
@@ -310,6 +310,14 @@ substituera. Installez-la sur votre poste — elle est gratuite sur Google Fonts
 ruptures dramaturgiques. Conséquence, un mot coupé entre deux blocs doit être
 ressoudé **entièrement d'un seul côté** par la passe de raccord, ce que le
 prompt impose explicitement.
+
+**La vision de `MODEL_OCR` n'a pas encore été éprouvée.**
+`--verifier-modeles` contrôle qu'un identifiant de modèle existe, non qu'il
+accepte les entrées image. Si `gpt-5.5-2026-04-23` refusait la vision, l'étape 1
+échouerait dès le premier appel par un code 400 — immédiatement et
+explicitement, sans consommer les quatre tentatives. Le repli est alors
+`MODEL_OCR = "gpt-4o"`, en une ligne. Raison de plus pour commencer par un PDF
+de dix pages.
 
 **Les contrôles mécaniques sont conservateurs.** Ils préfèrent manquer un rôle
 disparu plutôt que d'en signaler un à tort : un rapport bruyant ne serait pas

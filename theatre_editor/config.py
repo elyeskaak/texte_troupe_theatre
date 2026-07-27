@@ -40,7 +40,19 @@ SCAN_RECURSIF = False
 # ============================================================
 
 # Étape 1 — OCR Vision.
-MODEL_OCR = "gpt-4o"
+#
+# L'OCR est l'étape la plus nombreuse en appels (une par page), la plus
+# coûteuse, et celle dont tout le reste dépend : une erreur de transcription se
+# propage, l'étape 2 ayant pour consigne de ne pas réécrire l'auteur. C'est
+# donc le dernier endroit où économiser sur la qualité du modèle.
+#
+# Identifiant daté, comme pour l'édition : un alias non daté pourrait changer
+# de comportement au milieu d'un livre.
+#
+# Si ce modèle refusait les entrées `input_image`, l'appel échouerait par un
+# code 400 — non réessayable, donc immédiat et explicite. Repli connu et
+# éprouvé pour la vision : "gpt-4o".
+MODEL_OCR = "gpt-5.5-2026-04-23"
 
 # Étape 2a — édition OCR. Tâche la plus exigeante du pipeline.
 MODEL_EDITION = "gpt-5.5-2026-04-23"
