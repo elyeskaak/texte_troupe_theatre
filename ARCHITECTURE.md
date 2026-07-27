@@ -1,9 +1,14 @@
 # ARCHITECTURE — Pipeline d'édition de pièces de théâtre
 
-> **Statut : proposition soumise à validation.**
-> Aucun code métier n'est écrit avant approbation de ce document.
-> La section [§17](#17-points-à-valider-avant-écriture-du-code) liste les
-> décisions sur lesquelles j'attends une confirmation explicite.
+> **Statut : validé le 2026-07-27.**
+> Les neuf décisions ouvertes ont été tranchées ; le relevé figure en
+> [§17](#17-décisions-validées). L'implémentation peut commencer au commit 3
+> du [plan de livraison](#16-plan-de-livraison).
+>
+> Révision notable depuis la première rédaction : l'exigence de **discerner
+> acte, scène et personnage**, combinée au saut de page réservé aux actes, a
+> imposé une refonte complète de [§9.1](#91-acte-scène-ou-personnage--la-classification-à-trois-niveaux)
+> et le passage à six styles DOCX. Voir [§17.1](#171-lexigence-qui-a-le-plus-changé-la-conception).
 
 ---
 
@@ -25,7 +30,7 @@
 14. [Écarts assumés par rapport à l'arborescence demandée](#14-écarts-assumés-par-rapport-à-larborescence-demandée)
 15. [Conventions de code](#15-conventions-de-code)
 16. [Plan de livraison](#16-plan-de-livraison)
-17. [Points à valider avant écriture du code](#17-points-à-valider-avant-écriture-du-code)
+17. [Décisions validées](#17-décisions-validées)
 
 ---
 
@@ -295,11 +300,30 @@ def fenetre_fin(texte: str, n_lignes: int) -> tuple[str, str]      # (préfixe, 
 def fenetre_debut(texte: str, n_lignes: int) -> tuple[str, str]    # (extrait, suffixe)
 def nettoyer_enveloppe(texte: str) -> str
 def verifier_sortie(source: str, sortie: str) -> list[str]         # avertissements
-def classifier_ligne(ligne: str, noms_personnages: set[str]) -> TypeLigne
 def recenser_personnages(texte: str) -> set[str]
+    """Relève la distribution en tête d'ouvrage (règle 4 de §9.1)."""
+
+def construire_index_structure(texte: str) -> IndexStructure
+    """Applique les 8 règles de §9.1 + la passe C d'inférence de hiérarchie.
+    Retourne, pour chaque label en gras, son type (ACTE / SCENE / PERSONNAGE)
+    et le niveau de confiance du classement."""
+
+def classifier_ligne(ligne: str, index: IndexStructure) -> TypeLigne
+    """Classe une ligne à l'aide de l'index pré-calculé. Le passage par un
+    index est nécessaire : le type d'un `**X.**` ne peut pas se décider
+    localement, il dépend du document entier."""
+
+def rapport_classification(index: IndexStructure) -> str
+    """Table d'inspection lisible, affichée avant génération du DOCX."""
+
 def decouper_en_runs(ligne: str) -> list[Run]                      # gras / italique inline
 def assembler(textes: list[str]) -> str
 ```
+
+Noter la séparation entre `construire_index_structure()` (une passe sur le
+document entier) et `classifier_ligne()` (décision locale, instantanée). C'est
+la conséquence directe de §9.1 : le type d'un label en gras est une propriété
+**globale** du document, pas une propriété de la ligne.
 
 ---
 
@@ -398,6 +422,13 @@ CONTRÔLES AUTOMATIQUES (mécaniques, sans IA)
           → OCR pages 96-104
 
 ------------------------------------------------------------------------
+STRUCTURE DÉTECTÉE (§9.1)
+------------------------------------------------------------------------
+Actes : 3     Scènes : 24     Personnages : 9
+[ATTENTION]  1 classement incertain : « LA VOIX »
+             → ajoutez-le à PERSONNAGES_FORCES si c'est un rôle
+
+------------------------------------------------------------------------
 BLOC 12 — pages 89 à 96
 ------------------------------------------------------------------------
 [TEXTE RACCOURCI]     Réplique de MARTHA abrégée.
@@ -405,6 +436,12 @@ BLOC 12 — pages 89 à 96
 [DIDASCALIE PERDUE]   « Elle referme la porte » absente
                       Après la réplique de JAN, ~ligne 40
 ```
+
+La section « structure détectée » figure dans `REPORT.txt` bien qu'elle concerne
+l'étape 4. C'est délibéré : elle vous permet de repérer un problème de
+classification **avant** de générer le DOCX, au moment où vous relisez déjà le
+rapport. Un acte pris pour un personnage se verrait autrement à la première
+page blanche parasite.
 
 ### 5.7 Journaux `journal_<etape>.json`
 
@@ -538,11 +575,20 @@ une fenêtre de contexte, et un rapport sur un livre entier dépasserait
 | **Reprise** | sans objet (quelques secondes, entièrement local) |
 
 1. Lire `EDIT.txt`.
-2. Recenser les personnages (première passe, §9.1).
-3. Classifier chaque ligne (deuxième passe).
-4. Découper chaque ligne en runs (gras / italique inline, §9.2).
-5. Construire le document avec les styles nommés de [§9.3](#93-styles-docx).
-6. Écrire le `.docx` et `journal_docx.json`.
+2. **Construire l'index de structure** : relever la distribution, appliquer les
+   8 règles et la passe d'inférence de hiérarchie (§9.1). Une seule passe sur le
+   document entier.
+3. **Afficher la table d'inspection** (§9.1) : vous voyez ce que le parseur a
+   compris, et notamment les classements incertains, *avant* toute génération.
+4. Classifier chaque ligne à l'aide de l'index.
+5. Découper chaque ligne en runs (gras / italique inline, §9.2).
+6. Construire le document avec les six styles nommés de [§9.3](#93-styles-docx),
+   saut de page inséré avant chaque acte uniquement.
+7. Écrire le `.docx` et `journal_docx.json`, en y consignant tout classement
+   incertain.
+
+L'ordre 2 → 3 → 4 n'est pas négociable : le type d'un `**X.**` dépend du
+document entier, il ne peut donc pas être décidé en lisant les lignes une à une.
 
 ---
 
@@ -640,47 +686,134 @@ Comment ?
    testables.
 4. Elle est déjà éprouvée par vos prompts existants.
 
-Contrepartie assumée : cette grammaire est ambiguë sur un point (titre vs
-personnage), traité en [§9.1](#91-titre-ou-personnage-la-seule-ambiguïté-réelle).
+Contrepartie assumée : cette grammaire ne distingue pas, à elle seule, un titre
+d'acte, un titre de scène et un nom de personnage — les trois s'écrivant
+`**…**` seuls sur leur ligne. C'est le prix de la lisibilité de `EDIT.txt`, et
+c'est l'objet de [§9.1](#91-acte-scène-ou-personnage--la-classification-à-trois-niveaux).
 
 ---
 
 ## 9. Problèmes délicats et leur résolution
 
-### 9.1 Titre ou personnage : la seule ambiguïté réelle
+### 9.1 Acte, scène ou personnage : la classification à trois niveaux
 
-`**UN.**` (titre) et `**JAN.**` (personnage) sont **syntaxiquement
-indiscernables** : gras, seuls sur leur ligne, en capitales.
+C'est le problème central de l'étape 4, et votre exigence de saut de page en
+fait un problème **critique** plutôt que cosmétique.
 
-**Circonstance atténuante déterminante** : votre cahier des charges demande
-« titres : centrés, gras » **et** « personnages : centrés, gras ». Les deux
-rendus sont donc **visuellement identiques**. Une erreur de classification est
-par conséquent invisible dans le DOCX. Le risque est faible.
+**Le problème.** Trois éléments de nature totalement différente s'écrivent de
+façon **syntaxiquement indiscernable** — gras, seuls sur leur ligne, en
+capitales :
 
-Je maintiens néanmoins la distinction, pour deux raisons : appliquer un style
-nommé distinct permet un saut de page avant un acte
-(`SAUT_DE_PAGE_AVANT_TITRE`), et Word peut construire un sommaire à partir des
-styles de titre.
+```
+**ACTE PREMIER**     ← acte      (niveau 1)
+**SCÈNE 3**          ← scène     (niveau 2)
+**UN.**              ← ??        (acte ou scène selon la pièce)
+**JAN.**             ← personnage
+```
 
-Heuristique en deux passes :
+**Pourquoi c'est critique.** Vous demandez un saut de page **avant chaque acte,
+mais pas avant les scènes**. Une erreur de classification ne produit donc plus
+un défaut invisible : elle produit une page blanche parasite au milieu d'un
+acte, ou un acte qui ne commence pas sur une page neuve. Distinguer acte de
+scène n'est plus une élégance, c'est une condition de fonctionnement.
 
-**Passe 1 — recensement.** Parcourir tout `EDIT.txt` et collecter les
-candidats `**X.**`. Un candidat est retenu comme **personnage** si :
+#### Règle de décision, dans un ordre strict
 
-- il apparaît au moins `SEUIL_OCCURRENCES_PERSONNAGE` fois (défaut : 2) ; **et**
-- il est suivi, au moins une fois, d'une ligne de réplique non vide.
+L'erreur serait de compter les occurrences en premier. On mène au contraire avec
+les signaux **non ambigus** (lexique, numérotation), et on ne recourt aux
+statistiques qu'en dernier ressort.
 
-**Passe 2 — arbitrage par lexique.** Un candidat est classé **titre**,
-prioritairement sur la passe 1, s'il correspond à
-`LEXIQUE_TITRES` : `ACTE`, `SCÈNE`, `TABLEAU`, `PARTIE`, `PROLOGUE`,
-`ÉPILOGUE`, `INTERMÈDE`, ou un nombre écrit (`UN`, `DEUX`, `PREMIER`…), ou un
-chiffre romain seul.
+| # | Condition | Classement | Confiance |
+|---|---|---|---|
+| 0 | Figure dans un override de `config.py` | forcé | **certaine** |
+| 1 | Correspond à `LEXIQUE_ACTE` | **ACTE** | certaine |
+| 2 | Correspond à `LEXIQUE_SCENE` | **SCÈNE** | certaine |
+| 3 | Est un pur jeton de numérotation (`UN`, `II`, `3`, `PREMIÈRE`) | titre → passe C | déduite |
+| 4 | Figure dans la liste de personnages relevée en tête d'ouvrage | **PERSONNAGE** | certaine |
+| 5 | Est suivi au moins une fois d'une ligne de réplique | **PERSONNAGE** | probable |
+| 6 | Apparaît ≥ `SEUIL_OCCURRENCES_PERSONNAGE` fois | **PERSONNAGE** | probable |
+| 7 | Aucun des cas précédents | titre → passe C | **incertaine** ⚠ |
 
-**Départage final.** Un candidat ni personnage ni titre (occurrence unique, non
-suivi de réplique) est classé **titre** — c'est le cas d'un titre de scène
-inhabituel, et la conséquence visuelle est nulle.
+- `LEXIQUE_ACTE` : `ACTE`, `PARTIE`, `PROLOGUE`, `ÉPILOGUE`, `MOUVEMENT`,
+  `JOURNÉE`, `INTERMÈDE`.
+- `LEXIQUE_SCENE` : `SCÈNE`, `SCENE`, `TABLEAU`, `SÉQUENCE`, `FRAGMENT`.
+- Comparaison sur une forme normalisée : capitales, sans accents, sans point
+  final, espaces réduits. `ACTE PREMIER`, `Acte premier.` et `ACTE  I` sont donc
+  reconnus identiquement.
 
-Cette logique vit dans `blocks.py`, elle est pure, donc directement testable.
+**Pourquoi la règle 5 avant la règle 6.** Un personnage secondaire peut n'avoir
+qu'une seule réplique dans toute la pièce (`**LE MESSAGER.**`). Un simple seuil
+d'occurrences le classerait comme titre, et lui infligerait un saut de page. Le
+critère « suivi d'une réplique » l'attrape correctement, car un titre n'est
+jamais suivi d'une réplique : il est suivi d'un lieu en italique, ou d'un nom de
+personnage.
+
+**La règle 4 est le meilleur signal disponible.** Beaucoup d'éditions ouvrent sur
+une distribution (`PERSONNAGES`, `PERSONNAGES :`, `DISTRIBUTION`). Quand elle
+existe, `recenser_personnages()` l'analyse et alimente `personnages_connus` : la
+classification devient alors quasi certaine pour tous les rôles, y compris ceux
+qui ne parlent qu'une fois.
+
+#### Passe C — résoudre le niveau d'un titre purement numéroté
+
+Reste le cas de `**UN.**` : titre certain, mais acte ou scène ? Il se tranche par
+l'**inférence de hiérarchie**, au niveau du document entier :
+
+1. **Si des titres lexicaux `ACTE` existent** et que des titres numérotés
+   existent aussi → les titres numérotés sont des **scènes** imbriquées.
+2. **Si aucun titre lexical `ACTE` n'existe** → les titres numérotés
+   constituent le niveau supérieur, donc des **actes**. C'est exactement le cas
+   de votre prototype, dont le prompt nomme `**UN.**` un « titre de partie »,
+   c'est-à-dire une division de premier niveau. ✅
+3. **Détection de remise à zéro** : si la numérotation redémarre (1, 2, 3, 1, 2),
+   il y a deux niveaux ; la série qui redémarre est le niveau interne (scènes).
+4. **Départage par style de numérotation** : chiffres romains et nombres écrits
+   en lettres → acte ; chiffres arabes → scène. Signal faible, utilisé en dernier.
+
+Le point 2 mérite d'être souligné : dans une pièce contemporaine découpée en
+`UN / DEUX / TROIS` avec des `***` comme séparateurs internes, il n'y a
+**aucun titre de scène** — les `***` marquent les changements de scène. Traiter
+`**UN.**` comme un acte est donc le bon résultat, et le saut de page tombe au
+bon endroit.
+
+#### Le filet de sécurité : rendre la classification visible et corrigeable
+
+Aucune heuristique ne couvre toutes les pièces. Plutôt que de prétendre le
+contraire, la classification est **inspectable et surchargeable**.
+
+**1. Table d'inspection.** `rapport_classification()` produit un tableau affiché
+dans le notebook `04_DOCX.ipynb` **avant** la génération, et repris dans
+`REPORT.txt` :
+
+```
+LABEL             OCC.  SUIVI RÉPL.  CLASSÉ        CONFIANCE
+ACTE PREMIER         1            0  ACTE          certaine (lexique)
+SCÈNE 3              1            0  SCÈNE         certaine (lexique)
+JAN                 84           84  PERSONNAGE    certaine (distribution)
+LE MESSAGER          1            1  PERSONNAGE    probable (règle 5)
+UN                   1            0  ACTE          déduite (passe C, cas 2)
+LA VOIX              1            0  ACTE          INCERTAINE ⚠
+```
+
+Vous voyez donc, en une seconde et avant tout DOCX, ce que le parseur a compris —
+et notamment les lignes ⚠ qui demandent votre arbitrage.
+
+**2. Overrides dans `config.py`**, prioritaires sur toute heuristique :
+
+```python
+PERSONNAGES_FORCES  : set[str] = set()   # ex. {"LA VOIX", "LE MESSAGER"}
+TITRES_ACTE_FORCES  : set[str] = set()
+TITRES_SCENE_FORCES : set[str] = set()
+```
+
+Corriger la pièce la plus atypique devient l'ajout d'un mot dans un ensemble.
+
+**3. Journalisation.** Chaque classement `INCERTAINE` est enregistré comme
+avertissement dans `journal_docx.json`.
+
+Toute cette logique vit dans `blocks.py`. Elle est **pure** — pas d'I/O, pas
+d'API — donc entièrement couverte par `tests/test_blocks.py`, avec un cas de test
+par règle et par cas de la passe C.
 
 ### 9.2 Didascalie inline : le parsing à deux niveaux
 
@@ -705,20 +838,34 @@ première alternative, règle le problème proprement.
 
 ### 9.3 Styles DOCX
 
-Cinq styles de paragraphe créés programmatiquement — jamais de mise en forme
+**Six** styles de paragraphe créés programmatiquement — jamais de mise en forme
 appliquée run par run, afin qu'une modification globale reste un changement d'une
-seule ligne de `config.py`.
+seule ligne de `config.py`. Le style de titre est scindé en deux, conséquence
+directe de §9.1 et du saut de page réservé aux actes.
 
-| Style | Alignement | Casse/graisse | Espacement |
-|---|---|---|---|
-| `Theatre_Titre` | centré | **gras** | avant 24 pt, après 18 pt |
-| `Theatre_Lieu` | centré | *italique* | avant 12 pt, après 12 pt |
-| `Theatre_Personnage` | centré | **gras** | avant 12 pt, après 0 pt |
-| `Theatre_Didascalie` | centré | *italique* | avant 6 pt, après 6 pt |
-| `Theatre_Texte` | **justifié** | romain | après 6 pt |
+| Style | Alignement | Graisse | Corps | Espacement | Saut de page |
+|---|---|---|---|---|---|
+| `Theatre_Titre_Acte` | centré | **gras** | **14 pt** | avant 0, après 24 pt | **oui** |
+| `Theatre_Titre_Scene` | centré | **gras** | **12 pt** | avant 24, après 12 pt | non |
+| `Theatre_Lieu` | centré | *italique* | 11 pt | avant 12, après 12 pt | non |
+| `Theatre_Personnage` | centré | **gras** | 11 pt | avant 12, après 0 pt | non |
+| `Theatre_Didascalie` | centré | *italique* | 11 pt | avant 6, après 6 pt | non |
+| `Theatre_Texte` | **justifié** | romain | 11 pt | après 6 pt | non |
 
-Communs à tous : EB Garamond, 11 pt, **aucune couleur** (on ne définit
-simplement jamais `font.color`, la valeur héritée est le noir automatique).
+Communs à tous : EB Garamond, **aucune couleur** (on ne définit simplement
+jamais `font.color`, la valeur héritée est le noir automatique).
+
+Deux détails de mise en page qui comptent :
+
+- L'espacement *avant* de `Theatre_Titre_Acte` est nul, puisque le style porte
+  déjà un saut de page : un espacement avant, en haut d'une page neuve,
+  produirait un décalage inutile.
+- Le saut de page est implémenté via
+  `paragraph_format.page_break_before = True` sur le **style**, et non par
+  l'insertion d'un caractère de saut de page. Conséquence : passer
+  `SAUT_DE_PAGE_AVANT_ACTE` à `False` ne laisse aucun résidu dans le document,
+  et le premier acte du document ne crée pas de page blanche initiale (Word
+  ignore un `page_break_before` sur le premier paragraphe).
 
 Trois précisions techniques :
 
@@ -786,17 +933,18 @@ image gigantesque, dépassement de la taille de requête. Trois protections :
 
 ## 11. Configuration
 
-`config.py` — intégralité des constantes, aucune logique. Les valeurs ci-dessous
-sont mes propositions de défaut.
+`config.py` — intégralité des constantes, aucune logique. **Toutes les valeurs
+ci-dessous sont désormais validées** (voir §17).
 
 ```python
 # ----- Emplacements ---------------------------------------------------
 DOSSIER_DRIVE = Path("/content/drive/MyDrive/Troupe 122 - 2026-27")
+SCAN_RECURSIF = False           # PDF à plat dans le dossier
 
-# ----- Modèles --------------------------------------------------------
-MODEL_OCR         = "gpt-4o"                  # vision
-MODEL_EDITION     = "gpt-5.5-2026-04-23"      # repris de votre prototype
-MODEL_RACCORD     = "gpt-5.5-2026-04-23"
+# ----- Modèles (identifiants vérifiés sur le compte) ------------------
+MODEL_OCR         = "gpt-4o"                    # vision
+MODEL_EDITION     = "gpt-5.5-2026-04-23"        # repris du prototype
+MODEL_RACCORD     = "gpt-5.4-mini-2026-03-17"   # léger : voir note ci-dessous
 MODEL_VALIDATION  = "gpt-5.5-2026-04-23"
 
 # ----- Découpage ------------------------------------------------------
@@ -809,7 +957,7 @@ MAX_TENTATIVES      = 4
 PAUSE_ENTRE_APPELS  = 1.0
 ATTENTE_MAX_BACKOFF = 60
 TEMPERATURE         = None      # None ⇒ paramètre non transmis (D13)
-STOCKER_REPONSES    = True      # → store=… côté API (voir §17)
+STOCKER_REPONSES    = False     # → store=False (pièce sous droits)
 
 # ----- Rasterisation PDF ---------------------------------------------
 DPI_RASTERISATION    = 200
@@ -817,9 +965,18 @@ DPI_MINIMAL          = 110      # plancher en cas de dégradation
 TAILLE_MAX_IMAGE_MO  = 18.0
 
 # ----- Contrôles qualité ---------------------------------------------
-RATIO_MINIMAL_LONGUEUR       = 0.80   # étape 2 (0.55 dans le prototype)
+RATIO_MINIMAL_LONGUEUR       = 0.80   # au lieu de 0.55 dans le prototype
 RETRAITER_BLOCS_SUSPECTS     = True
 SEUIL_OCCURRENCES_PERSONNAGE = 2
+
+# ----- Classification structurelle (§9.1) ----------------------------
+LEXIQUE_ACTE  = {"ACTE", "PARTIE", "PROLOGUE", "EPILOGUE",
+                 "MOUVEMENT", "JOURNEE", "INTERMEDE"}
+LEXIQUE_SCENE = {"SCENE", "TABLEAU", "SEQUENCE", "FRAGMENT"}
+
+PERSONNAGES_FORCES  : set[str] = set()   # surcharges prioritaires
+TITRES_ACTE_FORCES  : set[str] = set()
+TITRES_SCENE_FORCES : set[str] = set()
 
 # ----- Marqueurs (contrat inter-étapes, §5) --------------------------
 MARQUEUR_PAGE     = "[PAGE {numero}]"
@@ -828,8 +985,11 @@ SEPARATEUR_PAGE   = "\n\n<<<PAGE_BREAK>>>\n\n"
 # ----- DOCX -----------------------------------------------------------
 POLICE_TEXTE            = "EB Garamond"
 TAILLE_TEXTE_PT         = 11
+TAILLE_TITRE_ACTE_PT    = 14
+TAILLE_TITRE_SCENE_PT   = 12
 MARGE_CM                = 3.0
-SAUT_DE_PAGE_AVANT_TITRE = False
+SAUT_DE_PAGE_AVANT_ACTE  = True    # actes seulement
+SAUT_DE_PAGE_AVANT_SCENE = False
 
 # ----- Suffixes de fichiers ------------------------------------------
 SUFFIXE_OCR           = "_OCR.txt"
@@ -841,17 +1001,35 @@ SUFFIXE_REPORT        = "_REPORT.txt"
 SUFFIXE_REPORT_BLOCS  = "_REPORT_blocs"
 ```
 
-Deux valeurs méritent votre attention :
+### 11.1 Note sur `MODEL_RACCORD` — une hypothèse corrigée
 
-- **`RATIO_MINIMAL_LONGUEUR`** : votre prototype utilisait `0.55`. C'est très
-  permissif — une réplique pourrait être amputée de 40 % sans déclencher
-  d'alerte. Or l'étape 2 supprime les marqueurs `[PAGE X]`, et le ratio est
-  calculé après neutralisation de ces marqueurs : la sortie devrait donc être
-  proche de 0,95–1,00 de l'entrée. Je propose `0.80`, nettement plus protecteur.
-- **`MODEL_OCR = "gpt-4o"`** conformément à votre demande, tandis que
-  `MODEL_EDITION` conserve le modèle de votre prototype. Ce sont des variables
-  de configuration : si un identifiant n'est pas disponible sur votre compte,
-  vous le changez en un seul endroit.
+L'inventaire des modèles réellement disponibles sur votre compte a démenti mon
+hypothèse implicite : **`gpt-5.5-mini` n'existe pas.** La famille 5.5 ne propose
+que `gpt-5.5`, `gpt-5.5-2026-04-23`, `gpt-5.5-pro` et `gpt-5.5-pro-2026-04-23`.
+
+Les variantes légères disponibles sont : `gpt-5.4-mini-2026-03-17`,
+`gpt-5.4-nano-2026-03-17`, `gpt-5-mini`, `gpt-5-nano`, `gpt-4.1-mini`,
+`gpt-4.1-nano`, `gpt-4o-mini`.
+
+Je retiens **`gpt-5.4-mini-2026-03-17`** : c'est le mini le plus récent, donc le
+plus proche de votre modèle d'édition en génération, et la tâche de raccord est
+étroite — ressouder un mot coupé sur une fenêtre de 100 lignes, avec un format de
+sortie délimité simple. L'identifiant est **daté**, donc figé : aucun risque
+qu'une mise à jour d'alias change le comportement au milieu d'un livre.
+
+Deux remarques d'inventaire, pour votre information :
+
+- `gpt-5.6-luna`, `gpt-5.6-sol` et `gpt-5.6-terra` sont plus récents que 5.5,
+  mais leur nomenclature ne permet pas d'inférer leur niveau ni leur coût, et
+  aucun n'a de variante datée. Je ne les retiens pas sans que vous ayez confirmé
+  ce qu'ils sont — changer de modèle d'édition en cours de livre créerait une
+  hétérogénéité stylistique entre blocs.
+- `gpt-4o` et `gpt-5.5-2026-04-23` sont bien tous deux présents : vos deux
+  choix principaux sont confirmés valides.
+
+Le helper `lister_modeles_disponibles()` est néanmoins inclus dans
+`utils/api.py` et appelable depuis les notebooks, afin que ce contrôle soit
+reproductible sans quitter Colab.
 
 ---
 
@@ -942,8 +1120,9 @@ a échoué.
 
 ## 14. Écarts assumés par rapport à l'arborescence demandée
 
-Trois ajouts par rapport à votre spécification. Je les signale parce que ce sont
-des écarts, et que vous devez pouvoir les refuser.
+Trois ajouts par rapport à votre spécification. **Les trois ont été acceptés**
+(§17, décision n° 5) ; je conserve ci-dessous leur justification et le plan B
+envisagé, pour que la trace de la décision subsiste.
 
 ### 14.1 `utils/api.py` — ajout
 
@@ -1011,12 +1190,12 @@ dans un état compréhensible.
 
 | # | Commit | Contenu |
 |---|---|---|
-| 1 | ✅ *fait* | Prototype préservé + `.gitignore` |
-| 2 | ⬅ *ce document* | `ARCHITECTURE.md` |
-| 3 | Socle | `config.py`, `__init__.py`, `requirements.txt`, `.gitattributes` |
+| 1 | ✅ *fait* | Prototype préservé + `.gitignore` + `.gitattributes` |
+| 2 | ✅ *fait* | `ARCHITECTURE.md`, puis révision après validation |
+| 3 | ⬅ **prochain** | `config.py`, `__init__.py`, `requirements.txt` |
 | 4 | Utilitaires | `utils/io.py`, `utils/logging.py` |
-| 5 | Logique texte | `utils/blocks.py` + `tests/test_blocks.py` |
-| 6 | Couche API | `utils/api.py` |
+| 5 | **Logique texte** | `utils/blocks.py` + `tests/test_blocks.py` |
+| 6 | Couche API | `utils/api.py` (dont `lister_modeles_disponibles()`) |
 | 7 | Prompts | les 4 fichiers `prompts/*.md` |
 | 8 | Étape 1 | `ocr.py` |
 | 9 | Étape 2 | `edition.py` |
@@ -1027,43 +1206,71 @@ dans un état compréhensible.
 | 14 | Documentation | `README.md`, déplacement du prototype dans `archive/` |
 
 L'ordre n'est pas arbitraire : chaque commit ne dépend que des précédents, donc
-le dépôt est cohérent à tout moment. Les tests des commits 5 et 11 sont
-exécutables immédiatement, sans clé API — je pourrai donc vous montrer que la
-logique délicate fonctionne avant même le premier appel facturé.
+le dépôt est cohérent à tout moment.
+
+**Le commit 5 est le jalon à surveiller.** `blocks.py` porte la classification
+acte / scène / personnage de §9.1, c'est-à-dire la logique la plus délicate du
+projet, et il est **pur** — donc `tests/test_blocks.py` s'exécute en une seconde
+sans clé API ni Drive monté. Je pourrai vous démontrer que la détection
+fonctionne, cas par cas, **avant le premier appel facturé**. Si l'heuristique
+doit être ajustée, c'est là que ça se verra, au moment le moins coûteux.
 
 ---
 
-## 17. Points à valider avant écriture du code
+## 17. Décisions validées
 
-Six questions dont la réponse change le code. Un simple « tout est bon » vaut
-acceptation de mes valeurs par défaut.
+Toutes les questions ouvertes ont été tranchées le 2026-07-27. Ce tableau est le
+relevé de ces décisions ; il n'y a plus de point bloquant.
 
-1. **`MODEL_EDITION = "gpt-5.5-2026-04-23"`** — repris de votre prototype. Cet
-   identifiant est-il bien disponible sur votre compte, et faut-il l'utiliser
-   aussi pour le raccord et la validation ? (Le raccord et la validation sont
-   des tâches beaucoup plus étroites : un modèle moins coûteux y suffirait
-   probablement, pour un gain de coût appréciable sur un livre.)
+| # | Question | Décision retenue |
+|---|---|---|
+| 1 | Modèles des étapes IA | `gpt-5.5-2026-04-23` pour l'édition **et** la validation ; modèle léger pour le raccord seul |
+| 2 | Identifiant du modèle léger | **`gpt-5.4-mini-2026-03-17`** — `gpt-5.5-mini` n'existe pas (§11.1) |
+| 3 | `RATIO_MINIMAL_LONGUEUR` | **`0.80`**, au lieu de `0.55` dans le prototype |
+| 4 | `STOCKER_REPONSES` | **`False`** — aucune perte de fonctionnalité, plus prudent pour une pièce sous droits |
+| 5 | Les trois ajouts de §14 | **Les trois acceptés** : `utils/api.py`, dossiers de cache, `tests/` |
+| 6 | Rangement des PDF | **À plat** dans `Troupe 122 - 2026-27` ⇒ `SCAN_RECURSIF = False` |
+| 7 | Saut de page | **Avant chaque acte uniquement**, pas avant les scènes |
+| 8 | Corps des titres | **Acte 14 pt, scène 12 pt**, texte 11 pt |
+| 9 | Discerner acte / scène / personnage | Exigence explicite ⇒ **classification à trois niveaux** (§9.1), refonte complète |
 
-2. **`RATIO_MINIMAL_LONGUEUR` : `0.80` au lieu de `0.55`** (§11). Plus
-   protecteur, mais produira davantage de blocs marqués « suspects » et donc de
-   retraitements. Préférez-vous rester à `0.55` ?
+### 17.1 L'exigence qui a le plus changé la conception
 
-3. **`STOCKER_REPONSES`** — par défaut, la Responses API conserve les réponses
-   côté OpenAI (`store=True`). Pour une pièce sous droits, vous pouvez préférer
-   `store=False`. Je propose `True` (aligné sur le comportement actuel de votre
-   prototype) mais le paramètre est là. Que choisissez-vous ?
+La demande « discerner les titres des actes, des titres de scènes et des noms
+des personnages » n'était pas un détail de confort : **elle interagit
+directement avec la décision n° 7.**
 
-4. **Les trois ajouts de §14** (`utils/api.py`, dossiers de cache, `tests/`) —
-   acceptés ?
+Ma conception initiale ne distinguait que *titre* et *personnage*, en s'appuyant
+sur un argument de faible risque — les deux se rendant « centrés gras », une
+erreur de classification restait invisible. Cet argument **tombe** dès lors
+qu'un saut de page est réservé aux actes : une erreur produit désormais une page
+blanche au milieu d'un acte, ou un acte qui n'ouvre pas sur une page neuve.
 
-5. **`DOSSIER_DRIVE`** — je reprends `/content/drive/MyDrive/Troupe 122 - 2026-27`
-   de votre prototype. Est-ce bien le dossier contenant les PDF ?
+Trois conséquences, toutes intégrées :
 
-6. **Saut de page avant chaque acte** dans le DOCX — `False` par défaut, parce
-   que vous ne l'avez pas demandé. C'est pourtant l'usage courant dans une
-   édition de théâtre. Le passer à `True` ?
+1. **§9.1 entièrement refondu** : règle de décision ordonnée à 8 niveaux menant
+   avec les signaux non ambigus (lexique, numérotation, distribution) plutôt
+   qu'avec le comptage d'occurrences, plus une passe d'inférence de hiérarchie
+   pour les titres purement numérotés comme `**UN.**`.
+2. **Six styles DOCX au lieu de cinq** (§9.3), `Theatre_Titre_Acte` et
+   `Theatre_Titre_Scene` étant désormais distincts.
+3. **Un filet de sécurité explicite** : table d'inspection affichée avant
+   génération, trois ensembles d'overrides dans `config.py`, et journalisation
+   de tout classement incertain. Une heuristique qui se donne à voir et se
+   laisse corriger vaut mieux qu'une heuristique qu'on affirme parfaite.
+
+### 17.2 Un point resté ouvert, non bloquant
+
+`gpt-5.6-luna`, `gpt-5.6-sol` et `gpt-5.6-terra` sont disponibles sur votre
+compte et plus récents que `gpt-5.5`. Leur nomenclature ne permet pas d'inférer
+leur niveau de capacité ni leur coût. Je ne les retiens pas par défaut, mais si
+l'un d'eux correspond à un modèle d'édition supérieur, il suffira de changer
+`MODEL_EDITION`. À ne faire **qu'entre deux livres**, jamais au milieu d'un :
+mélanger deux modèles d'édition sur un même texte introduirait une hétérogénéité
+stylistique entre les blocs, précisément ce que la passe de raccord ne sait pas
+rattraper.
 
 ---
 
-*Document rédigé avant tout code, conformément à la consigne. La suite du*
-*travail commence au commit 3 du plan de livraison, après votre validation.*
+*Architecture validée le 2026-07-27. L'implémentation commence au commit 3 du*
+*plan de livraison (§16).*
