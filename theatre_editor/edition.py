@@ -105,6 +105,69 @@ def _message_bloc(bloc: blocks.Bloc, nombre_blocs: int) -> str:
     )
 
 
+def bloc_deja_edite(bloc: blocks.Bloc, chemins: io.CheminsLivre) -> bool:
+    """
+    Détermine si un bloc est déjà édité **et porte encore les mêmes pages**.
+
+    Vérifier le statut ne suffit pas. Le numéro d'un bloc ne l'identifie pas :
+    il dépend du nombre de pages présentes dans `OCR.txt`. Un essai limité à
+    dix pages produit un « bloc 2 » couvrant les pages 9 et 10 ; le passage
+    complet du même livre attend un bloc 2 couvrant les pages 9 à 16.
+
+    Sans ce contrôle, le bloc de l'essai serait tenu pour terminé et sauté —
+    les pages 11 à 16 disparaîtraient d'`EDIT.txt` sans aucune alerte. C'est
+    exactement le genre de perte silencieuse que le pipeline doit rendre
+    impossible.
+
+    Un bloc dont les frontières ont changé est donc réédité.
+    """
+    sidecar = io.lire_sidecar(chemins.bloc_json(bloc.numero))
+
+    if sidecar is None or sidecar.get("statut") != config.STATUT_TERMINE:
+        return False
+
+    memes_pages = (
+        sidecar.get("page_debut") == bloc.page_debut
+        and sidecar.get("page_fin") == bloc.page_fin
+    )
+
+    if not memes_pages:
+        journalisation.alerte(
+            f"bloc {bloc.numero} : frontières changées "
+            f"(pages {sidecar.get('page_debut')}–{sidecar.get('page_fin')} "
+            f"→ {bloc.page_debut}–{bloc.page_fin}), réédition"
+        )
+        return False
+
+    return True
+
+
+def invalider_raccords_voisins(chemins: io.CheminsLivre, numero: int) -> None:
+    """
+    Périme les raccords qui dépendent d'un bloc réédité.
+
+    Second volet du même problème. `preparer_blocs_raccords()` ne recopie jamais
+    par-dessus un fichier existant — à raison, puisque ces fichiers portent les
+    corrections de jonction déjà acquises. Mais si le bloc source vient d'être
+    réédité, sa copie dans `_EDIT_raccords/` est périmée, et l'ancienne version
+    se retrouverait dans `EDIT.txt`.
+
+    On supprime donc la copie du bloc, ainsi que les sidecars des deux jonctions
+    qui le touchent, afin qu'elles soient rejouées sur le texte à jour.
+    """
+    cibles = [chemins.raccord_txt(numero)]
+
+    # La jonction N relie les blocs N et N+1 : le bloc `numero` intervient donc
+    # dans les jonctions `numero - 1` et `numero`.
+    for jonction in (numero - 1, numero):
+        if jonction >= 1:
+            cibles.append(chemins.raccord_json(jonction))
+
+    for chemin in cibles:
+        if chemin.exists():
+            chemin.unlink()
+
+
 def editer_bloc(
     *,
     bloc: blocks.Bloc,
@@ -121,7 +184,7 @@ def editer_bloc(
     """
     libelle = f"bloc {bloc.numero}"
 
-    if io.unite_terminee(chemins.bloc_json(bloc.numero)):
+    if bloc_deja_edite(bloc, chemins):
         return UNITE_SAUTEE
 
     try:
@@ -148,6 +211,11 @@ def editer_bloc(
     avertissements += blocks.verifier_sortie(bloc.contenu, texte)
 
     statut = io.statut_depuis_avertissements(avertissements)
+
+    # Le bloc change : ses raccords deviennent périmés. À faire avant
+    # d'enregistrer, pour qu'une coupure ne laisse pas un bloc à jour flanqué
+    # de raccords obsolètes tenus pour valides.
+    invalider_raccords_voisins(chemins, bloc.numero)
 
     # Contenu d'abord, sidecar ensuite : l'ordre porte l'invariant de reprise.
     io.ecrire_texte_atomique(chemins.bloc_txt(bloc.numero), texte)

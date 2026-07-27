@@ -572,6 +572,105 @@ class TestReprise(BaseEdition):
         self.assertEqual(appel.call_count, 1)
         self.assertEqual(io.lire_texte(self.chemins.raccord_txt(1)), avant)
 
+    def test_frontieres_changees_forcent_la_reedition(self):
+        """
+        Régression, et perte de données silencieuse.
+
+        Un essai limité à 10 pages produit un « bloc 2 » couvrant les pages 9
+        et 10. Le passage complet du même livre attend un bloc 2 couvrant les
+        pages 9 à 16. Le numéro seul n'identifie donc pas un bloc.
+
+        Sans ce contrôle, le bloc de l'essai était tenu pour terminé et sauté,
+        et les pages 11 à 16 disparaissaient d'EDIT.txt sans aucune alerte.
+        """
+        liste = blocks.former_blocs(
+            blocks.decouper_en_pages(io.lire_texte(self.chemins.ocr)),
+            self.PAGES_PAR_BLOC,
+        )
+        bloc = liste[0]
+
+        io.ecrire_texte_atomique(self.chemins.bloc_txt(bloc.numero), "ancien")
+        io.ecrire_sidecar(
+            self.chemins.bloc_json(bloc.numero),
+            {
+                "statut": config.STATUT_TERMINE,
+                # Frontières d'un essai plus court.
+                "page_debut": bloc.page_debut,
+                "page_fin": bloc.page_fin - 1,
+            },
+        )
+
+        self.assertFalse(edition.bloc_deja_edite(bloc, self.chemins))
+
+    def test_memes_frontieres_permettent_de_sauter(self):
+        """Contrepartie : sans changement, le bloc ne doit pas être repayé."""
+        liste = blocks.former_blocs(
+            blocks.decouper_en_pages(io.lire_texte(self.chemins.ocr)),
+            self.PAGES_PAR_BLOC,
+        )
+        bloc = liste[0]
+
+        io.ecrire_sidecar(
+            self.chemins.bloc_json(bloc.numero),
+            {
+                "statut": config.STATUT_TERMINE,
+                "page_debut": bloc.page_debut,
+                "page_fin": bloc.page_fin,
+            },
+        )
+
+        self.assertTrue(edition.bloc_deja_edite(bloc, self.chemins))
+
+    def test_bloc_reedite_perime_ses_raccords(self):
+        """
+        Second volet du même problème.
+
+        `preparer_blocs_raccords()` ne recopie jamais par-dessus un fichier
+        existant — à raison. Mais si le bloc source vient d'être réédité, sa
+        copie dans `_EDIT_raccords/` est périmée, et l'ancienne version se
+        retrouverait dans EDIT.txt.
+        """
+        self.executer()
+
+        # On périme le bloc 2 : frontières incohérentes.
+        sidecar = io.lire_sidecar(self.chemins.bloc_json(2))
+        sidecar["page_fin"] = sidecar["page_fin"] - 1
+        io.ecrire_sidecar(self.chemins.bloc_json(2), sidecar)
+
+        io.ecrire_texte_atomique(self.chemins.raccord_txt(2), "VERSION PERIMEE\n")
+
+        self.executer()
+
+        contenu = io.lire_texte(self.chemins.raccord_txt(2))
+
+        self.assertNotIn("PERIMEE", contenu)
+        self.assertNotIn("PERIMEE", io.lire_texte(self.chemins.edit))
+
+    def test_invalidation_cible_les_deux_jonctions_voisines(self):
+        """La jonction N relie les blocs N et N+1 : le bloc N touche N-1 et N."""
+        # Trois blocs sont nécessaires pour que deux jonctions existent :
+        # la classe de base n'en produit que deux.
+        io.ecrire_texte_atomique(self.chemins.ocr, fabriquer_ocr(6))
+
+        self.executer()
+
+        for numero in (1, 2):
+            self.assertTrue(self.chemins.raccord_json(numero).exists())
+
+        edition.invalider_raccords_voisins(self.chemins, 2)
+
+        self.assertFalse(self.chemins.raccord_txt(2).exists())
+        self.assertFalse(self.chemins.raccord_json(1).exists())
+        self.assertFalse(self.chemins.raccord_json(2).exists())
+
+    def test_invalidation_du_premier_bloc_ne_cherche_pas_de_jonction_zero(self):
+        self.executer()
+
+        edition.invalider_raccords_voisins(self.chemins, 1)
+
+        self.assertFalse(self.chemins.raccord_txt(1).exists())
+        self.assertFalse(self.chemins.raccord_json(1).exists())
+
     def test_bloc_en_echec_n_ecrit_pas_de_txt(self):
         def effet(**kwargs):
             if kwargs["libelle"] == "bloc 1":

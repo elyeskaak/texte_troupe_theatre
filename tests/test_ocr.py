@@ -878,5 +878,136 @@ class TestDiagnostic(BaseOcr):
             self.assertEqual(ocr.diagnostiquer_couches_texte(Path(vide)), [])
 
 
+# ============================================================
+# 9. LIMITE DE PAGES (essais)
+# ============================================================
+
+
+class TestPagesRetenues(unittest.TestCase):
+    """Le calcul du plafond, isolé."""
+
+    def test_sans_limite_tout_est_retenu(self):
+        with mock.patch.object(config, "LIMITE_PAGES", None):
+            self.assertEqual(ocr.pages_retenues(289), 289)
+
+    def test_limite_appliquee(self):
+        self.assertEqual(ocr.pages_retenues(289, 10), 10)
+
+    def test_limite_superieure_au_document_sans_effet(self):
+        self.assertEqual(ocr.pages_retenues(4, 10), 4)
+
+    def test_parametre_prime_sur_la_configuration(self):
+        with mock.patch.object(config, "LIMITE_PAGES", 5):
+            self.assertEqual(ocr.pages_retenues(100, 20), 20)
+
+    def test_limite_nulle_refusee(self):
+        """
+        Une limite à zéro produirait un OCR.txt vide d'apparence normale : mieux
+        vaut échouer bruyamment.
+        """
+        for invalide in (0, -3):
+            with self.subTest(limite=invalide):
+                with self.assertRaises(ValueError) as contexte:
+                    ocr.pages_retenues(100, invalide)
+
+                self.assertIn("LIMITE_PAGES", str(contexte.exception))
+
+
+class TestEssaiLimite(BaseOcr):
+    """Un essai sur les premières pages, puis le passage complet."""
+
+    NOMBRE_PAGES = 12
+
+    def test_seules_les_premieres_pages_sont_traitees(self):
+        _, appel = self.executer_avec_limite(4)
+
+        numeros = [int(c.kwargs["libelle"].split()[-1]) for c in appel.call_args_list]
+
+        self.assertEqual(numeros, [1, 2, 3, 4])
+
+    def test_bilan_distingue_pages_du_pdf_et_pages_retenues(self):
+        resultats, _ = self.executer_avec_limite(4)
+
+        self.assertEqual(resultats[0].pages_du_pdf, self.NOMBRE_PAGES)
+        self.assertEqual(resultats[0].pages_totales, 4)
+
+    def test_ocr_ne_contient_que_les_pages_retenues(self):
+        """
+        Aucun marqueur d'échec pour les pages hors périmètre : elles n'ont pas
+        échoué, elles n'ont simplement pas été demandées.
+        """
+        self.executer_avec_limite(4)
+
+        contenu = io.lire_texte(self.chemins.ocr)
+
+        self.assertIn(config.MARQUEUR_PAGE.format(numero=4), contenu)
+        self.assertNotIn(config.MARQUEUR_PAGE.format(numero=5), contenu)
+        self.assertNotIn("ÉCHEC OCR", contenu)
+
+    def test_essai_declare_termine(self):
+        resultats, _ = self.executer_avec_limite(4)
+
+        self.assertEqual(resultats[0].statut, config.STATUT_TERMINE)
+        self.assertTrue(resultats[0].complet)
+
+    def test_passage_complet_reutilise_l_essai(self):
+        """
+        Le cœur de l'intérêt : les pages de l'essai ne sont ni perdues ni
+        repayées.
+        """
+        self.executer_avec_limite(4)
+
+        resultats, appel = self.executer()
+
+        numeros = [int(c.kwargs["libelle"].split()[-1]) for c in appel.call_args_list]
+
+        self.assertEqual(numeros, list(range(5, self.NOMBRE_PAGES + 1)))
+        self.assertEqual(resultats[0].pages_sautees, 4)
+        self.assertEqual(resultats[0].pages_totales, self.NOMBRE_PAGES)
+
+    def test_ocr_complet_apres_le_passage_complet(self):
+        self.executer_avec_limite(4)
+        self.executer()
+
+        pages = blocks.decouper_en_pages(io.lire_texte(self.chemins.ocr))
+
+        self.assertEqual(len(pages), self.NOMBRE_PAGES)
+
+    def test_limite_consignee_dans_le_journal(self):
+        self.executer_avec_limite(4)
+
+        configuration = io.lire_sidecar(self.base / "journal_ocr.json")["configuration"]
+
+        self.assertEqual(configuration["limite_pages"], 4)
+
+    def test_limite_lue_dans_la_configuration(self):
+        with mock.patch.object(config, "LIMITE_PAGES", 3):
+            _, appel = self.executer()
+
+        self.assertEqual(appel.call_count, 3)
+
+    def test_diagnostic_respecte_la_limite(self):
+        document = DocumentFactice(self.NOMBRE_PAGES)
+
+        with mock.patch.object(ocr, "ouvrir_pdf", return_value=document), \
+             mock.patch.object(api, "appeler_modele") as appel:
+            diagnostics = ocr.diagnostiquer_couches_texte(self.base, limite_pages=4)
+
+        appel.assert_not_called()
+        self.assertEqual(diagnostics[0].pages_du_pdf, self.NOMBRE_PAGES)
+        self.assertEqual(diagnostics[0].pages_totales, 4)
+
+    def executer_avec_limite(self, limite: int):
+        """Lance l'étape avec un plafond de pages."""
+        sequence = ["Texte de la page."] * 50
+
+        with mock.patch.object(
+            api, "appeler_modele", side_effect=lambda **_kw: resultat_api(sequence.pop(0))
+        ) as appel:
+            resultats = ocr.executer(self.base, limite_pages=limite)
+
+        return resultats, appel
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -49,7 +49,31 @@ contenant le jeton ne peut donc pas se retrouver dans un message d'erreur.
 Si vous préférez ne pas créer de jeton, déposez le dossier `theatre_editor/` sur
 votre Drive et utilisez l'option B de la cellule de récupération du code.
 
-### 3. Ouvrir les notebooks, dans l'ordre
+### 3. Commencer par un essai sur dix pages
+
+Sur tout nouveau livre, réglez dans le notebook 01 :
+
+```python
+config.LIMITE_PAGES = 10
+```
+
+Éprouver les quatre étapes sur dix pages coûte quelques centimes et révèle les
+mauvaises surprises — couche texte trompeuse, structure mal reconnue — avant
+d'engager trois cents pages. Les pages transcrites sont **conservées et
+réutilisées** au passage complet : rien n'est perdu, rien n'est repayé.
+
+Remettez ensuite `LIMITE_PAGES = None` et relancez. Vous verrez alors :
+
+```
+[ALERTE]  bloc 2 : frontières changées (pages 9–10 → 9–16), réédition
+```
+
+C'est normal et voulu. Avec des blocs de 8 pages, l'essai produit un bloc 2 de
+2 pages là où le livre entier en attend 8 : l'étape 2 compare les frontières
+enregistrées à celles recalculées et réédite le bloc concerné. Sans ce contrôle,
+les pages 11 à 16 disparaîtraient silencieusement d'`EDIT.txt`.
+
+### 4. Ouvrir les notebooks, dans l'ordre
 
 | Notebook | Étape | Durée indicative (300 pages) | Coût |
 |---|---|---|---|

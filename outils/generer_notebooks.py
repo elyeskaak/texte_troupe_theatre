@@ -430,7 +430,59 @@ if NOM_LIVRE:
             ),
             markdown(
                 """
-## 8. Lancement
+## 8. Essai sur les premières pages
+
+**À faire sur tout nouveau livre.** Éprouver les quatre étapes sur dix pages
+coûte quelques centimes et révèle les mauvaises surprises — modèle qui refuse la
+vision, couche texte trompeuse, structure mal reconnue — avant d'engager
+trois cents pages.
+
+Les pages transcrites pendant l'essai sont **conservées et réutilisées** lors du
+passage complet : rien n'est perdu, rien n'est repayé.
+
+Enchaînez ensuite les notebooks 02, 03 et 04 : ils travaillent depuis `OCR.txt`,
+qui ne contiendra que les pages retenues. Aucun réglage à y reporter.
+"""
+            ),
+            code(
+                """
+# Nombre de pages à traiter par PDF. None = livre entier.
+config.LIMITE_PAGES = 10
+
+print("Limite de pages :", config.LIMITE_PAGES)
+"""
+            ),
+            markdown(
+                """
+### Passer au livre entier
+
+Remettez `LIMITE_PAGES` à `None` et relancez la cellule de lancement. Seules les
+pages manquantes seront transcrites.
+
+Un point de vigilance, désormais géré par le code. Avec des blocs de 8 pages, un
+essai de 10 pages produit un « bloc 2 » couvrant les pages 9 et 10, tandis que le
+livre entier attend un bloc 2 couvrant les pages 9 à 16. L'étape 2 compare donc
+les frontières enregistrées à celles recalculées, et **réédite tout bloc dont les
+frontières ont changé** — sans quoi les pages 11 à 16 disparaîtraient
+silencieusement.
+
+Vous verrez alors s'afficher, ce qui est normal :
+
+```
+[ALERTE]  bloc 2 : frontières changées (pages 9–10 → 9–16), réédition
+```
+"""
+            ),
+            code(
+                """
+# Décommentez pour traiter le livre entier :
+
+# config.LIMITE_PAGES = None
+"""
+            ),
+            markdown(
+                """
+## 9. Lancement
 
 Reprenable : relancez cette cellule autant de fois qu'il le faut.
 
@@ -448,7 +500,7 @@ resultats = ocr.executer(config.DOSSIER_DRIVE)
             ),
             markdown(
                 """
-## 9. Contrôle du résultat
+## 10. Contrôle du résultat
 
 Affiche le début de chaque fichier produit, et signale les pages en échec.
 """
@@ -470,7 +522,7 @@ for resultat in resultats:
         print(io.lire_texte(chemins.ocr)[:1200])
 """
             ),
-            markdown("## 10. Journal"),
+            markdown("## 11. Journal"),
             cellule_journal("ocr"),
         ],
     )

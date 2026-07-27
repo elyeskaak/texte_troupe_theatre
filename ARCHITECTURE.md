@@ -1006,6 +1006,42 @@ texte exploitable la réutilisent, les autres passent à la vision. L'homogéné
 de qualité que D2 cherchait à préserver est garantie non par l'unicité du chemin,
 mais par la sévérité du contrôle à l'entrée du chemin gratuit.
 
+### 10.2 `LIMITE_PAGES`, et le piège qu'elle a révélé
+
+`config.LIMITE_PAGES` plafonne le nombre de pages traitées par PDF, pour
+éprouver les quatre étapes sur dix pages avant d'engager un livre entier.
+
+Ce réglage a mis au jour **deux pertes de données silencieuses** qui existaient
+déjà, et que rien n'aurait signalées.
+
+**Le numéro d'un bloc ne l'identifie pas.** Il dépend du nombre de pages
+présentes dans `OCR.txt`. Avec `PAGES_PAR_BLOC = 8` :
+
+| | essai (10 pages) | livre entier (289 pages) |
+|---|---|---|
+| bloc 1 | pages 1–8 | pages 1–8 |
+| bloc 2 | **pages 9–10** | **pages 9–16** |
+
+Le bloc 2 de l'essai portait `statut: "termine"`. Au passage complet,
+`editer_bloc()` le sautait — et **les pages 11 à 16 disparaissaient d'`EDIT.txt`
+sans aucune alerte**. `bloc_deja_edite()` compare désormais les frontières
+enregistrées à celles recalculées, et réédite tout bloc dont elles ont changé.
+
+**Un bloc réédité laissait ses raccords périmés.**
+`preparer_blocs_raccords()` ne recopie jamais par-dessus un fichier existant — à
+raison, puisque ces fichiers portent les corrections de jonction déjà acquises.
+Mais la copie d'un bloc réédité est obsolète, et c'est l'ancienne version qui se
+retrouvait dans `EDIT.txt`. `invalider_raccords_voisins()` supprime donc la copie
+du bloc et les sidecars des deux jonctions qui le touchent.
+
+Vérifié de bout en bout : essai de 10 pages puis passage complet à 24 pages sur
+un livre dont chaque page porte un marqueur unique — **24 pages sur 24 présentes
+dans `EDIT.txt`, 14 appels OCR au second passage au lieu de 24**.
+
+La leçon générale : un identifiant dérivé d'un découpage n'est stable que si le
+découpage l'est. Partout où une unité est mise en cache, son sidecar doit porter
+de quoi vérifier qu'elle recouvre bien ce qu'on croit.
+
 ---
 
 ## 11. Configuration

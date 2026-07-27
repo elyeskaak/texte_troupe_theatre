@@ -30,6 +30,17 @@ DOSSIER_DRIVE = Path("/content/drive/MyDrive/Troupe 122 - 2026-27")
 # Passer à True pour explorer aussi les sous-dossiers.
 SCAN_RECURSIF = False
 
+# Nombre maximal de pages traitées par PDF. `None` traite le livre entier.
+#
+# Destiné aux essais : régler à 10 permet d'éprouver les quatre étapes sur un
+# nouveau livre pour quelques centimes, avant d'engager 300 pages.
+#
+# Les pages transcrites lors d'un essai sont conservées et réutilisées lors du
+# passage complet — rien n'est perdu, rien n'est repayé. Les étapes suivantes
+# n'ont pas besoin de ce réglage : elles travaillent depuis `OCR.txt`, qui ne
+# contiendra que les pages retenues.
+LIMITE_PAGES: int | None = None
+
 
 # ============================================================
 # MODÈLES

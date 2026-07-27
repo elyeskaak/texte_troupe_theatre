@@ -72,6 +72,9 @@ class ResultatLivre:
 
     nom: str
     statut: str = config.STATUT_TERMINE
+    # Pages du PDF, et pages effectivement retenues : les deux diffèrent
+    # lorsqu'une limite d'essai est active.
+    pages_du_pdf: int = 0
     pages_totales: int = 0
     pages_traitees: int = 0
     pages_sautees: int = 0
@@ -91,6 +94,7 @@ class ResultatLivre:
         """Bilan à consigner dans le journal de l'étape."""
         return {
             "statut": self.statut,
+            "pages_du_pdf": self.pages_du_pdf,
             "pages_totales": self.pages_totales,
             "pages_traitees": self.pages_traitees,
             "pages_couche_texte": self.pages_couche_texte,
@@ -157,6 +161,32 @@ def ouvrir_pdf(chemin: Path):
 def rasteriser_page(page: Any, dpi: int) -> bytes:
     """Rend une page en PNG à la résolution demandée."""
     return page.get_pixmap(dpi=dpi).tobytes("png")
+
+
+def pages_retenues(pages_du_pdf: int, limite: int | None = None) -> int:
+    """
+    Détermine combien de pages seront réellement traitées.
+
+    Args:
+        pages_du_pdf: nombre de pages du document.
+        limite: plafond, ou `config.LIMITE_PAGES` si None.
+
+    Raises:
+        ValueError: si la limite est nulle ou négative, ce qui ne traiterait
+            rien tout en produisant un `OCR.txt` vide d'apparence normale.
+    """
+    plafond = config.LIMITE_PAGES if limite is None else limite
+
+    if plafond is None:
+        return pages_du_pdf
+
+    if plafond < 1:
+        raise ValueError(
+            f"LIMITE_PAGES doit valoir au moins 1, reçu {plafond}. "
+            "Utilisez None pour traiter le livre entier."
+        )
+
+    return min(pages_du_pdf, plafond)
 
 
 # ============================================================
@@ -557,6 +587,7 @@ def assembler_ocr(chemins: io.CheminsLivre, nombre_pages: int) -> str:
 def traiter_pdf(
     chemin_pdf: Path,
     journal: journalisation.Journal,
+    limite_pages: int | None = None,
 ) -> ResultatLivre:
     """
     Transcrit un PDF entier, page par page, puis assemble `OCR.txt`.
@@ -577,6 +608,7 @@ def traiter_pdf(
                 chemins=chemins,
                 journal=journal,
                 resultat=resultat,
+                limite_pages=limite_pages,
             )
         except Exception as erreur:
             # Un livre en erreur ne doit pas empêcher de traiter les suivants.
@@ -604,16 +636,29 @@ def _transcrire_pages(
     chemins: io.CheminsLivre,
     journal: journalisation.Journal,
     resultat: ResultatLivre,
+    limite_pages: int | None = None,
 ) -> None:
     """Boucle sur les pages d'un PDF déjà ouvert."""
     document = ouvrir_pdf(chemin_pdf)
 
     try:
-        nombre_pages = document.page_count
+        resultat.pages_du_pdf = document.page_count
+        nombre_pages = pages_retenues(document.page_count, limite_pages)
         resultat.pages_totales = nombre_pages
 
         io.assurer_dossier(chemins.dossier_pages)
-        journalisation.info(f"   {nombre_pages} page(s) à transcrire")
+
+        if nombre_pages < resultat.pages_du_pdf:
+            # Message volontairement voyant : produire un OCR.txt de dix pages
+            # à partir d'un livre de trois cents serait une mauvaise surprise
+            # si la limite avait été oubliée.
+            journalisation.alerte(
+                f"ESSAI LIMITÉ : {nombre_pages} page(s) sur "
+                f"{resultat.pages_du_pdf}. Mettez LIMITE_PAGES à None pour "
+                "traiter le livre entier."
+            )
+        else:
+            journalisation.info(f"   {nombre_pages} page(s) à transcrire")
 
         compteurs = {
             PAGE_TERMINEE: 0,
@@ -696,6 +741,7 @@ class DiagnosticLivre:
     """Ce qu'un PDF coûtera, avant d'avoir dépensé le moindre jeton."""
 
     nom: str
+    pages_du_pdf: int = 0
     pages_totales: int = 0
     pages_exploitables: int = 0
     pages_a_ocriser: int = 0
@@ -712,7 +758,10 @@ class DiagnosticLivre:
         return (self.pages_exploitables + self.pages_deja_faites) / self.pages_totales
 
 
-def diagnostiquer_couches_texte(dossier: Path | None = None) -> list[DiagnosticLivre]:
+def diagnostiquer_couches_texte(
+    dossier: Path | None = None,
+    limite_pages: int | None = None,
+) -> list[DiagnosticLivre]:
     """
     Recense, sans aucun appel API, ce que chaque PDF coûtera réellement.
 
@@ -735,14 +784,17 @@ def diagnostiquer_couches_texte(dossier: Path | None = None) -> list[DiagnosticL
     diagnostics: list[DiagnosticLivre] = []
 
     for chemin in io.lister_pdf(base):
-        diagnostics.append(_diagnostiquer_pdf(chemin))
+        diagnostics.append(_diagnostiquer_pdf(chemin, limite_pages))
 
     _afficher_diagnostic(diagnostics)
 
     return diagnostics
 
 
-def _diagnostiquer_pdf(chemin_pdf: Path) -> DiagnosticLivre:
+def _diagnostiquer_pdf(
+    chemin_pdf: Path,
+    limite_pages: int | None = None,
+) -> DiagnosticLivre:
     """Examine la couche texte de chaque page d'un PDF."""
     nom_livre = io.nom_livre_depuis_pdf(chemin_pdf)
     chemins = io.resoudre_chemins(nom_livre, chemin_pdf.parent)
@@ -755,9 +807,10 @@ def _diagnostiquer_pdf(chemin_pdf: Path) -> DiagnosticLivre:
         return diagnostic
 
     try:
-        diagnostic.pages_totales = document.page_count
+        diagnostic.pages_du_pdf = document.page_count
+        diagnostic.pages_totales = pages_retenues(document.page_count, limite_pages)
 
-        for numero in range(1, document.page_count + 1):
+        for numero in range(1, diagnostic.pages_totales + 1):
             if io.unite_terminee(chemins.page_json(numero)):
                 diagnostic.pages_deja_faites += 1
                 continue
@@ -794,7 +847,13 @@ def _afficher_diagnostic(diagnostics: list[DiagnosticLivre]) -> None:
             journalisation.echec(diagnostic.erreur)
             continue
 
-        journalisation.info(f"   pages totales           {diagnostic.pages_totales}")
+        if diagnostic.pages_totales < diagnostic.pages_du_pdf:
+            journalisation.alerte(
+                f"ESSAI LIMITÉ : {diagnostic.pages_totales} page(s) "
+                f"examinée(s) sur {diagnostic.pages_du_pdf}"
+            )
+
+        journalisation.info(f"   pages retenues          {diagnostic.pages_totales}")
         journalisation.info(
             f"   couche texte utilisable {diagnostic.pages_exploitables}"
         )
@@ -834,7 +893,10 @@ def _afficher_diagnostic(diagnostics: list[DiagnosticLivre]) -> None:
 # ============================================================
 
 
-def executer(dossier: Path | None = None) -> list[ResultatLivre]:
+def executer(
+    dossier: Path | None = None,
+    limite_pages: int | None = None,
+) -> list[ResultatLivre]:
     """
     Lance l'étape OCR sur tous les PDF du dossier de travail.
 
@@ -862,11 +924,17 @@ def executer(dossier: Path | None = None) -> list[ResultatLivre]:
         {
             "modele": config.MODEL_OCR,
             "dpi": config.DPI_RASTERISATION,
+            "strategie_couche_texte": config.STRATEGIE_COUCHE_TEXTE,
+            "limite_pages": (
+                config.LIMITE_PAGES if limite_pages is None else limite_pages
+            ),
             "max_output_tokens": config.MAX_OUTPUT_TOKENS,
         },
     )
 
-    resultats = [traiter_pdf(chemin, journal) for chemin in pdfs]
+    resultats = [
+        traiter_pdf(chemin, journal, limite_pages) for chemin in pdfs
+    ]
 
     _afficher_recapitulatif(resultats, journal)
 
