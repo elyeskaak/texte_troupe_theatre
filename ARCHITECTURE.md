@@ -862,13 +862,19 @@ directe de §9.1 et du saut de page réservé aux actes.
 
 | Style | Alignement | Graisse | Corps | Espacement | Saut de page |
 |---|---|---|---|---|---|
-| `Theatre_Titre_Acte` | centré | **gras** | **14 pt** | avant 0, après 24 pt | **oui** |
-| `Theatre_Titre_Scene` | centré | **gras** | **12 pt** | avant 24, après 12 pt | non |
-| `Theatre_Distribution` | centré | **gras** | 12 pt | avant 24, après 12 pt | non |
+| `Theatre_Titre_Acte` | centré | **gras** | **16 pt** | avant 0, après 24 pt | **oui** |
+| `Theatre_Titre_Scene` | centré | **gras** | **14 pt** | avant 24, après 12 pt | non |
+| `Theatre_Distribution` | centré | **gras** | 14 pt | avant 24, après 12 pt | non |
 | `Theatre_Lieu` | centré | *italique* | 11 pt | avant 12, après 12 pt | non |
-| `Theatre_Personnage` | centré | **gras** | 11 pt | avant 12, après 0 pt | non |
+| `Theatre_Personnage` | centré | **gras** | **11 pt** | avant 12, après 0 pt | non |
 | `Theatre_Didascalie` | centré | *italique* | 11 pt | avant 6, après 6 pt | non |
 | `Theatre_Texte` | **justifié** | romain | 11 pt | après 6 pt | non |
+
+Seuls les **titres** se détachent par le corps. Le nom de personnage reste à la
+taille du texte : il se distingue par le gras et le centrage, jamais par la
+taille. Son style référence directement `TAILLE_TEXTE_PT` plutôt qu'une
+constante propre — c'est une relation voulue, non une coïncidence de valeurs, et
+changer le corps entraînera le personnage avec lui.
 
 `Theatre_Distribution` porte les mêmes valeurs que `Theatre_Titre_Scene`, mais
 reste un style distinct : cela évite de fausser le décompte des scènes dans le
@@ -1007,9 +1013,10 @@ SEPARATEUR_PAGE   = "\n\n<<<PAGE_BREAK>>>\n\n"
 
 # ----- DOCX -----------------------------------------------------------
 POLICE_TEXTE            = "EB Garamond"
+# Seuls les titres se détachent par le corps ; le personnage suit le texte.
+TAILLE_TITRE_ACTE_PT    = 16
+TAILLE_TITRE_SCENE_PT   = 14
 TAILLE_TEXTE_PT         = 11
-TAILLE_TITRE_ACTE_PT    = 14
-TAILLE_TITRE_SCENE_PT   = 12
 MARGE_CM                = 3.0
 SAUT_DE_PAGE_AVANT_ACTE  = True    # actes seulement
 SAUT_DE_PAGE_AVANT_SCENE = False
@@ -1254,7 +1261,7 @@ relevé de ces décisions ; il n'y a plus de point bloquant.
 | 5 | Les trois ajouts de §14 | **Les trois acceptés** : `utils/api.py`, dossiers de cache, `tests/` |
 | 6 | Rangement des PDF | **À plat** dans `Troupe 122 - 2026-27` ⇒ `SCAN_RECURSIF = False` |
 | 7 | Saut de page | **Avant chaque acte uniquement**, pas avant les scènes |
-| 8 | Corps des titres | **Acte 14 pt, scène 12 pt**, texte 11 pt |
+| 8 | Corps des titres | **Acte 16 pt, scène 14 pt** ; personnage et texte 11 pt |
 | 9 | Discerner acte / scène / personnage | Exigence explicite ⇒ **classification à trois niveaux** (§9.1), refonte complète |
 
 ### 17.1 L'exigence qui a le plus changé la conception

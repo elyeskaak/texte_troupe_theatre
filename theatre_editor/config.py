@@ -251,9 +251,19 @@ STATUT_ECHEC = "echec"
 # ============================================================
 
 POLICE_TEXTE = "EB Garamond"
+
+# Hiérarchie typographique : seuls les titres se détachent par le corps.
+#
+# Le nom de personnage n'a délibérément pas de constante propre : il doit
+# rester de la taille du corps de texte, et le style le référence donc
+# directement. Ainsi, changer le corps entraîne le personnage avec lui —
+# c'est une relation voulue, non une coïncidence de valeurs.
+#
+# L'ordre TITRE_ACTE > TITRE_SCENE > TEXTE est vérifié par
+# tests/test_config.py, pour qu'une retouche ne l'aplatisse pas par accident.
+TAILLE_TITRE_ACTE_PT = 16
+TAILLE_TITRE_SCENE_PT = 14
 TAILLE_TEXTE_PT = 11
-TAILLE_TITRE_ACTE_PT = 14
-TAILLE_TITRE_SCENE_PT = 12
 
 # Marges généreuses, en centimètres, sur les quatre côtés.
 MARGE_CM = 3.0
@@ -327,7 +337,11 @@ DEFINITIONS_STYLES: dict[str, dict[str, object]] = {
         "alignement": "centre",
         "gras": True,
         "italique": False,
+        # Même corps que le texte : le nom se distingue par le gras et le
+        # centrage, non par la taille.
         "taille_pt": TAILLE_TEXTE_PT,
+        # Espacement après nul : la réplique doit adhérer au nom qui
+        # l'annonce, sans quoi le lien entre les deux se perd visuellement.
         "espace_avant_pt": 12,
         "espace_apres_pt": 0,
         "saut_de_page": False,
