@@ -296,7 +296,12 @@ class Journal:
             configuration: paramètres de l'exécution courante, écrasant ceux
                 de l'exécution précédente.
         """
-        chemin = dossier / config.NOM_JOURNAL.format(etape=etape)
+        # Les journaux vivent dans le dossier de travail, non à la racine :
+        # le dossier principal ne montre que les PDF et les DOCX.
+        chemin = (
+            io.assurer_dossier(dossier / config.DOSSIER_TEMPORAIRE)
+            / config.NOM_JOURNAL.format(etape=etape)
+        )
         existant = io.lire_sidecar(chemin) or {}
 
         return cls(

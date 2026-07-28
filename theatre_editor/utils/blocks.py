@@ -49,6 +49,7 @@ class TypeLigne(str, Enum):
     TITRE_ACTE = "titre_acte"
     TITRE_SCENE = "titre_scene"
     DISTRIBUTION = "distribution"
+    ENTREE_DISTRIBUTION = "entree_distribution"
     LIEU = "lieu"
     PERSONNAGE = "personnage"
     DIDASCALIE = "didascalie"
@@ -127,6 +128,10 @@ class IndexStructure:
 
     classements: dict[str, ClassementLabel] = field(default_factory=dict)
     avertissements: list[str] = field(default_factory=list)
+    # Indices des lignes appartenant à la liste des rôles, en tête d'ouvrage.
+    # Elles reçoivent un style propre : lignes courtes, alignées à gauche, que
+    # la justification du corps de texte étirerait d'un bord à l'autre.
+    lignes_distribution: frozenset[int] = frozenset()
 
     def type_de(self, label_normalise: str) -> TypeLigne:
         """
@@ -940,20 +945,28 @@ def valeur_numerotation(label: str) -> int | None:
 
 def _ressemble_a_un_nom(segment: str) -> bool:
     """
-    Vrai si un segment de ligne ressemble à un nom de rôle.
+    Vrai si un segment de ligne, dans une liste de rôles, peut être un nom.
 
-    Dans une distribution, les rôles sont écrits en capitales et suivis d'une
-    éventuelle description. Exiger une majorité de capitales évite de prendre
-    une phrase de préface pour un personnage.
+    Le critère est **volontairement permissif**, et cela ne présente aucun
+    risque. Les noms relevés ici ne servent qu'à *amorcer* la reconnaissance :
+    la règle 4 ne les consulte que pour un label qui apparaît réellement en
+    gras dans le texte. Un intrus dans cette liste — « La scène est à
+    Messine. » — ne peut donc pas créer un personnage inexistant, il reste un
+    amorçage inutilisé.
+
+    Exiger une majorité de capitales, comme le faisait une version antérieure,
+    écartait en revanche les distributions imprimées en **casse de titre** :
+    « Roberto Zucco. », « Sa mère. », « La gamine. » — soit tout l'amorçage
+    d'une édition comme celle de Koltès.
     """
-    lettres = [c for c in segment if c.isalpha()]
+    lettres = [caractere for caractere in segment if caractere.isalpha()]
 
-    if not lettres or len(segment) > 40:
+    if len(lettres) < 2 or len(segment) > MAX_LONGUEUR_LABEL:
         return False
 
-    majuscules = sum(1 for c in lettres if c.isupper())
-
-    return majuscules / len(lettres) >= 0.5
+    # Un nom de rôle commence par une capitale, en capitales comme en casse de
+    # titre. Cela écarte une ligne de prose reprise en cours de phrase.
+    return segment[0].isupper()
 
 
 def recenser_personnages(texte: str) -> set[str]:
@@ -969,29 +982,46 @@ def recenser_personnages(texte: str) -> set[str]:
         Ensemble de labels normalisés. Vide si aucune distribution n'est
         trouvée, ce qui est un cas parfaitement normal.
     """
+    noms, _ = recenser_distribution(texte)
+
+    return noms
+
+
+def recenser_distribution(texte: str) -> tuple[set[str], frozenset[int]]:
+    """
+    Relève la distribution et repère les lignes qu'elle occupe.
+
+    Les indices servent à l'étape 4 : les entrées d'une liste de rôles reçoivent
+    un style propre, aligné à gauche, qu'une justification du corps de texte
+    étirerait d'un bord à l'autre de la page.
+
+    Returns:
+        `(noms normalisés, indices des lignes de la liste)`.
+    """
     lignes = texte.split("\n")
-    noms: set[str] = set()
 
     for index, ligne in enumerate(lignes):
         if normaliser_label(ligne) not in config.ETIQUETTES_DISTRIBUTION:
             continue
 
-        noms |= _lire_distribution(lignes, index + 1)
-
         # Une seule distribution par ouvrage : la première rencontrée.
-        break
+        return _lire_distribution(lignes, index + 1)
 
-    return noms
+    return set(), frozenset()
 
 
-def _lire_distribution(lignes: list[str], depart: int) -> set[str]:
+def _lire_distribution(
+    lignes: list[str],
+    depart: int,
+) -> tuple[set[str], frozenset[int]]:
     """Lit les lignes suivant une étiquette de distribution."""
     noms: set[str] = set()
+    indices: set[int] = set()
     vides_consecutives = 0
 
     fin = min(depart + config.MAX_LIGNES_DISTRIBUTION, len(lignes))
 
-    for ligne in lignes[depart:fin]:
+    for decalage, ligne in enumerate(lignes[depart:fin]):
         nue = ligne.strip()
 
         # Deux lignes vides d'affilée : la liste est terminée.
@@ -1015,13 +1045,19 @@ def _lire_distribution(lignes: list[str], depart: int) -> set[str]:
             ):
                 break
 
-        # « JAN, jeune homme » → « JAN »
+        # Toute ligne du bloc appartient à la liste, et reçoit donc son style.
+        # La position suffit à le décider : inutile de reconnaître un nom pour
+        # savoir qu'une ligne fait partie de la distribution.
+        indices.add(depart + decalage)
+
+        # « JAN, jeune homme » → « JAN ». Le nom, lui, n'est retenu comme
+        # amorçage que s'il en a l'allure.
         segment = re.split(r"[,:(–—-]", nue.strip("*"), maxsplit=1)[0].strip()
 
         if _ressemble_a_un_nom(segment):
             noms.add(normaliser_label(segment))
 
-    return noms
+    return noms, frozenset(indices)
 
 
 # ============================================================
@@ -1155,9 +1191,9 @@ def construire_index_structure(
     seuil = _defaut(seuil_occurrences, config.SEUIL_OCCURRENCES_PERSONNAGE)
 
     observations = _collecter_labels(texte)
-    distribution = recenser_personnages(texte)
+    distribution, lignes_distribution = recenser_distribution(texte)
 
-    index = IndexStructure()
+    index = IndexStructure(lignes_distribution=lignes_distribution)
 
     # Titres purement numérotés : ce sont des titres certains, mais dont le
     # niveau ne peut être décidé qu'au vu du document entier (passe C).
@@ -1456,10 +1492,16 @@ def classifier_document(texte: str, index: IndexStructure) -> list[LigneClassee]
     resultats: list[LigneClassee] = []
     type_precedent: TypeLigne | None = None
 
-    for ligne in texte.split("\n"):
+    for numero, ligne in enumerate(texte.split("\n")):
         for brut, type_ligne, contenu in _classer_ligne_eventuellement_dedoublee(
             ligne, index
         ):
+            # Une ligne de la liste des rôles reçoit son style propre : lignes
+            # courtes alignées à gauche, qu'une justification étirerait d'un
+            # bord à l'autre de la page.
+            if numero in index.lignes_distribution and type_ligne is TypeLigne.TEXTE:
+                type_ligne = TypeLigne.ENTREE_DISTRIBUTION
+
             if type_ligne is TypeLigne.DIDASCALIE and type_precedent in _OUVRE_UNE_SCENE:
                 type_ligne = TypeLigne.LIEU
 

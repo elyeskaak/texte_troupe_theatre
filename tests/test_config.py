@@ -28,7 +28,8 @@ CLES_ATTENDUES = {
     "saut_de_page",
 }
 
-ALIGNEMENTS_VALIDES = {"centre", "justifie"}
+# Alignements que `docx_export._alignement()` sait traduire.
+ALIGNEMENTS_VALIDES = {"centre", "justifie", "gauche"}
 
 
 class TestHierarchieTypographique(unittest.TestCase):
@@ -54,7 +55,7 @@ class TestHierarchieTypographique(unittest.TestCase):
         )
 
     def test_didascalie_et_lieu_a_la_taille_du_corps(self):
-        for cle in ("lieu", "didascalie"):
+        for cle in ("lieu", "didascalie", "entree_distribution"):
             with self.subTest(style=cle):
                 self.assertEqual(
                     config.DEFINITIONS_STYLES[cle]["taille_pt"],
@@ -111,6 +112,12 @@ class TestDefinitionsStyles(unittest.TestCase):
                     config.DEFINITIONS_STYLES[cle]["alignement"], "centre"
                 )
 
+        # Les entrées de la liste des rôles sont alignées à gauche : ce sont des
+        # lignes courtes, qu'une justification étirerait d'un bord à l'autre.
+        self.assertEqual(
+            config.DEFINITIONS_STYLES["entree_distribution"]["alignement"], "gauche"
+        )
+
 
 class TestSautsDePage(unittest.TestCase):
     """Le saut de page est réservé aux actes (décision n° 7)."""
@@ -127,8 +134,15 @@ class TestSautsDePage(unittest.TestCase):
             config.SAUT_DE_PAGE_AVANT_SCENE,
         )
 
+    def test_distribution_suit_sa_constante(self):
+        """La liste des rôles occupe une page à part entière."""
+        self.assertIs(
+            config.DEFINITIONS_STYLES["distribution"]["saut_de_page"],
+            config.SAUT_DE_PAGE_AVANT_DISTRIBUTION,
+        )
+
     def test_aucun_autre_style_ne_saute_de_page(self):
-        for cle in ("distribution", "lieu", "personnage", "didascalie", "texte"):
+        for cle in ("entree_distribution", "lieu", "personnage", "didascalie", "texte"):
             with self.subTest(style=cle):
                 self.assertFalse(config.DEFINITIONS_STYLES[cle]["saut_de_page"])
 

@@ -48,9 +48,14 @@ class CheminsLivre:
 
     nom: str
     dossier: Path
+    # Sous-dossier recevant tout le travail intermédiaire de ce livre.
+    dossier_travail: Path
+
+    # --- Visible dans le dossier principal ---------------------------
+    pdf: Path
+    docx: Path
 
     # --- Étape 1 -----------------------------------------------------
-    pdf: Path
     dossier_pages: Path
     ocr: Path
 
@@ -62,9 +67,6 @@ class CheminsLivre:
     # --- Étape 3 -----------------------------------------------------
     dossier_report: Path
     report: Path
-
-    # --- Étape 4 -----------------------------------------------------
-    docx: Path
 
     # ------------------------------------------------------------
     # Chemins des unités de travail.
@@ -118,20 +120,73 @@ def resoudre_chemins(nom_livre: str, dossier: Path | None = None) -> CheminsLivr
         la résolution d'un chemin ne doit avoir aucun effet de bord.
     """
     base = dossier if dossier is not None else config.DOSSIER_DRIVE
+    travail = base / config.DOSSIER_TEMPORAIRE / nom_livre
 
     return CheminsLivre(
         nom=nom_livre,
         dossier=base,
+        dossier_travail=travail,
+        # Seuls ces deux fichiers restent visibles dans le dossier principal.
         pdf=base / f"{nom_livre}.pdf",
-        dossier_pages=base / f"{nom_livre}{config.SUFFIXE_OCR_PAGES}",
-        ocr=base / f"{nom_livre}{config.SUFFIXE_OCR}",
-        dossier_blocs=base / f"{nom_livre}{config.SUFFIXE_EDIT_BLOCS}",
-        dossier_raccords=base / f"{nom_livre}{config.SUFFIXE_EDIT_RACCORDS}",
-        edit=base / f"{nom_livre}{config.SUFFIXE_EDIT}",
-        dossier_report=base / f"{nom_livre}{config.SUFFIXE_REPORT_BLOCS}",
-        report=base / f"{nom_livre}{config.SUFFIXE_REPORT}",
         docx=base / f"{nom_livre}{config.SUFFIXE_DOCX}",
+        dossier_pages=travail / config.NOM_OCR_PAGES,
+        ocr=travail / config.NOM_OCR,
+        dossier_blocs=travail / config.NOM_EDIT_BLOCS,
+        dossier_raccords=travail / config.NOM_EDIT_RACCORDS,
+        edit=travail / config.NOM_EDIT,
+        dossier_report=travail / config.NOM_REPORT_BLOCS,
+        report=travail / config.NOM_REPORT,
     )
+
+
+def dossier_temporaire(dossier: Path | None = None) -> Path:
+    """Dossier abritant tout le travail intermédiaire, et les journaux."""
+    base = dossier if dossier is not None else config.DOSSIER_DRIVE
+
+    return base / config.DOSSIER_TEMPORAIRE
+
+
+def lister_livres(dossier: Path | None = None) -> list[str]:
+    """
+    Noms des livres possédant un dossier de travail.
+
+    C'est ainsi que les étapes 2 à 4 recensent les livres : leurs fichiers
+    d'entrée ne sont plus à plat dans le dossier principal, mais rangés par
+    livre. Chaque étape filtre ensuite sur le fichier dont elle a besoin.
+    """
+    temporaire = dossier_temporaire(dossier)
+
+    if not temporaire.is_dir():
+        return []
+
+    return sorted(
+        (chemin.name for chemin in temporaire.iterdir() if chemin.is_dir()),
+        key=str.lower,
+    )
+
+
+def lister_livres_avec(
+    fichier: str,
+    dossier: Path | None = None,
+) -> list[CheminsLivre]:
+    """
+    Livres dont le fichier de travail nommé existe.
+
+    Args:
+        fichier: nom du fichier attendu, p. ex. `config.NOM_OCR`.
+        dossier: dossier de travail principal.
+    """
+    base = dossier if dossier is not None else config.DOSSIER_DRIVE
+
+    resultats: list[CheminsLivre] = []
+
+    for nom in lister_livres(base):
+        chemins = resoudre_chemins(nom, base)
+
+        if (chemins.dossier_travail / fichier).is_file():
+            resultats.append(chemins)
+
+    return resultats
 
 
 def nom_livre_depuis_pdf(chemin: Path) -> str:
@@ -410,6 +465,94 @@ def _parcourir(dossier: Path) -> list[Path]:
     """Liste les fichiers du dossier, récursivement selon la configuration."""
     motif = "**/*" if config.SCAN_RECURSIF else "*"
     return [c for c in dossier.glob(motif) if _est_fichier_utile(c)]
+
+
+# ============================================================
+# 5 bis. MIGRATION DEPUIS L'ANCIENNE DISPOSITION
+# ============================================================
+
+# Ancien nom à plat → nouveau nom dans le dossier de travail.
+_CORRESPONDANCES_MIGRATION: tuple[tuple[str, str], ...] = (
+    (config.SUFFIXE_OCR, config.NOM_OCR),
+    (config.SUFFIXE_OCR_PAGES, config.NOM_OCR_PAGES),
+    (config.SUFFIXE_EDIT, config.NOM_EDIT),
+    (config.SUFFIXE_EDIT_BLOCS, config.NOM_EDIT_BLOCS),
+    (config.SUFFIXE_EDIT_RACCORDS, config.NOM_EDIT_RACCORDS),
+    (config.SUFFIXE_REPORT, config.NOM_REPORT),
+    (config.SUFFIXE_REPORT_BLOCS, config.NOM_REPORT_BLOCS),
+)
+
+
+def migrer_livre(nom_livre: str, dossier: Path | None = None) -> list[str]:
+    """
+    Déplace les fichiers d'un livre de l'ancienne disposition vers la nouvelle.
+
+    Indispensable après le changement de disposition : sans migration, les
+    transcriptions déjà obtenues deviendraient invisibles, et tout le livre
+    serait **retranscrit puis repayé**.
+
+    L'opération est un simple déplacement, donc sans perte et sans coût. Elle
+    est **idempotente** : un fichier déjà migré est laissé en place, et
+    relancer la migration ne fait rien.
+
+    Returns:
+        La liste de ce qui a été déplacé, pour affichage.
+    """
+    chemins = resoudre_chemins(nom_livre, dossier)
+    deplaces: list[str] = []
+
+    assurer_dossier(chemins.dossier_travail)
+
+    for ancien_suffixe, nouveau_nom in _CORRESPONDANCES_MIGRATION:
+        source = chemins.dossier / f"{nom_livre}{ancien_suffixe}"
+        destination = chemins.dossier_travail / nouveau_nom
+
+        if not source.exists() or destination.exists():
+            continue
+
+        os.replace(source, destination)
+        deplaces.append(f"{source.name} → {config.DOSSIER_TEMPORAIRE}/{nom_livre}/{nouveau_nom}")
+
+    return deplaces
+
+
+def migrer_journaux(dossier: Path | None = None) -> list[str]:
+    """Déplace les journaux vers le dossier de travail."""
+    base = dossier if dossier is not None else config.DOSSIER_DRIVE
+    temporaire = assurer_dossier(dossier_temporaire(base))
+
+    deplaces: list[str] = []
+
+    for etape in ("ocr", "edition", "validation", "docx"):
+        nom = config.NOM_JOURNAL.format(etape=etape)
+        source = base / nom
+        destination = temporaire / nom
+
+        if source.exists() and not destination.exists():
+            os.replace(source, destination)
+            deplaces.append(nom)
+
+    return deplaces
+
+
+def livres_a_migrer(dossier: Path | None = None) -> list[str]:
+    """
+    Recense les livres encore rangés selon l'ancienne disposition.
+
+    Un livre est concerné dès qu'un seul de ses anciens fichiers subsiste à
+    plat dans le dossier principal.
+    """
+    base = dossier if dossier is not None else config.DOSSIER_DRIVE
+    verifier_dossier_travail(base)
+
+    noms: set[str] = set()
+
+    for chemin in base.iterdir():
+        for ancien_suffixe, _ in _CORRESPONDANCES_MIGRATION:
+            if chemin.name.endswith(ancien_suffixe):
+                noms.add(chemin.name[: -len(ancien_suffixe)])
+
+    return sorted(noms, key=str.lower)
 
 
 def lister_pdf(dossier: Path | None = None) -> list[Path]:

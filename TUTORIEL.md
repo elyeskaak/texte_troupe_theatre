@@ -167,7 +167,7 @@ Code récupéré : /content/texte_troupe_theatre
 Jeton GitHub  : non nécessaire (dépôt public)
 ```
 
-### Section 3 — Configuration
+### Section 4 — Configuration
 
 Vérifiez que le chemin correspond à votre dossier, puis lancez.
 
@@ -181,7 +181,7 @@ Existe             : True
 > s'appelle autrement, ou il est dans un « Drive partagé » et non dans « Mon
 > Drive ». Corrigez le chemin dans la cellule et relancez.
 
-### Sections 4 et 5 — Clé API et modèles
+### Sections 5 et 6 — Clé API et modèles
 
 Deux vérifications rapides. Vous devez voir `Clé API trouvée.` puis quatre
 lignes `[OK]`.
@@ -189,12 +189,12 @@ lignes `[OK]`.
 > **`[ECHEC] ocr … introuvable` ?** Le modèle configuré n'existe pas sur votre
 > compte. Voyez le dépannage en §10.
 
-### Section 6 — Aperçu
+### Section 7 — Aperçu
 
 Liste vos PDF avec leur taille. Aucun appel payant. Vérifiez que vos deux
 fichiers sont bien là.
 
-### Section 7 — Diagnostic : ce que ça va coûter
+### Section 8 — Diagnostic : ce que ça va coûter
 
 **Cette cellule est gratuite.** Elle regarde si vos PDF contiennent déjà du texte
 exploitable — beaucoup de PDF ont déjà été passés à l'OCR par un scanner.
@@ -217,7 +217,7 @@ Les Justes
 Ici, le premier livre ne coûtera **rien** et le second coûtera 10 appels. C'est
 normal : l'un est déjà OCRisé, l'autre est fait d'images.
 
-### Section 8 — Régler l'essai
+### Section 9 — Régler l'essai
 
 ```python
 config.LIMITE_PAGES = 10
@@ -225,7 +225,7 @@ config.LIMITE_PAGES = 10
 
 Lancez. Vous devez voir `Limite de pages : 10`.
 
-### Section 9 — Lancement
+### Section 10 — Lancement
 
 C'est ici que les appels payants ont lieu. Vous verrez défiler l'avancement :
 ```
@@ -239,7 +239,7 @@ L'alerte « ESSAI LIMITÉ » est **normale** : c'est un rappel volontaire que vo
 
 ⏱ Environ 1 minute pour 10 pages.
 
-### Section 10 — Contrôle
+### Section 11 — Contrôle
 
 Affiche le début du texte obtenu. **Lisez-le vraiment.** C'est le moment de voir
 si la transcription est correcte avant d'aller plus loin.
@@ -250,7 +250,7 @@ si la transcription est correcte avant d'aller plus loin.
 
 Retournez dans **Fichier → Ouvrir un notebook → GitHub** et ouvrez le suivant.
 
-Pour chacun : refaites les sections 1, 2 et 3 (Drive, code, configuration), puis
+Pour chacun : refaites les sections 1, 2 et 4 (Drive, code, configuration), puis
 suivez les sections numérotées.
 
 **Vous n'avez rien à reporter d'un notebook à l'autre.** Chaque étape lit les
@@ -258,13 +258,13 @@ fichiers laissés par la précédente sur le Drive.
 
 | Notebook | Ce qu'il fait | À regarder |
 |---|---|---|
-| **02_Edition** | Corrige les erreurs de lecture, met en forme | la section 9 affiche le texte édité et la structure détectée |
+| **02_Edition** | Corrige les erreurs de lecture, met en forme | la section 10 affiche le texte édité et la structure détectée |
 | **03_Verification** | Compare l'original et l'édition | le rapport : ce qui aurait été perdu |
-| **04_DOCX** | Fabrique le document Word | **la table d'inspection, section 5** |
+| **04_DOCX** | Fabrique le document Word | **la table d'inspection, section 6** |
 
 ### Le point à ne pas survoler : la table d'inspection
 
-Dans le notebook 04, section 5, vous verrez :
+Dans le notebook 04, section 6, vous verrez :
 
 ```
 LABEL                     OCC.  RÉPL.  CLASSÉ        CONFIANCE
@@ -282,7 +282,7 @@ Pourquoi c'est important : seuls les **actes** déclenchent un saut de page dans
 document Word. Une scène prise pour un acte produirait une page blanche au milieu
 d'un acte.
 
-Si une ligne est mal classée, corrigez-la dans la section 6 :
+Si une ligne est mal classée, corrigez-la dans la section 7 :
 
 ```python
 config.TITRES_ACTE_FORCES = frozenset({"OUVERTURE"})
@@ -296,13 +296,13 @@ colonne `LABEL`. Puis relancez la génération — c'est gratuit et instantané.
 
 ## 8. Passer au livre entier
 
-L'essai vous a convaincu ? Retournez au notebook **01**, section 8 :
+L'essai vous a convaincu ? Retournez au notebook **01**, section 9 :
 
 ```python
 config.LIMITE_PAGES = None
 ```
 
-Relancez la section 9. **Les 10 pages de l'essai ne seront pas repayées** : seules
+Relancez la section 10. **Les 10 pages de l'essai ne seront pas repayées** : seules
 les pages manquantes sont transcrites.
 
 Puis refaites les notebooks 02, 03 et 04.
@@ -329,7 +329,7 @@ limite les sessions à quelques heures.
 **Vous ne perdez rien.** Voici la marche à suivre :
 
 1. Rechargez la page.
-2. Relancez les sections 1, 2 et 3 (Drive, code, configuration).
+2. Relancez les sections 1, 2 et 4 (Drive, code, configuration).
 3. Relancez la section de lancement.
 
 Vous verrez alors :
@@ -353,7 +353,7 @@ Seul ce qui manquait est traité. Aucun appel n'est repayé.
 | `Clé API introuvable` | Le secret `OPENAI_API_KEY` manque, ou son interrupteur « Accès au notebook » est éteint | Revoyez §5 |
 | `Existe : False` | Le dossier Drive n'est pas au chemin indiqué | Corrigez le chemin. Attention aux « Drive partagés », dont le chemin diffère |
 | `Dossier de travail introuvable` | Le Drive n'est pas monté | Relancez la section 1 |
-| `[ECHEC] ocr … introuvable` | Le modèle n'existe pas sur votre compte | Dans la section 3, ajoutez `config.MODEL_OCR = "gpt-4o"` et relancez |
+| `[ECHEC] ocr … introuvable` | Le modèle n'existe pas sur votre compte | Dans la section 4, ajoutez `config.MODEL_OCR = "gpt-4o"` et relancez |
 | `[ALERTE] page N : mise en forme ajoutée` | Le modèle a ajouté du `**gras**` ou de l'`*italique*`, alors que la transcription doit être en texte nu | La page est reprise automatiquement, jusqu'à 2 fois. Si l'alerte persiste, elle est conservée et signalée : lisez la page dans `Livre_OCR_pages/` pour juger |
 | `[ALERTE] page N : sortie vide` | Le modèle n'a rien rendu sans déclarer une page blanche | Reprise automatique. Si la page est réellement blanche, ce n'est pas grave |
 | `Erreur non réessayable … 400` | Le modèle refuse les images | Même correctif : repassez `MODEL_OCR` sur `"gpt-4o"` |
@@ -365,14 +365,10 @@ Seul ce qui manquait est traité. Aucun appel n'est repayé.
 
 ### Si rien ne marche : repartir de zéro sur un livre
 
-Supprimez sur le Drive tout ce qui porte le nom du livre **sauf le PDF** :
+Supprimez le sous-dossier de travail du livre :
 
 ```
-Le Malentendu_OCR.txt          ← supprimer
-Le Malentendu_OCR_pages/       ← supprimer
-Le Malentendu_EDIT_blocs/      ← supprimer
-Le Malentendu_EDIT_raccords/   ← supprimer
-Le Malentendu_EDIT.txt         ← supprimer
+temp/Le Malentendu/            ← supprimer entièrement
 Le Malentendu.pdf              ← GARDER
 ```
 
@@ -382,22 +378,45 @@ Attention : cela fera repayer tout l'OCR.
 
 ## 11. Où sont mes fichiers
 
-Tout dans le même dossier Drive, à côté du PDF.
+Le dossier principal ne montre que **ce qui vous intéresse**. Tout le travail
+intermédiaire est rangé à part.
 
-| Fichier | Ce que c'est | Utile pour vous ? |
-|---|---|---|
-| `Livre.pdf` | votre source | — |
-| `Livre_OCR.txt` | transcription brute, non corrigée | rarement |
-| `Livre_EDIT.txt` | **texte propre** | **oui** — c'est ici qu'on corrige à la main |
-| `Livre_REPORT.txt` | ce qui aurait été perdu | oui, à relire une fois |
-| `Livre.docx` | **le document final** | **oui** |
-| `Livre_OCR_pages/` | une page par fichier | non, mémoire interne |
-| `Livre_EDIT_blocs/` | blocs intermédiaires | non |
-| `Livre_EDIT_raccords/` | blocs après ressoudure | non |
-| `journal_*.json` | trace de chaque appel et son coût | si vous voulez vérifier la dépense |
+```
+Troupe 122 - 2026-27/
+    Roberto Zucco.pdf          ← votre source
+    Roberto Zucco.docx         ← LE RÉSULTAT
+    temp/
+        journal_ocr.json …     ← trace de chaque appel et de son coût
+        Roberto Zucco/
+            OCR.txt            ← transcription brute
+            OCR_pages/
+            EDIT.txt           ← TEXTE PROPRE, à corriger à la main au besoin
+            EDIT_blocs/
+            EDIT_raccords/
+            REPORT.txt         ← ce qui aurait été perdu, à relire une fois
+            REPORT_blocs/
+```
 
-**Ne supprimez pas les dossiers `_pages/`, `_blocs/`, `_raccords/`** : c'est grâce
-à eux que rien n'est jamais repayé.
+Trois fichiers vous concernent vraiment :
+
+| Fichier | Pourquoi l'ouvrir |
+|---|---|
+| `Livre.docx` | c'est le résultat |
+| `temp/Livre/EDIT.txt` | pour corriger une coquille à la main |
+| `temp/Livre/REPORT.txt` | pour savoir ce que l'édition aurait perdu |
+
+**Ne supprimez pas le dossier `temp/`** : c'est grâce à lui que rien n'est jamais
+repayé. Si vous voulez faire de la place, supprimez uniquement les
+sous-dossiers `OCR_pages/`, `EDIT_blocs/` et `EDIT_raccords/` d'un livre
+**terminé** — mais vous perdrez alors la possibilité de le reprendre sans
+repayer.
+
+### Vous avez utilisé le pipeline avant ce changement ?
+
+Le notebook 01 comporte une **section 3 de migration**, à lancer une fois. Elle
+déplace vos fichiers existants vers la nouvelle disposition : rien n'est perdu,
+rien n'est repayé. Sans elle, vos transcriptions deviendraient invisibles et
+seraient refaites.
 
 ### Corriger le texte à la main
 
@@ -437,8 +456,8 @@ jour tout seul.
 
 1. Déposer le PDF dans `Troupe 122 - 2026-27` sur le Drive.
 2. Ouvrir `01_OCR.ipynb` depuis GitHub.
-3. Sections 1 à 3, puis 7 (diagnostic), 8 (`LIMITE_PAGES = 10`), 9, 10.
-4. Si l'essai est bon : `LIMITE_PAGES = None`, relancer la section 9.
+3. Sections 1 à 4, puis 8 (diagnostic), 9 (`LIMITE_PAGES = 10`), 10, 11.
+4. Si l'essai est bon : `LIMITE_PAGES = None`, relancer la section 10.
 5. Notebooks 02, 03, 04 — en lisant la table d'inspection au 04.
 6. Récupérer le `.docx` sur le Drive.
 

@@ -520,7 +520,7 @@ class TestParametresEtJournal(BaseValidation):
     def test_journal_ecrit(self):
         self.executer()
 
-        journal = io.lire_sidecar(self.base / "journal_validation.json")
+        journal = io.lire_sidecar(io.dossier_temporaire(self.base) / "journal_validation.json")
 
         self.assertEqual(journal["etape"], "validation")
         self.assertEqual(len(journal["appels"]), len(EDIT_BLOCS))

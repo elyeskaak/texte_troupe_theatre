@@ -32,6 +32,9 @@ MyDrive/Troupe 122 - 2026-27/
     Les Justes.pdf
 ```
 
+Le pipeline y ajoutera les DOCX, et rangera tout le travail intermédiaire dans
+`temp/<Nom du livre>/` — le dossier principal reste donc lisible.
+
 ### 2. Renseigner la clé API dans Colab
 
 Panneau latéral **🔑 Secrets** → ajouter `OPENAI_API_KEY` → activer « Accès au

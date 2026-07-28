@@ -84,12 +84,22 @@ class TestValeursCitees(unittest.TestCase):
     def test_police(self):
         self.assertIn(config.POLICE_TEXTE, lire("TUTORIEL.md"))
 
-    def test_suffixes_de_fichiers(self):
+    def test_noms_des_fichiers_de_travail(self):
+        """
+        Les suffixes à plat (`_OCR.txt`) ont laissé place à des noms rangés par
+        livre : le tutoriel doit citer les seconds.
+        """
         tuto = lire("TUTORIEL.md")
 
-        for suffixe in (config.SUFFIXE_OCR, config.SUFFIXE_EDIT, config.SUFFIXE_REPORT):
-            with self.subTest(suffixe=suffixe):
-                self.assertIn(suffixe, tuto)
+        for nom in (config.NOM_OCR, config.NOM_EDIT, config.NOM_REPORT):
+            with self.subTest(fichier=nom):
+                self.assertIn(nom, tuto)
+
+    def test_dossier_de_travail_explique(self):
+        tuto = lire("TUTORIEL.md")
+
+        self.assertIn(f"{config.DOSSIER_TEMPORAIRE}/", tuto)
+        self.assertIn("migration", tuto.lower())
 
     def test_nom_du_secret_de_cle_api(self):
         self.assertIn(config.NOM_CLE_API, lire("TUTORIEL.md"))

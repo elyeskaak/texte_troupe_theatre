@@ -324,12 +324,11 @@ def construire_docx(texte: str) -> tuple[Any, blocks.IndexStructure, int]:
 
 
 def traiter_livre(
-    chemin_edit: Path,
+    chemins: io.CheminsLivre,
     journal: journalisation.Journal,
 ) -> ResultatLivre:
     """Génère le DOCX d'un livre à partir de son fichier édité."""
-    nom_livre = io.nom_livre_depuis_edit(chemin_edit)
-    chemins = io.resoudre_chemins(nom_livre, chemin_edit.parent)
+    nom_livre = chemins.nom
     resultat = ResultatLivre(nom=nom_livre)
 
     journalisation.section(f"DOCX — {nom_livre}")
@@ -409,13 +408,13 @@ def executer(dossier: Path | None = None) -> list[ResultatLivre]:
 
     journalisation.titre("Étape 4 — Génération DOCX")
 
-    fichiers = io.lister_fichiers_edit(base)
+    livres = io.lister_livres_avec(config.NOM_EDIT, base)
     journalisation.info(f"Dossier : {base}")
-    journalisation.info(f"Fichiers édités trouvés : {len(fichiers)}")
+    journalisation.info(f"Livres édités trouvés : {len(livres)}")
 
-    if not fichiers:
+    if not livres:
         journalisation.alerte(
-            f"aucun fichier « {config.SUFFIXE_EDIT} » — "
+            f"aucun « {config.NOM_EDIT} » dans {config.DOSSIER_TEMPORAIRE}/ — "
             "lancez d'abord l'étape « edition »"
         )
         return []
@@ -433,7 +432,7 @@ def executer(dossier: Path | None = None) -> list[ResultatLivre]:
         },
     )
 
-    resultats = [traiter_livre(chemin, journal) for chemin in fichiers]
+    resultats = [traiter_livre(chemins, journal) for chemins in livres]
 
     _afficher_recapitulatif(resultats, journal)
 

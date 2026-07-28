@@ -478,12 +478,11 @@ def composer_rapport(
 
 
 def traiter_livre(
-    chemin_ocr: Path,
+    chemins: io.CheminsLivre,
     journal: journalisation.Journal,
 ) -> ResultatLivre:
     """Valide un livre : contrôles mécaniques, comparaison par bloc, rapport."""
-    nom_livre = io.nom_livre_depuis_ocr(chemin_ocr)
-    chemins = io.resoudre_chemins(nom_livre, chemin_ocr.parent)
+    nom_livre = chemins.nom
     resultat = ResultatLivre(nom=nom_livre)
 
     journalisation.section(f"Validation — {nom_livre}")
@@ -491,7 +490,6 @@ def traiter_livre(
     with journalisation.Chrono() as chrono:
         try:
             _valider(
-                chemin_ocr=chemin_ocr,
                 chemins=chemins,
                 journal=journal,
                 resultat=resultat,
@@ -517,7 +515,6 @@ def traiter_livre(
 
 def _valider(
     *,
-    chemin_ocr: Path,
     chemins: io.CheminsLivre,
     journal: journalisation.Journal,
     resultat: ResultatLivre,
@@ -525,13 +522,13 @@ def _valider(
     """Corps de la validation d'un livre."""
     io.verifier_entree_etape(chemins.edit, "validation", "edition")
 
-    ocr = io.lire_texte(chemin_ocr)
+    ocr = io.lire_texte(chemins.ocr)
     edit = io.lire_texte(chemins.edit)
 
     pages = blocks.decouper_en_pages(ocr)
 
     if not pages:
-        raise ValueError(f"aucune page exploitable dans {chemin_ocr.name}")
+        raise ValueError(f"aucune page exploitable dans {chemins.ocr.name}")
 
     liste_blocs = blocks.former_blocs(pages, config.PAGES_PAR_BLOC)
     verifier_alignement(liste_blocs, chemins)
@@ -625,13 +622,14 @@ def executer(dossier: Path | None = None) -> list[ResultatLivre]:
 
     journalisation.titre("Étape 3 — Contrôle qualité")
 
-    fichiers = io.lister_fichiers_ocr(base)
+    livres = io.lister_livres_avec(config.NOM_OCR, base)
     journalisation.info(f"Dossier : {base}")
-    journalisation.info(f"Fichiers OCR trouvés : {len(fichiers)}")
+    journalisation.info(f"Livres transcrits trouvés : {len(livres)}")
 
-    if not fichiers:
+    if not livres:
         journalisation.alerte(
-            f"aucun fichier « {config.SUFFIXE_OCR} » — lancez d'abord l'étape OCR"
+            f"aucun « {config.NOM_OCR} » dans {config.DOSSIER_TEMPORAIRE}/ — "
+            "lancez d'abord l'étape OCR"
         )
         return []
 
@@ -646,7 +644,7 @@ def executer(dossier: Path | None = None) -> list[ResultatLivre]:
         },
     )
 
-    resultats = [traiter_livre(chemin, journal) for chemin in fichiers]
+    resultats = [traiter_livre(chemins, journal) for chemins in livres]
 
     _afficher_recapitulatif(resultats, journal)
 

@@ -452,7 +452,7 @@ class TestRobustesse(unittest.TestCase):
 
         docx_export.executer(self.base)
 
-        journal = io.lire_sidecar(self.base / "journal_docx.json")
+        journal = io.lire_sidecar(io.dossier_temporaire(self.base) / "journal_docx.json")
 
         self.assertEqual(journal["etape"], "docx")
         bilan = journal["livres"]["Le Malentendu"]

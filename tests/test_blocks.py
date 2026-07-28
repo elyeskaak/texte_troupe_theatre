@@ -846,6 +846,7 @@ class TestLieuApresSeparateur(unittest.TestCase):
             TypeLigne.TITRE_ACTE,
             TypeLigne.TITRE_SCENE,
             TypeLigne.DISTRIBUTION,
+            TypeLigne.ENTREE_DISTRIBUTION,
             TypeLigne.LIEU,
             TypeLigne.PERSONNAGE,
             TypeLigne.DIDASCALIE,

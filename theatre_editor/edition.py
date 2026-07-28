@@ -658,19 +658,18 @@ def assembler_edit(chemins: io.CheminsLivre, nombre_blocs: int) -> str:
 
 
 def traiter_fichier_ocr(
-    chemin_ocr: Path,
+    chemins: io.CheminsLivre,
     journal: journalisation.Journal,
 ) -> ResultatLivre:
-    """Édite un fichier OCR de bout en bout : passe 2a, passe 2b, assemblage."""
-    nom_livre = io.nom_livre_depuis_ocr(chemin_ocr)
-    chemins = io.resoudre_chemins(nom_livre, chemin_ocr.parent)
+    """Édite un livre de bout en bout : passe 2a, passe 2b, assemblage."""
+    nom_livre = chemins.nom
     resultat = ResultatLivre(nom=nom_livre)
 
     journalisation.section(f"Édition — {nom_livre}")
 
     with journalisation.Chrono() as chrono:
         try:
-            liste_blocs = _preparer_blocs(chemin_ocr)
+            liste_blocs = _preparer_blocs(chemins.ocr)
 
             journalisation.info(
                 f"   {len(liste_blocs)} bloc(s) de "
@@ -763,13 +762,14 @@ def executer(dossier: Path | None = None) -> list[ResultatLivre]:
 
     journalisation.titre("Étape 2 — Édition OCR")
 
-    fichiers = io.lister_fichiers_ocr(base)
+    livres = io.lister_livres_avec(config.NOM_OCR, base)
     journalisation.info(f"Dossier : {base}")
-    journalisation.info(f"Fichiers OCR trouvés : {len(fichiers)}")
+    journalisation.info(f"Livres transcrits trouvés : {len(livres)}")
 
-    if not fichiers:
+    if not livres:
         journalisation.alerte(
-            f"aucun fichier « {config.SUFFIXE_OCR} » — lancez d'abord l'étape OCR"
+            f"aucun « {config.NOM_OCR} » dans {config.DOSSIER_TEMPORAIRE}/ — "
+            "lancez d'abord l'étape OCR"
         )
         return []
 
@@ -785,7 +785,7 @@ def executer(dossier: Path | None = None) -> list[ResultatLivre]:
         },
     )
 
-    resultats = [traiter_fichier_ocr(chemin, journal) for chemin in fichiers]
+    resultats = [traiter_fichier_ocr(chemins, journal) for chemins in livres]
 
     _afficher_recapitulatif(resultats, journal)
 

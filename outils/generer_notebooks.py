@@ -22,6 +22,7 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parent.parent
 DOSSIER_NOTEBOOKS = RACINE / "notebooks"
 
+DOSSIER_TRAVAIL = "temp"
 DEPOT_COMPTE = "elyeskaak"
 DEPOT_NOM = "texte_troupe_theatre"
 
@@ -207,8 +208,43 @@ print("Jeton GitHub  :", "utilisé" if jeton else "non nécessaire (dépôt publ
 """
         ),
         markdown(
+            f"""
+## 3. Migration des livres déjà traités
+
+**À lancer une fois**, si vous avez utilisé le pipeline avant le changement de
+disposition du Drive.
+
+Le dossier principal ne contient désormais que vos PDF et les DOCX produits ;
+tout le travail intermédiaire est rangé dans `{DOSSIER_TRAVAIL}/<Nom du livre>/`.
+
+Cette cellule déplace les fichiers existants vers la nouvelle disposition. C'est
+un simple déplacement : **rien n'est perdu et rien n'est repayé**. Sans elle, vos
+transcriptions deviendraient invisibles et seraient refaites.
+
+L'opération ne fait rien si elle a déjà été effectuée.
+"""
+        ),
+        code(
             """
-## 3. Configuration
+from theatre_editor.utils import io
+
+a_migrer = io.livres_a_migrer(config.DOSSIER_DRIVE)
+
+if not a_migrer:
+    print("Rien à migrer : la disposition est déjà à jour.")
+else:
+    for nom in a_migrer:
+        print(nom)
+        for ligne in io.migrer_livre(nom, config.DOSSIER_DRIVE):
+            print("   ", ligne)
+
+    for nom in io.migrer_journaux(config.DOSSIER_DRIVE):
+        print("journal :", nom)
+"""
+        ),
+        markdown(
+            """
+## 4. Configuration
 
 `config.py` porte toutes les valeurs par défaut. Les surcharges ci-dessous ne
 valent que pour cette session : elles ne modifient pas le fichier.
@@ -315,13 +351,13 @@ def notebook_ocr() -> dict:
                 "C'est l'étape 2 qui corrigera, et c'est parce que `OCR.txt` "
                 "reste brut qu'il pourra servir de référence à l'étape 3.",
             ),
-            markdown("## 4. Clé API"),
+            markdown("## 5. Clé API"),
             CELLULE_CLE_API,
-            markdown("## 5. Vérification des modèles"),
+            markdown("## 6. Vérification des modèles"),
             CELLULE_VERIFIER_MODELES,
             markdown(
                 """
-## 6. Aperçu du travail à faire
+## 7. Aperçu du travail à faire
 
 Liste les PDF trouvés et l'avancement de chacun, sans lancer aucun appel.
 """
@@ -346,7 +382,7 @@ for chemin in io.lister_pdf(config.DOSSIER_DRIVE):
             ),
             markdown(
                 """
-## 7. Combien de pages seront réellement facturées ?
+## 8. Combien de pages seront réellement facturées ?
 
 **Cette cellule ne consomme aucun jeton.**
 
@@ -442,7 +478,7 @@ if NOM_LIVRE:
             ),
             markdown(
                 """
-## 8. Essai sur les premières pages
+## 9. Essai sur les premières pages
 
 **À faire sur tout nouveau livre.** Éprouver les quatre étapes sur dix pages
 coûte quelques centimes et révèle les mauvaises surprises — modèle qui refuse la
@@ -494,7 +530,7 @@ Vous verrez alors s'afficher, ce qui est normal :
             ),
             markdown(
                 """
-## 9. Lancement
+## 10. Lancement
 
 Reprenable : relancez cette cellule autant de fois qu'il le faut.
 
@@ -512,7 +548,7 @@ resultats = ocr.executer(config.DOSSIER_DRIVE)
             ),
             markdown(
                 """
-## 10. Contrôle du résultat
+## 11. Contrôle du résultat
 
 Affiche le début de chaque fichier produit, et signale les pages en échec.
 """
@@ -534,7 +570,7 @@ for resultat in resultats:
         print(io.lire_texte(chemins.ocr)[:1200])
 """
             ),
-            markdown("## 11. Journal"),
+            markdown("## 12. Journal"),
             cellule_journal("ocr"),
         ],
     )
@@ -558,13 +594,13 @@ def notebook_edition() -> dict:
                 "**Le texte de l'auteur n'est jamais réécrit.** Seules les "
                 "erreurs manifestes d'OCR sont corrigées.",
             ),
-            markdown("## 4. Clé API"),
+            markdown("## 5. Clé API"),
             CELLULE_CLE_API,
-            markdown("## 5. Vérification des modèles"),
+            markdown("## 6. Vérification des modèles"),
             CELLULE_VERIFIER_MODELES,
             markdown(
                 """
-## 6. Réglages de l'édition
+## 7. Réglages de l'édition
 
 `PAGES_PAR_BLOC` est le réglage le plus sensible. **Ne le changez pas au milieu
 d'un livre** : les blocs déjà édités ne seraient plus alignés, et l'étape 3
@@ -584,7 +620,7 @@ print("Pages par bloc   :", config.PAGES_PAR_BLOC)
             ),
             markdown(
                 """
-## 7. Aperçu du découpage
+## 8. Aperçu du découpage
 
 Montre en combien de blocs chaque livre sera découpé, et ce qui est déjà fait.
 """
@@ -617,7 +653,7 @@ for chemin in io.lister_fichiers_ocr(config.DOSSIER_DRIVE):
             ),
             markdown(
                 """
-## 8. Lancement
+## 9. Lancement
 
 Les deux passes s'enchaînent : édition des blocs, puis raccord des jonctions.
 Reprenable à l'unité près.
@@ -632,7 +668,7 @@ resultats = edition.executer(config.DOSSIER_DRIVE)
             ),
             markdown(
                 """
-## 9. Contrôle du résultat
+## 10. Contrôle du résultat
 
 Affiche le début de chaque `EDIT.txt` et la structure que l'étape 4 y verra.
 C'est le moment de vérifier que la convention typographique est bien appliquée.
@@ -656,7 +692,7 @@ for resultat in resultats:
     print(blocks.rapport_classification(blocks.construire_index_structure(texte)))
 """
             ),
-            markdown("## 10. Journal"),
+            markdown("## 11. Journal"),
             cellule_journal("edition"),
         ],
     )
@@ -680,11 +716,11 @@ def notebook_verification() -> dict:
                 "diagnostic, pas une correction : c'est à vous de décider quoi "
                 "faire de ce qu'elle signale.",
             ),
-            markdown("## 4. Clé API"),
+            markdown("## 5. Clé API"),
             CELLULE_CLE_API,
             markdown(
                 """
-## 5. Contrôles mécaniques d'abord
+## 6. Contrôles mécaniques d'abord
 
 Ces contrôles sont **gratuits et instantanés** : aucun appel API. Lancez-les
 seuls pour un premier avis, avant d'engager la comparaison par le modèle.
@@ -713,7 +749,7 @@ for chemin in io.lister_fichiers_ocr(config.DOSSIER_DRIVE):
             ),
             markdown(
                 """
-## 6. Lancement de la comparaison complète
+## 7. Lancement de la comparaison complète
 
 Un appel par bloc. Reprenable.
 """
@@ -727,7 +763,7 @@ resultats = validation.executer(config.DOSSIER_DRIVE)
             ),
             markdown(
                 """
-## 7. Lecture du rapport
+## 8. Lecture du rapport
 
 Le rapport est fait pour être lu par un humain. Il ne détaille que les blocs
 porteurs de constats.
@@ -746,7 +782,7 @@ for resultat in resultats:
             ),
             markdown(
                 """
-## 8. Que faire d'un constat ?
+## 9. Que faire d'un constat ?
 
 Le rapport signale, il ne corrige pas. Trois façons d'agir, de la plus légère à
 la plus lourde.
@@ -784,7 +820,7 @@ au milieu d'un livre, cela produirait des blocs hétérogènes.
 #         print("supprimé :", chemin.name)
 """
             ),
-            markdown("## 9. Journal"),
+            markdown("## 10. Journal"),
             cellule_journal("validation"),
         ],
     )
@@ -810,7 +846,7 @@ def notebook_docx() -> dict:
             ),
             markdown(
                 """
-## 4. Réglages typographiques
+## 5. Réglages typographiques
 
 Modifiez librement : cette étape est gratuite et reproductible.
 """
@@ -835,7 +871,7 @@ for cle, definition in config.DEFINITIONS_STYLES.items():
             ),
             markdown(
                 """
-## 5. Table d'inspection de la structure
+## 6. Table d'inspection de la structure
 
 **À lire avant de générer.** Elle montre comment chaque nom en gras a été
 classé — acte, scène, personnage — et signale d'un `⚠` les classements
@@ -862,7 +898,7 @@ for chemin in io.lister_fichiers_edit(config.DOSSIER_DRIVE):
             ),
             markdown(
                 """
-## 6. Corriger un classement
+## 7. Corriger un classement
 
 Si la table ci-dessus se trompe, forcez le classement ici. Écrivez les noms
 **en capitales et sans accents**, tels qu'ils apparaissent dans la colonne
@@ -882,7 +918,7 @@ print("Actes forcés       :", sorted(config.TITRES_ACTE_FORCES))
 print("Scènes forcées     :", sorted(config.TITRES_SCENE_FORCES))
 """
             ),
-            markdown("## 7. Génération"),
+            markdown("## 8. Génération"),
             code(
                 """
 from theatre_editor import docx_export
@@ -892,7 +928,7 @@ resultats = docx_export.executer(config.DOSSIER_DRIVE)
             ),
             markdown(
                 """
-## 8. Contrôle du document
+## 9. Contrôle du document
 
 Relit le DOCX produit et affiche le style appliqué à chaque paragraphe. Le
 meilleur moyen de vérifier qu'actes, scènes et personnages sont bien distingués.
@@ -926,7 +962,7 @@ for resultat in resultats:
             ),
             markdown(
                 """
-## 9. Téléchargement
+## 10. Téléchargement
 
 Le document est déjà sur votre Drive. Cette cellule permet de le récupérer
 directement sur votre machine.
@@ -945,7 +981,7 @@ for resultat in resultats:
             ),
             markdown(
                 """
-## 10. À propos de la police
+## 11. À propos de la police
 
 `python-docx` inscrit le **nom** de la police dans le document, il ne
 l'incorpore pas. EB Garamond n'a donc pas à être installée dans Colab pour que
@@ -956,7 +992,7 @@ substituera une autre police. Pour un rendu conforme, installez EB Garamond sur
 votre poste — elle est gratuite et disponible sur Google Fonts.
 """
             ),
-            markdown("## 11. Journal"),
+            markdown("## 12. Journal"),
             cellule_journal("docx"),
         ],
     )

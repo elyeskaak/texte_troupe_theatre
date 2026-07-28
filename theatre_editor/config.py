@@ -419,6 +419,11 @@ MARGE_CM = 3.0
 SAUT_DE_PAGE_AVANT_ACTE = True
 SAUT_DE_PAGE_AVANT_SCENE = False
 
+# La liste des personnages occupe une page à part entière, comme dans les
+# éditions imprimées : saut de page avant l'en-tête, et après la liste.
+SAUT_DE_PAGE_AVANT_DISTRIBUTION = True
+SAUT_DE_PAGE_APRES_DISTRIBUTION = True
+
 # Préfixe des styles créés dans le document, pour ne jamais entrer en
 # collision avec un style intégré de Word.
 PREFIXE_STYLE = "Theatre_"
@@ -465,8 +470,23 @@ DEFINITIONS_STYLES: dict[str, dict[str, object]] = {
         "gras": True,
         "italique": False,
         "taille_pt": TAILLE_TITRE_SCENE_PT,
-        "espace_avant_pt": 24,
-        "espace_apres_pt": 12,
+        # Espacement avant nul : le style porte un saut de page.
+        "espace_avant_pt": 0,
+        "espace_apres_pt": 18,
+        "saut_de_page": SAUT_DE_PAGE_AVANT_DISTRIBUTION,
+    },
+    # Entrées de la liste des rôles : « DON PÉDRO, prince d'Aragon. »
+    #
+    # Alignées à gauche et non justifiées : ce sont des lignes courtes, et une
+    # justification les étirerait d'un bord à l'autre de la page.
+    "entree_distribution": {
+        "nom": "Entree_Distribution",
+        "alignement": "gauche",
+        "gras": False,
+        "italique": False,
+        "taille_pt": TAILLE_TEXTE_PT,
+        "espace_avant_pt": 0,
+        "espace_apres_pt": 2,
         "saut_de_page": False,
     },
     "lieu": {
@@ -517,11 +537,47 @@ DEFINITIONS_STYLES: dict[str, dict[str, object]] = {
 
 
 # ============================================================
-# SUFFIXES DE FICHIERS
+# DISPOSITION DES FICHIERS SUR LE DRIVE
 # ------------------------------------------------------------
-# Tous les chemins du pipeline dérivent du nom du livre et de ces suffixes,
-# via `utils.io.resoudre_chemins()`.
+# Le dossier principal ne montre que ce qui vous intéresse : le PDF source et
+# le DOCX final. Tout le travail intermédiaire vit dans un sous-dossier par
+# livre, ce qui garde le Drive lisible même avec plusieurs pièces en cours.
+#
+#     Troupe 122 - 2026-27/
+#         Le Malentendu.pdf              ← votre source
+#         Le Malentendu.docx             ← le résultat
+#         temp/
+#             journal_ocr.json …
+#             Le Malentendu/
+#                 OCR.txt
+#                 OCR_pages/
+#                 EDIT.txt               ← à corriger à la main au besoin
+#                 EDIT_blocs/
+#                 EDIT_raccords/
+#                 REPORT.txt             ← à relire une fois
+#                 REPORT_blocs/
+#
+# Tous les chemins dérivent du nom du livre, via `utils.io.resoudre_chemins()`.
 # ============================================================
+
+DOSSIER_TEMPORAIRE = "temp"
+
+NOM_OCR = "OCR.txt"
+NOM_OCR_PAGES = "OCR_pages"
+NOM_EDIT = "EDIT.txt"
+NOM_EDIT_BLOCS = "EDIT_blocs"
+NOM_EDIT_RACCORDS = "EDIT_raccords"
+NOM_REPORT = "REPORT.txt"
+NOM_REPORT_BLOCS = "REPORT_blocs"
+
+SUFFIXE_DOCX = ".docx"
+
+# ------------------------------------------------------------
+# Suffixes de l'ancienne disposition, à plat dans le dossier principal.
+#
+# Conservés pour `io.migrer_livre()` : sans migration, les fichiers déjà
+# produits deviendraient invisibles et tout serait retranscrit, donc repayé.
+# ------------------------------------------------------------
 
 SUFFIXE_OCR = "_OCR.txt"
 SUFFIXE_OCR_PAGES = "_OCR_pages"
@@ -530,7 +586,6 @@ SUFFIXE_EDIT_BLOCS = "_EDIT_blocs"
 SUFFIXE_EDIT_RACCORDS = "_EDIT_raccords"
 SUFFIXE_REPORT = "_REPORT.txt"
 SUFFIXE_REPORT_BLOCS = "_REPORT_blocs"
-SUFFIXE_DOCX = ".docx"
 
 # Extension des fichiers temporaires de l'écriture atomique.
 EXTENSION_TEMPORAIRE = ".tmp"

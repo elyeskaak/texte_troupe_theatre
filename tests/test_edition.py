@@ -706,7 +706,7 @@ class TestJournal(BaseEdition):
     def test_journal_distingue_blocs_et_raccords(self):
         self.executer()
 
-        journal = io.lire_sidecar(self.base / "journal_edition.json")
+        journal = io.lire_sidecar(io.dossier_temporaire(self.base) / "journal_edition.json")
         unites = {appel["unite"] for appel in journal["appels"]}
 
         self.assertEqual(unites, {"bloc", "raccord"})
@@ -714,7 +714,7 @@ class TestJournal(BaseEdition):
     def test_configuration_des_deux_modeles_consignee(self):
         self.executer()
 
-        configuration = io.lire_sidecar(self.base / "journal_edition.json")["configuration"]
+        configuration = io.lire_sidecar(io.dossier_temporaire(self.base) / "journal_edition.json")["configuration"]
 
         self.assertEqual(configuration["modele_edition"], config.MODEL_EDITION)
         self.assertEqual(configuration["modele_raccord"], config.MODEL_RACCORD)
@@ -722,7 +722,7 @@ class TestJournal(BaseEdition):
     def test_bilan_du_livre_journalise(self):
         self.executer()
 
-        bilan = io.lire_sidecar(self.base / "journal_edition.json")["livres"]["Le Malentendu"]
+        bilan = io.lire_sidecar(io.dossier_temporaire(self.base) / "journal_edition.json")["livres"]["Le Malentendu"]
 
         self.assertEqual(bilan["statut"], config.STATUT_TERMINE)
         self.assertEqual(bilan["blocs"]["total"], self.nombre_blocs)

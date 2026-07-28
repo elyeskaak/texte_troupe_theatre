@@ -565,7 +565,7 @@ class TestJournalEtSidecars(BaseOcr):
     def test_journal_ecrit_avec_les_champs_attendus(self):
         self.executer()
 
-        journal = io.lire_sidecar(self.base / "journal_ocr.json")
+        journal = io.lire_sidecar(io.dossier_temporaire(self.base) / "journal_ocr.json")
 
         self.assertEqual(journal["etape"], "ocr")
         self.assertEqual(len(journal["appels"]), self.NOMBRE_PAGES)
@@ -586,7 +586,7 @@ class TestJournalEtSidecars(BaseOcr):
     def test_bilan_du_livre_journalise(self):
         self.executer()
 
-        journal = io.lire_sidecar(self.base / "journal_ocr.json")
+        journal = io.lire_sidecar(io.dossier_temporaire(self.base) / "journal_ocr.json")
         bilan = journal["livres"]["Le Malentendu"]
 
         self.assertEqual(bilan["pages_totales"], self.NOMBRE_PAGES)
@@ -607,7 +607,7 @@ class TestJournalEtSidecars(BaseOcr):
         self.executer()
         self.executer()
 
-        journal = io.lire_sidecar(self.base / "journal_ocr.json")
+        journal = io.lire_sidecar(io.dossier_temporaire(self.base) / "journal_ocr.json")
 
         # Aucun appel supplémentaire, mais les précédents sont conservés.
         self.assertEqual(len(journal["appels"]), self.NOMBRE_PAGES)
@@ -852,7 +852,7 @@ class TestReutilisationCoucheTexte(BaseOcr):
 
         self.executer()
 
-        journal = io.lire_sidecar(self.base / "journal_ocr.json")
+        journal = io.lire_sidecar(io.dossier_temporaire(self.base) / "journal_ocr.json")
         appels = journal["appels"]
 
         self.assertEqual(len(appels), self.NOMBRE_PAGES)
@@ -1050,7 +1050,7 @@ class TestEssaiLimite(BaseOcr):
     def test_limite_consignee_dans_le_journal(self):
         self.executer_avec_limite(4)
 
-        configuration = io.lire_sidecar(self.base / "journal_ocr.json")["configuration"]
+        configuration = io.lire_sidecar(io.dossier_temporaire(self.base) / "journal_ocr.json")["configuration"]
 
         self.assertEqual(configuration["limite_pages"], 4)
 
