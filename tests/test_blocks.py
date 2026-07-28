@@ -209,6 +209,15 @@ class TestVerifierSortie(unittest.TestCase):
 
         self.assertTrue(avertissements)
 
+    def test_replique_avec_je_ne_peux_pas_n_est_pas_signalee(self):
+        """Régression : « je ne peux pas » est une réplique banale, pas un
+        refus du modèle. La signaler marquait le bloc suspect, jusqu'à le
+        faire disparaître d'EDIT.txt à l'assemblage."""
+        source = "JAN Je ne peux pas te le dire maintenant."
+        sortie = "**JAN.**\nJe ne peux pas te le dire maintenant."
+
+        self.assertEqual(verifier_sortie(source, sortie), [])
+
     def test_asterisque_orpheline_detectee(self):
         """Une astérisque impaire casserait la convention, donc l'étape 4."""
         avertissements = verifier_sortie("texte", "**JAN.*\nMort ?")

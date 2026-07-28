@@ -1003,7 +1003,10 @@ mécaniques, indépendants du modèle :
 1. **Ratio de longueur** par bloc (`RATIO_MINIMAL_LONGUEUR`) → détecte
    troncature et résumé involontaire.
 2. **Motifs interdits** → `<<<PAGE_BREAK>>>` résiduel, ` ``` `, « Voici le
-   texte corrigé », « je ne peux pas »… Détecte le bavardage et les refus.
+   texte corrigé », « as an AI »… Détecte le bavardage et les refus de type
+   assistant. « je ne peux pas » en a été écarté : c'est une réplique trop
+   courante (« je ne peux pas te le dire »), et §9.7 capte déjà le vrai refus
+   de transcription — au prix, sinon, de pages perdues.
 3. **Parité des astérisques** (séparateurs `***` exclus) → détecte une
    astérisque orpheline — un balisage `*…*` ou `**…**` non refermé qui
    casserait l'étape 4. Le séparateur de scène `***`, impair mais parfaitement

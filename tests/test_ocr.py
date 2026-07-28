@@ -468,6 +468,21 @@ class TestControlesContenu(BaseOcr):
             with self.subTest(contenu=contenu[:24]):
                 self.assertEqual(blocks.verifier_page_ocr(contenu), [])
 
+    def test_replique_avec_je_ne_peux_pas_n_est_pas_signalee(self):
+        """
+        Régression, et perte de page. Le motif de refus « je ne peux pas » se
+        déclenchait sur une réplique banale (« WANG. Je ne peux pas te le
+        dire »), marquant la page suspecte au point de la faire disparaître du
+        fichier assemblé. Un vrai refus de transcription reste capté par
+        `est_declaration_echec` : l'objet du verbe doit être la page (§9.7).
+        """
+        for contenu in (
+            "WANG. Je ne peux pas te le dire maintenant.",
+            "SHEN TÉ. Je ne peux pas refuser.",
+        ):
+            with self.subTest(contenu=contenu[:24]):
+                self.assertEqual(blocks.verifier_page_ocr(contenu), [])
+
     def test_emphase_markdown_reste_signalee(self):
         """
         Contrepartie : la vraie mise en forme ajoutée doit toujours être vue,

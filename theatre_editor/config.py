@@ -265,6 +265,12 @@ RATIO_MAXIMAL_RACCORD = 1.10
 
 # Motifs dont la présence en sortie signale un problème : marqueur non
 # supprimé, bavardage du modèle, refus, ou balise de code.
+#
+# « je ne peux pas » n'y figure pas, à dessein : c'est une réplique banale
+# (« je ne peux pas te le dire »), et la signaler marquait le bloc suspect —
+# au point de le faire disparaître du fichier assemblé. Un vrai refus de
+# transcription est capté par `est_declaration_echec` (§9.7), qui exige que
+# l'objet du verbe soit la page, ce qu'une réplique n'a pas.
 MOTIFS_INTERDITS: tuple[str, ...] = (
     r"<<<PAGE_BREAK>>>",
     r"^\s*\[PAGE\s+\d+\]\s*$",
@@ -274,7 +280,6 @@ MOTIFS_INTERDITS: tuple[str, ...] = (
     r"(?i)voici le texte",
     r"(?i)voici la version",
     r"(?i)texte corrigé",
-    r"(?i)je ne peux pas",
     r"(?i)i can't assist",
     r"(?i)as an ai",
 )
@@ -282,6 +287,10 @@ MOTIFS_INTERDITS: tuple[str, ...] = (
 # Motifs interdits en sortie d'OCR. La liste diffère de celle de l'édition :
 # l'OCR doit produire du texte NU, donc les marqueurs de page et la mise en
 # forme y sont des anomalies, alors que l'édition les produit légitimement.
+#
+# Comme pour MOTIFS_INTERDITS, « je ne peux pas » en est absent : le motif se
+# déclenchait sur une réplique (« WANG. Je ne peux pas te le dire ») et faisait
+# perdre la page. Le vrai refus reste capté par `est_declaration_echec` (§9.7).
 MOTIFS_INTERDITS_OCR: tuple[str, ...] = (
     r"<<<PAGE_BREAK>>>",
     r"\[PAGE\s+\d+\]",
@@ -289,7 +298,6 @@ MOTIFS_INTERDITS_OCR: tuple[str, ...] = (
     r"(?i)voici la transcription",
     r"(?i)voici le texte",
     r"(?i)transcription de la page",
-    r"(?i)je ne peux pas",
     r"(?i)i can't assist",
     r"(?i)as an ai",
 )
