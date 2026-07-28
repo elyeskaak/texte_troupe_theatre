@@ -412,7 +412,8 @@ def traiter_jonction(
     """
     libelle = f"raccord {numero}"
 
-    if io.unite_terminee(chemins.raccord_json(numero)):
+    chemin_sidecar = chemins.raccord_json(numero)
+    if not io.unite_a_refaire(chemin_sidecar):
         return UNITE_SAUTEE
 
     chemin_gauche = chemins.raccord_txt(numero)
@@ -468,12 +469,31 @@ def traiter_jonction(
     io.ecrire_texte_atomique(chemin_gauche, blocks.recoller_gauche(prefixe, gauche_finale))
     io.ecrire_texte_atomique(chemin_droit, blocks.recoller_droite(droite_finale, suffixe))
 
-    statut = io.statut_depuis_avertissements(avertissements)
+    # Borne de reprises, comme pour les blocs (`MAX_REPRISES_SUSPECTES`). Une
+    # jonction que le modèle rate de façon reproductible — extrait vide, longueur
+    # aberrante — ne doit pas bloquer le pipeline sans fin : sans plafond,
+    # l'édition resterait éternellement « incomplète » et n'atteindrait jamais la
+    # validation ni le DOCX. Le garde-fou a déjà conservé le texte d'origine ;
+    # passé ce plafond, on ACCEPTE la jonction telle quelle (non ressoudée), en
+    # consignant l'avertissement, plutôt que de la refaire indéfiniment.
+    reprises = io.reprises_effectuees(chemin_sidecar)
+    if avertissements:
+        reprises += 1
+
+    if avertissements and reprises >= config.MAX_REPRISES_SUSPECTES:
+        avertissements = [
+            *avertissements,
+            f"jonction non ressoudée, acceptée après {reprises} tentative(s)",
+        ]
+        statut = config.STATUT_TERMINE
+    else:
+        statut = io.statut_depuis_avertissements(avertissements)
 
     io.ecrire_sidecar(
-        chemins.raccord_json(numero),
+        chemin_sidecar,
         {
             "statut": statut,
+            "reprises": reprises,
             "unite": "raccord",
             "numero": numero,
             "bloc_gauche": numero,
@@ -495,7 +515,7 @@ def traiter_jonction(
         **resultat.champs_journal(),
     )
 
-    return UNITE_SUSPECTE if avertissements else UNITE_TERMINEE
+    return UNITE_TERMINEE if statut == config.STATUT_TERMINE else UNITE_SUSPECTE
 
 
 def _valider_correction(

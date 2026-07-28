@@ -325,6 +325,31 @@ class TestGardeFouRaccord(BaseEdition):
         self.assertIn("Ligne 20 du bloc 1.", io.lire_texte(self.chemins.raccord_txt(1)))
         self.assertEqual(resultats[0].raccords.suspectes, 1)
 
+    def test_raccord_irrecuperable_accepte_apres_le_plafond(self):
+        """
+        Régression : un raccord que le modèle rate de façon reproductible (ici
+        un extrait vide) restait éternellement « suspect », faute de borne. Comme
+        l'édition n'était alors jamais « complète », la validation et le DOCX
+        n'étaient jamais atteints — le pipeline tournait en boucle. Passé
+        `MAX_REPRISES_SUSPECTES`, la jonction est acceptée telle quelle (le texte
+        d'origine est déjà conservé par le garde-fou) et l'édition redevient
+        complète.
+        """
+        def reponse(gauche, droite):
+            return reponse_raccord("", droite)
+
+        # Les premières passes laissent le raccord suspect, et le retentent.
+        for _ in range(config.MAX_REPRISES_SUSPECTES - 1):
+            resultats, _ = self._executer_avec_raccord(reponse)
+            self.assertFalse(resultats[0].complet)
+
+        # Passe suivante : plafond atteint, la jonction est acceptée telle quelle.
+        resultats, _ = self._executer_avec_raccord(reponse)
+        self.assertTrue(resultats[0].complet)
+
+        # Le texte d'origine est conservé : aucune perte malgré l'extrait vide.
+        self.assertIn("Ligne 20 du bloc 1.", io.lire_texte(self.chemins.raccord_txt(1)))
+
     def test_correction_legitime_est_appliquee(self):
         """
         Contrepartie des tests précédents : une correction de faible amplitude
