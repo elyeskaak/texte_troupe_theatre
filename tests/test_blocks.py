@@ -27,6 +27,7 @@ from theatre_editor.utils.blocks import (
     contenu_italique,
     decouper_en_pages,
     decouper_en_runs,
+    dedoubler_replique_en_ligne,
     est_jeton_numerotation,
     est_ligne_de_replique,
     est_separateur,
@@ -611,8 +612,119 @@ class TestClassifierDocument(unittest.TestCase):
                 self.assertNotIn("*", ligne.texte)
 
     def test_toutes_les_lignes_conservees(self):
-        """Aucune ligne ne doit disparaître : le DOCX doit tout restituer."""
+        """
+        Aucune ligne ne doit disparaître : le DOCX doit tout restituer.
+
+        Le compte peut en revanche **augmenter** si une ligne portait un nom de
+        personnage et sa réplique ensemble : elle est alors dédoublée. Ce texte
+        d'essai n'en contient pas.
+        """
         self.assertEqual(len(self.lignes), len(self.texte.split("\n")))
+
+
+class TestRepliqueEnLigne(unittest.TestCase):
+    """
+    Nom de personnage et réplique sur la même ligne.
+
+    C'est la disposition de beaucoup d'éditions imprimées — « LÉA. Tu penses à
+    quoi ? » — et le modèle d'édition la reproduit parfois malgré la consigne.
+    Sans traitement, aucun personnage n'était reconnu et les astérisques se
+    retrouvaient **visibles dans le DOCX**.
+    """
+
+    TEXTE = (
+        "**LÉA.** Tu penses à quoi ?\n"
+        "*Pas de réponse.*\n"
+        "**PHIL.** Rien.\n"
+        "**LÉA.** Encore ?\n"
+    )
+
+    def setUp(self):
+        self.index = construire_index_structure(self.TEXTE)
+        self.lignes = classifier_document(self.TEXTE, self.index)
+
+    def test_dedoublement(self):
+        self.assertEqual(
+            dedoubler_replique_en_ligne("**LÉA.** Tu penses à quoi ?"),
+            ("LÉA.", "Tu penses à quoi ?"),
+        )
+
+    def test_personnages_reconnus(self):
+        self.assertEqual(self.index.compter(TypeLigne.PERSONNAGE), 2)
+
+    def test_paragraphes_separes(self):
+        types = [l.type for l in self.lignes if l.type is not TypeLigne.VIDE]
+
+        self.assertEqual(
+            types,
+            [
+                TypeLigne.PERSONNAGE,
+                TypeLigne.TEXTE,
+                TypeLigne.DIDASCALIE,
+                TypeLigne.PERSONNAGE,
+                TypeLigne.TEXTE,
+                TypeLigne.PERSONNAGE,
+                TypeLigne.TEXTE,
+            ],
+        )
+
+    def test_aucune_asterisque_residuelle(self):
+        for ligne in self.lignes:
+            with self.subTest(ligne=ligne.brut):
+                self.assertNotIn("*", ligne.texte)
+
+    def test_emphase_simple_n_est_pas_dedoublee(self):
+        """
+        Garde-fou. Sans l'exigence de capitales, une emphase en tête de réplique
+        fabriquerait un personnage inexistant.
+        """
+        for essai in (
+            "**Attention** dit-il.",
+            "**Mot** en gras au début.",
+            "**Ça** compte.",
+        ):
+            with self.subTest(essai=essai):
+                self.assertIsNone(dedoubler_replique_en_ligne(essai))
+
+    def test_nom_seul_sur_sa_ligne_non_affecte(self):
+        """La forme canonique ne doit pas être happée par ce traitement."""
+        self.assertIsNone(dedoubler_replique_en_ligne("**JAN.**"))
+
+    def test_separateur_non_affecte(self):
+        self.assertIsNone(dedoubler_replique_en_ligne("***"))
+
+
+class TestLieuApresSeparateur(unittest.TestCase):
+    """
+    Beaucoup de pièces contemporaines font suivre un `***` de la description du
+    nouveau lieu, sans titre de scène intermédiaire.
+    """
+
+    def test_italique_apres_separateur_est_un_lieu(self):
+        texte = (
+            "**LÉA.** Rien.\n"
+            "***\n"
+            "*Un champ. Léa et Phil, Phil mange une glace.*\n"
+            "**LÉA.** Encore ?\n"
+        )
+
+        index = construire_index_structure(texte)
+        lignes = classifier_document(texte, index)
+
+        lieux = [l.texte for l in lignes if l.type is TypeLigne.LIEU]
+
+        self.assertEqual(lieux, ["Un champ. Léa et Phil, Phil mange une glace."])
+
+    def test_italique_en_cours_de_scene_reste_une_didascalie(self):
+        texte = "**LÉA.** Tu penses à quoi ?\n*Pas de réponse.*\n"
+
+        index = construire_index_structure(texte)
+        lignes = classifier_document(texte, index)
+
+        self.assertEqual(
+            [l.texte for l in lignes if l.type is TypeLigne.DIDASCALIE],
+            ["Pas de réponse."],
+        )
 
     def test_les_types_couvrent_les_styles_configures(self):
         """

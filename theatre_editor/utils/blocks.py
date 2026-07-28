@@ -182,6 +182,25 @@ MOTIF_LIGNE_GRAS = re.compile(r"^\*\*(?P<contenu>.+?)\*\*$")
 # `**X**` satisfait sinon `^\*.*\*$`.
 MOTIF_LIGNE_ITALIQUE = re.compile(r"^\*(?P<contenu>[^*].*?)\*$")
 
+# Nom de personnage suivi de sa réplique **sur la même ligne** :
+#
+#     **LÉA.** Tu penses à quoi ?
+#
+# C'est ainsi que beaucoup d'éditions imprimées présentent le dialogue, et le
+# modèle d'édition reproduit parfois cette disposition malgré la consigne de
+# placer le nom seul sur sa ligne.
+#
+# Sans traitement, la ligne entière est classée comme du texte : aucun
+# personnage n'est reconnu, et les astérisques se retrouvent **visibles dans le
+# DOCX**. Ce motif permet de dédoubler la ligne (§ `dedoubler_replique_en_ligne`).
+MOTIF_REPLIQUE_EN_LIGNE = re.compile(
+    r"^\*\*(?P<label>[^*\n]+)\*\*\s+(?P<suite>\S.*)$"
+)
+
+# Bornes d'un nom de personnage plausible en tête de réplique.
+MIN_LETTRES_REPRISE = 2
+MAX_LONGUEUR_REPRISE = 40
+
 # Emphase à l'intérieur d'une ligne. Le gras est la première alternative :
 # sur `**mot**`, une alternance qui commencerait par l'italique capturerait
 # une chaîne vide entre les deux premières astérisques.
@@ -740,6 +759,37 @@ def contenu_italique(ligne: str) -> str | None:
     return correspondance.group("contenu").strip() if correspondance else None
 
 
+def dedoubler_replique_en_ligne(ligne: str) -> tuple[str, str] | None:
+    """
+    Sépare un nom de personnage de sa réplique lorsqu'ils partagent une ligne.
+
+    `**LÉA.** Tu penses à quoi ?` devient `("LÉA.", "Tu penses à quoi ?")`.
+
+    Le nom doit être **entièrement en capitales** pour que la ligne soit
+    dédoublée. Sans cette exigence, une simple emphase en tête de réplique —
+    `**Attention** dit-il.` — serait prise pour un nom de personnage, ce qui
+    fabriquerait des rôles inexistants.
+
+    Returns:
+        `(nom, réplique)`, ou None si la ligne n'a pas cette forme.
+    """
+    correspondance = MOTIF_REPLIQUE_EN_LIGNE.match(ligne.strip())
+
+    if correspondance is None:
+        return None
+
+    label = correspondance.group("label").strip()
+    lettres = [caractere for caractere in label if caractere.isalpha()]
+
+    if len(lettres) < MIN_LETTRES_REPRISE or len(label) > MAX_LONGUEUR_REPRISE:
+        return None
+
+    if not all(caractere.isupper() for caractere in lettres):
+        return None
+
+    return label, correspondance.group("suite").strip()
+
+
 def est_ligne_de_replique(ligne: str) -> bool:
     """
     Vrai si la ligne ressemble à du texte parlé.
@@ -947,9 +997,18 @@ def _collecter_labels(texte: str) -> dict[str, _Observation]:
 
     for index, ligne in enumerate(lignes):
         contenu = contenu_gras(ligne)
+        replique_immediate = False
 
         if contenu is None:
-            continue
+            # Le nom peut partager sa ligne avec la réplique : dans ce cas, la
+            # réplique est là, sur la même ligne.
+            dedouble = dedoubler_replique_en_ligne(ligne)
+
+            if dedouble is None:
+                continue
+
+            contenu, _ = dedouble
+            replique_immediate = True
 
         label = normaliser_label(contenu)
 
@@ -961,7 +1020,7 @@ def _collecter_labels(texte: str) -> dict[str, _Observation]:
         )
         observation.occurrences += 1
 
-        if _suit_une_replique(lignes, index + 1):
+        if replique_immediate or _suit_une_replique(lignes, index + 1):
             observation.suivi_replique += 1
 
     return observations
@@ -1316,23 +1375,66 @@ def classifier_document(texte: str, index: IndexStructure) -> list[LigneClassee]
     type_precedent: TypeLigne | None = None
 
     for ligne in texte.split("\n"):
-        type_ligne = classifier_ligne(ligne, index)
-        contenu = contenu_sans_marqueurs(ligne, type_ligne)
-
-        if type_ligne is TypeLigne.DIDASCALIE and type_precedent in (
-            TypeLigne.TITRE_ACTE,
-            TypeLigne.TITRE_SCENE,
+        for brut, type_ligne, contenu in _classer_ligne_eventuellement_dedoublee(
+            ligne, index
         ):
-            type_ligne = TypeLigne.LIEU
+            if type_ligne is TypeLigne.DIDASCALIE and type_precedent in _OUVRE_UNE_SCENE:
+                type_ligne = TypeLigne.LIEU
 
-        resultats.append(LigneClassee(brut=ligne, texte=contenu, type=type_ligne))
+            resultats.append(LigneClassee(brut=brut, texte=contenu, type=type_ligne))
 
-        # Les lignes vides et les séparateurs ne rompent pas l'enchaînement
-        # « titre → lieu » : une ligne vide les sépare presque toujours.
-        if type_ligne not in (TypeLigne.VIDE, TypeLigne.SEPARATEUR):
-            type_precedent = type_ligne
+            # Une ligne vide ne rompt pas l'enchaînement « ouverture → lieu » :
+            # elle les sépare presque toujours.
+            if type_ligne is not TypeLigne.VIDE:
+                type_precedent = type_ligne
 
     return resultats
+
+
+# Types après lesquels une ligne en italique est une **indication de lieu**, non
+# une didascalie ordinaire.
+#
+# Le séparateur `***` en fait partie : il marque un changement de scène, et
+# beaucoup d'éditions font suivre ce séparateur de la description du nouveau
+# lieu, sans titre intermédiaire — c'est le cas des pièces contemporaines
+# découpées en fragments.
+_OUVRE_UNE_SCENE = frozenset(
+    {TypeLigne.TITRE_ACTE, TypeLigne.TITRE_SCENE, TypeLigne.SEPARATEUR}
+)
+
+
+def _classer_ligne_eventuellement_dedoublee(
+    ligne: str,
+    index: IndexStructure,
+) -> list[tuple[str, TypeLigne, str]]:
+    """
+    Classe une ligne, en la dédoublant si elle porte un nom **et** sa réplique.
+
+    Une ligne du type `**LÉA.** Tu penses à quoi ?` produit deux paragraphes :
+    le nom de personnage, puis la réplique. Le nombre de lignes en sortie peut
+    donc dépasser celui de l'entrée — c'est voulu, et c'est la seule
+    transformation de structure que la classification s'autorise.
+
+    Sans elle, la ligne entière serait du texte : aucun personnage reconnu, et
+    des astérisques visibles dans le document final.
+    """
+    dedouble = dedoubler_replique_en_ligne(ligne)
+
+    if dedouble is not None:
+        nom, replique = dedouble
+        type_nom = index.type_de(normaliser_label(nom))
+
+        # On ne dédouble que pour un personnage. Un titre suivi de texte sur la
+        # même ligne est trop inhabituel pour qu'on l'interprète.
+        if type_nom is TypeLigne.PERSONNAGE:
+            return [
+                (ligne, TypeLigne.PERSONNAGE, nom),
+                (ligne, TypeLigne.TEXTE, replique),
+            ]
+
+    type_ligne = classifier_ligne(ligne, index)
+
+    return [(ligne, type_ligne, contenu_sans_marqueurs(ligne, type_ligne))]
 
 
 def contenu_sans_marqueurs(ligne: str, type_ligne: TypeLigne) -> str:
