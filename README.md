@@ -74,7 +74,7 @@ Sur tout nouveau livre, réglez dans le notebook 01 :
 config.LIMITE_PAGES = 10
 ```
 
-Éprouver les quatre étapes sur dix pages coûte quelques centimes et révèle les
+Éprouver la chaîne entière sur dix pages coûte quelques centimes et révèle les
 mauvaises surprises — couche texte trompeuse, structure mal reconnue — avant
 d'engager trois cents pages. Les pages transcrites sont **conservées et
 réutilisées** au passage complet : rien n'est perdu, rien n'est repayé.
@@ -312,7 +312,7 @@ theatre_editor/
     main.py              orchestration CLI
 
 notebooks/               interfaces Colab (générées par outils/)
-tests/                   532 tests
+tests/                   538 tests
 archive/                 prototype d'origine, conservé
 ARCHITECTURE.md          conception détaillée et justifiée
 ```
@@ -369,7 +369,7 @@ stylistiquement hétérogènes, ce que la passe de raccord ne rattrape pas.
 python -m unittest discover -s tests -t .
 ```
 
-**532 tests, environ 12 secondes.** Aucune clé API, aucun Drive monté, aucun appel
+**538 tests, environ 20 secondes.** Aucune clé API, aucun Drive monté, aucun appel
 réseau : `openai` et `pymupdf` sont remplacés par des doublures, et les modules
 concernés diffèrent leur import pour rendre cela possible.
 

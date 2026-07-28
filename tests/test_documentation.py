@@ -303,6 +303,28 @@ class TestLiens(unittest.TestCase):
         self.assertTrue(liens)
         self.assertEqual([l for l in liens if l not in ancres], [])
 
+    def test_renvois_en_paragraphe_resolvent(self):
+        """
+        Les renvois de la forme « (§9.7) » ne sont pas des liens Markdown : le
+        contrôle d'ancres ci-dessus ne les voit pas. Ils sont pourtant écrits à
+        la main, et une renumérotation les laisserait pointer dans le vide — ou,
+        pire, vers la mauvaise section.
+        """
+        for nom in ("ARCHITECTURE.md", "README.md", "TUTORIEL.md"):
+            texte = lire(nom)
+
+            titres = set(re.findall(r"(?m)^#{2,3}\s+(\d+(?:\.\d+)?)", texte))
+            renvois = set(re.findall(r"§\s?(\d+(?:\.\d+)?)", texte))
+
+            orphelins = sorted(
+                renvoi
+                for renvoi in renvois
+                if renvoi not in titres and renvoi.split(".")[0] not in titres
+            )
+
+            with self.subTest(document=nom):
+                self.assertEqual(orphelins, [])
+
 
 class TestDepannage(unittest.TestCase):
     """

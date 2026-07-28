@@ -114,6 +114,16 @@ résultat sans toucher une ligne de Python.**
       ▼
    Pièce_EDIT.txt                   ← texte propre, convention typographique
       │
+      │  ÉTAPE 2c — Rôles des pages liminaires    (même notebook)
+      │  ┌──────────────────────────────────────────────────────────┐
+      │  │ LIGNES_LIMINAIRES premières lignes au plus                │
+      │  │ UN SEUL appel par livre, mis en cache                     │
+      │  │ Responses API → « numéro|rôle », aucun texte rendu        │
+      │  │ Écriture : LIMINAIRES.json                                │
+      │  └──────────────────────────────────────────────────────────┘
+      │
+      ├──▶ LIMINAIRES.json             ← rôles seuls, relus par l'étape 4
+      │
       │  ÉTAPE 3 — Contrôle qualité               notebooks/03_Verification.ipynb
       │  ┌──────────────────────────────────────────────────────────┐
       │  │ Contrôles mécaniques (sans IA)  ──┐                       │
@@ -137,6 +147,13 @@ rapport révèle un problème, on corrige soit un prompt puis on relance l'étap
 sur les blocs concernés, soit `EDIT.txt` à la main. Cela évite toute boucle de
 réécriture automatique, qui serait la porte ouverte à la violation de P1.
 
+Second point : **l'étape 2c ne produit aucun texte.** Elle ne rend que des
+couples « numéro de ligne → rôle ». C'est ce qui la rend inoffensive : elle ne
+peut pas altérer l'œuvre, seulement se tromper sur la mise en forme de quelques
+lignes du début. Elle est de surcroît facultative — sans `LIMINAIRES.json`,
+l'étape 4 retombe intégralement sur ses règles déterministes. Une étape d'IA
+ajoutée sans créer de dépendance.
+
 ---
 
 ## 3. Arborescence du projet
@@ -159,7 +176,8 @@ Théâtre/
 │   │   ├── prompt_ocr.md
 │   │   ├── prompt_edition.md        ← repris du prototype
 │   │   ├── prompt_raccord.md        ← repris du prototype
-│   │   └── prompt_validation.md
+│   │   ├── prompt_validation.md
+│   │   └── prompt_liminaires.md     ← étape 2c
 │   │
 │   ├── utils/
 │   │   ├── __init__.py
@@ -170,15 +188,19 @@ Théâtre/
 │   │
 │   ├── ocr.py                       ← étape 1
 │   ├── edition.py                   ← étapes 2a + 2b
+│   ├── liminaires.py                ← étape 2c — un appel par livre
 │   ├── validation.py                ← étape 3
 │   ├── docx_export.py               ← étape 4
 │   └── main.py                      ← orchestration CLI
 │
-├── notebooks/
+├── notebooks/                       ← générés par outils/, jamais à la main
 │   ├── 01_OCR.ipynb
-│   ├── 02_Edition.ipynb
+│   ├── 02_Edition.ipynb             ← contient les étapes 2a, 2b et 2c
 │   ├── 03_Verification.ipynb
 │   └── 04_DOCX.ipynb
+│
+├── outils/
+│   └── generer_notebooks.py         ← ⚠ AJOUT — cf. §14
 │
 ├── tests/                           ← ⚠ AJOUT — sans API ni Drive
 │   ├── test_blocks.py
@@ -197,34 +219,50 @@ Pour un livre nommé `Le Malentendu`, `DOSSIER_DRIVE` contient :
 ```
 Troupe 122 - 2026-27/
 ├── Le Malentendu.pdf                     ← ENTRÉE (fournie par vous)
-│
-├── Le Malentendu_OCR_pages/              ← cache étape 1
-│   ├── page_0001.txt
-│   ├── page_0001.json
-│   ├── page_0002.txt
-│   └── page_0002.json
-├── Le Malentendu_OCR.txt                 ← SORTIE étape 1
-│
-├── Le Malentendu_EDIT_blocs/             ← cache étape 2a
-│   ├── bloc_0001.txt
-│   └── bloc_0001.json
-├── Le Malentendu_EDIT_raccords/          ← cache étape 2b
-│   ├── bloc_0001.txt
-│   └── raccord_0001.json
-├── Le Malentendu_EDIT.txt                ← SORTIE étape 2
-│
-├── Le Malentendu_REPORT_blocs/           ← cache étape 3
-│   ├── bloc_0001.txt
-│   └── bloc_0001.json
-├── Le Malentendu_REPORT.txt              ← SORTIE étape 3
-│
 ├── Le Malentendu.docx                    ← SORTIE étape 4
+├── Les Justes.ignorer                    ← marqueur : livre écarté (§9.9)
 │
-├── journal_ocr.json
-├── journal_edition.json
-├── journal_validation.json
-└── journal_docx.json
+└── temp/                                 ← tout le travail intermédiaire
+    ├── journal_ocr.json                  ← un journal par étape, tous livres
+    ├── journal_edition.json
+    ├── journal_liminaires.json
+    ├── journal_validation.json
+    ├── journal_docx.json
+    │
+    └── Le Malentendu/                    ← un sous-dossier par livre
+        ├── OCR_pages/                    ← cache étape 1
+        │   ├── page_0001.txt
+        │   ├── page_0001.json
+        │   └── page_0002.txt
+        ├── OCR.txt                       ← SORTIE étape 1
+        │
+        ├── EDIT_blocs/                   ← cache étape 2a
+        │   ├── bloc_0001.txt
+        │   └── bloc_0001.json
+        ├── EDIT_raccords/                ← cache étape 2b
+        │   ├── bloc_0001.txt
+        │   └── raccord_0001.json
+        ├── EDIT.txt                      ← SORTIE étape 2
+        │
+        ├── LIMINAIRES.json               ← SORTIE étape 2c (rôles seuls)
+        │
+        ├── REPORT_blocs/                 ← cache étape 3
+        │   ├── bloc_0001.txt
+        │   └── bloc_0001.json
+        └── REPORT.txt                    ← SORTIE étape 3
 ```
+
+**Le dossier principal ne montre que le PDF et le DOCX.** C'est une demande
+explicite : avec une dizaine de pièces, la disposition à plat d'origine — où
+chaque livre déposait cinq fichiers et quatre dossiers à la racine — rendait le
+dossier Drive illisible.
+
+Le changement est arrivé après que des livres avaient déjà été traités. Les
+transcriptions existantes seraient devenues invisibles, donc refaites et
+repayées. `io.migrer_livre()` déplace l'ancienne disposition vers la nouvelle,
+et le notebook 01 comporte une section de migration à lancer une fois. Le
+critère de reprise portant sur le contenu des sidecars et non sur leur
+emplacement, la migration suffit à préserver l'intégralité du travail.
 
 **Le nom du livre est la clé de voûte.** Il est dérivé une seule fois du nom du
 PDF (`Le Malentendu.pdf` → `Le Malentendu`) et tous les autres chemins en
@@ -246,6 +284,7 @@ dossier entier en boucle.
 | `utils/api.py` | Client OpenAI, retry, extraction de texte, chronométrage | `config`, `logging` | **oui** | non |
 | `ocr.py` | Étape 1 : PDF → `OCR.txt` | tout `utils` | oui | oui |
 | `edition.py` | Étapes 2a/2b : `OCR.txt` → `EDIT.txt` | tout `utils` | oui | oui |
+| `liminaires.py` | Étape 2c : `EDIT.txt` → `LIMINAIRES.json` | tout `utils` | oui | oui |
 | `validation.py` | Étape 3 : → `REPORT.txt` | tout `utils` | oui | oui |
 | `docx_export.py` | Étape 4 : `EDIT.txt` → `.docx` | `config`, `io`, `blocks` | **non** | oui |
 | `main.py` | Orchestration, CLI, sélection d'étape | tous | — | — |
@@ -400,6 +439,53 @@ Tous les sidecars partagent une base commune, ce qui permet à
 Assemblage **exclusivement** des blocs présents dans `_EDIT_raccords/`, jamais
 de `_EDIT_blocs/`. Blocs joints par `\n\n`. Le fichier se termine par un unique
 `\n`.
+
+### 5.5 bis `LIMINAIRES.json`
+
+Sortie de l'étape 2c. **Ne contient aucun texte** — seulement des numéros de
+ligne et des rôles :
+
+```json
+{
+  "roles": {
+    "0": "titre_oeuvre",
+    "1": "titre_secondaire",
+    "3": "epigraphe",
+    "4": "attribution",
+    "6": "distribution",
+    "7": "entree_distribution"
+  },
+  "lignes_soumises": 9,
+  "roles_refuses": [],
+  "date_traitement": "2026-07-28T10:17:19",
+  "modele": "gpt-5.5-2026-04-23",
+  "response_id": "resp_abc123",
+  "duree_secondes": 3.4,
+  "tentative_reussie": 1,
+  "tokens_entree": 612,
+  "tokens_sortie": 48,
+  "longueur_sortie": 97
+}
+```
+
+Trois propriétés portées par ce format :
+
+- **Ce fichier est à la fois la sortie et le sidecar.** Sa présence vaut
+  `statut == "termine"` : un second lancement n'appelle rien. L'invariant de
+  §7 tient donc sans fichier supplémentaire, l'unité de reprise étant le livre
+  entier et non un fragment.
+- **`roles_refuses` conserve les rôles inventés par le modèle.** Ils sont
+  écartés à la lecture, mais consignés : un rôle rejeté en silence resterait
+  introuvable, alors qu'il signale un prompt à corriger.
+- **Les clés sont des chaînes**, JSON n'admettant pas de clé numérique.
+  `charger_roles()` les reconvertit, et ignore toute valeur devenue inconnue
+  plutôt que d'échouer — un rôle retiré de `config.py` après l'annotation ferait
+  autrement échouer une étape 4 censée être infaillible.
+
+L'étape 4 applique ces rôles **en comparant le contenu des lignes, non leur
+numéro.** La classification peut scinder une ligne en deux paragraphes — une
+réplique en ligne `**JAN.** Bonjour.` en produit deux — ce qui décale tous les
+numéros suivants. Se fier à l'indice attribuerait le rôle à la mauvaise ligne.
 
 ### 5.6 `<Livre>_REPORT.txt`
 
@@ -937,6 +1023,144 @@ image gigantesque, dépassement de la taille de requête. Trois protections :
 - l'assemblage insère un marqueur visible `[PAGE N — ÉCHEC OCR]` afin que le
   trou soit repérable dans `OCR.txt` plutôt que silencieux.
 
+### 9.6 Les pages liminaires : le seul endroit où l'IA est indispensable
+
+Le problème est venu d'exemples réels. Les premières pages d'une édition
+imprimée contiennent, dans un ordre variable, un titre d'œuvre, un nom
+d'auteur, un sous-titre, une épigraphe, la source de cette épigraphe, une note
+d'éditeur, un prologue et la liste des rôles.
+
+Après l'étape 2, tous ces éléments s'écrivent **de la même façon** : en gras ou
+en italique, centrés, seuls sur leur ligne. La convention de §8 les rend
+indiscernables, par construction — elle a été conçue pour le corps de la pièce,
+où trois catégories suffisent.
+
+Aucune règle mécanique ne peut trancher. « Heiner Müller » sous une phrase en
+italique est la source d'une épigraphe ; le même nom en tête de page est
+l'auteur ; ailleurs, ce serait un personnage. La différence est **sémantique**,
+et il n'existe pas d'indice typographique pour l'établir.
+
+**Cinq pistes ont été évaluées avant d'écrire une ligne de code.**
+
+| # | Proposition | Verdict |
+|---|---|---|
+| 1 | Détecter les déclarations d'échec du modèle | Retenue — corrigeait une corruption silencieuse observée (§9.7) |
+| 2 | Marqueur pour écarter un livre déjà traité | Retenue — §9.9 |
+| 3 | Faire produire à l'étape 1 une **seconde sortie décrivant la mise en page** | Retenue sous condition, puis restreinte |
+| 4 | Demander au modèle d'OCR de séparer les noms d'une liste de rôles agglutinée | **Écartée** — cas de bord, et §9.8 le règle mieux |
+| 5 | Une passe d'IA dédiée aux liminaires | Retenue — c'est l'étape 2c |
+
+La proposition 3 méritait d'être retenue : un modèle vision *voit* le gras, le
+centrage et la taille, et le dire ne coûte presque rien puisque l'appel est déjà
+payé. Elle a néanmoins été restreinte pour une raison décisive : la mise en page
+observée serait devenue **une seconde source de vérité**, en concurrence avec la
+convention typographique. Un modèle rapportant « centré, grand » sur un nom de
+personnage aurait pu remonter jusqu'à l'étape 4 et défaire une mise en page
+voulue. L'observation reste utile pour les liminaires, où aucune règle n'existe
+déjà ; elle est nuisible partout où une règle existe.
+
+D'où la restriction retenue : **l'étape 2c ne voit que les premières lignes**,
+plafonnées à `LIGNES_LIMINAIRES`, et ne rend **que des rôles**. Elle ne peut
+donc pas contredire la convention sur le corps de la pièce, ni altérer une
+seule lettre du texte.
+
+Trois propriétés complètent la protection :
+
+- **un appel par livre, mis en cache** — le coût est négligeable et ne croît
+  pas avec la longueur de l'ouvrage ;
+- **PyMuPDF fournit gratuitement l'information de mise en page** —
+  `get_text("dict")` rend la taille exacte, le gras, l'italique et la position
+  de chaque fragment, sans appel d'API. La proposition 3 était donc en partie
+  déjà satisfaite, gratuitement ;
+- **dégradation propre** — sans `LIMINAIRES.json`, l'étape 4 se comporte
+  exactement comme avant. Un échec de cette étape ne bloque rien.
+
+### 9.7 Page blanche, ou modèle qui renonce ?
+
+Deux réponses inattendues du modèle d'OCR, de conséquences opposées.
+
+**Une page blanche est normale** dans un livre imprimé. Le prompt impose une
+mention exacte, mais un modèle paraphrase : « Cette page est vide. » Écrite
+telle quelle dans `OCR.txt`, la phrase devenait du texte de la pièce.
+
+**Une déclaration d'échec est tout autre chose.** Le message observé,
+`Erreur - Impossible d'OCR cette page`, a été enregistré avec le statut
+« terminé ». Trois conséquences, aucune signalée : le message entrait dans le
+texte, la page n'était **jamais reprise** puisque son sidecar la déclarait
+faite, et l'étape 3 comparait un `OCR.txt` déjà corrompu — donc ne pouvait rien
+détecter.
+
+Les deux cas sont donc reconnus séparément, et routés à l'opposé : une page vide
+est conservée vide et comptée comme traitée ; une déclaration d'échec devient un
+`PAGE_ECHOUEE`, retentée puis annoncée.
+
+Le discriminant retenu pour l'échec n'est pas lexical mais **syntaxique :
+l'objet du verbe**. C'est ce qui sépare « je ne peux pas lire cette page » d'une
+réplique comme « je ne peux pas lire dans tes pensées ». Une première version
+exigeait la préposition `à`, ce qui manquait « je ne peux pas lire cette page »
+— la formulation la plus probable.
+
+Une ambiguïté subsiste, tranchée délibérément : une page dont **tout** le
+contenu déclare l'illisibilité est comptée comme un échec, même si un
+personnage y parlait d'une lettre effacée. L'asymétrie des conséquences le
+justifie — un échec est annoncé, donc corrigible à la main, tandis que l'erreur
+inverse corrompt le texte en silence.
+
+Enfin, la détection de blancheur est **locale et gratuite** : PyMuPDF rasterise
+à `DPI_TEST_BLANCHEUR` (40) et compte les pixels sombres. Une page blanche ne
+coûte alors aucun appel. Le seuil est volontairement sévère : manquer une page
+blanche coûte un appel, sauter une page imprimée perdrait du texte.
+
+### 9.8 Où s'arrête la liste des rôles
+
+La distribution est lue **par position** : après l'étiquette (`PERSONNAGES`,
+`PERSONNAGES ET DÉCORS`…), toute ligne lui appartient. Cette lecture est ce qui
+permet de traiter une liste tenant sur un seul bloc, sans avoir à reconnaître
+chaque nom. Sa contrepartie : il faut savoir où elle s'arrête.
+
+Les critères d'arrêt initiaux — deux lignes vides, un séparateur, un titre
+d'acte ou de scène — laissaient passer le cas le plus courant :
+
+```
+**PERSONNAGES**
+Gilles Rimey.
+Alphonsine Rouart.
+
+**JAN.**
+Bonjour.
+```
+
+`**JAN.**` ne correspondant à aucun critère, la lecture continuait : **le corps
+entier de la pièce était classé « entrée de distribution »**.
+
+Le critère décisif est **l'enchaînement sur une réplique**. Une entrée de
+distribution n'en est jamais suivie — elle précède un autre nom, ou une ligne
+vide. Un nom de personnage annonce toujours du texte. Ce même critère écarte les
+faux noms extraits d'une liste en un seul bloc, où `**LIEU DE L'ACTION**`
+devenait une amorce appliquée ensuite à chaque page du livre.
+
+Limite assumée : une liste agglutinée sur une ligne — « LES TROIS DIEUX. SHEN
+TÉ. WANG, marchand d'eau. » — ne fournit aucune amorce exploitable. Les séparer
+demanderait de deviner où chaque nom finit. Le classement mécanique s'abstient
+donc, ce qui est le bon arbitrage : une amorce fausse dégrade toutes les pages,
+une amorce absente n'en dégrade aucune, les personnages restant reconnus par
+leurs répliques.
+
+### 9.9 Écarter un livre déjà traité
+
+Deux ouvrages du dossier avaient été traités par un autre outil. Les relancer
+aurait consommé des tokens pour rien.
+
+**Décision : un fichier marqueur sur le Drive**, nommé
+`<Livre>` + `SUFFIXE_IGNORER`, plutôt qu'une liste dans `config.py`. La liste
+codée en dur aurait supposé un commit — donc un aller-retour par le dépôt — pour
+chaque livre ajouté ou retiré, alors que la décision se prend en regardant le
+Drive. Le marqueur se crée et se supprime là où l'information se trouve.
+
+Le contenu du fichier, s'il en a un, sert de raison. Un livre écarté est
+**toujours annoncé** au lancement : écarté en silence, il serait indiscernable
+d'un livre oublié, et la recherche partirait sur une fausse piste.
+
 ---
 
 ## 10. Choix techniques et justifications
@@ -957,6 +1181,12 @@ image gigantesque, dépassement de la taille de requête. Trois protections :
 | **D12** | Journaux JSON réécrits atomiquement à chaque ajout | JSONL en append | Vous demandez des `.json`. À l'échelle d'un livre (quelques centaines d'entrées), réécrire un JSON complet coûte quelques millisecondes. Le fichier reste un JSON valide en permanence, y compris après interruption. |
 | **D13** | `temperature` **optionnelle** (`None` ⇒ non transmise) | toujours envoyer `temperature=0` | `temperature=0` est idéal pour la fidélité, mais certains modèles récents rejettent le paramètre. Le rendre omissible évite un plantage à chaque changement de modèle. |
 | **D14** | Le nom du livre dérive du nom du PDF, chemins centralisés | chemins construits sur place | Une seule fonction `resoudre_chemins()` : renommer une convention de fichier devient un changement d'un seul endroit. |
+| **D15** | Une **passe d'IA dédiée aux liminaires**, bornée aux premières lignes et ne rendant que des rôles | faire décrire la mise en page par l'étape 1 sur tout le livre ; ou étendre les règles déterministes | Les liminaires sont sémantiquement ambigus et typographiquement identiques (§9.6) : aucune règle ne peut les départager. Décrire la mise en page sur tout le livre créerait en revanche **une seconde source de vérité** concurrente de la convention de §8, capable de défaire une mise en page voulue. Borner la passe aux liminaires garde le bénéfice et supprime le risque. |
+| **D16** | L'étape 2c est **facultative** : sans `LIMINAIRES.json`, l'étape 4 retombe sur ses règles | en faire une dépendance de l'étape 4 | Une étape d'IA sur le chemin critique du DOCX annulerait la propriété la plus utile de l'étape 4 — gratuite, déterministe, rejouable à volonté. Elle est donc lancée depuis le notebook 02, jamais depuis le 04. |
+| **D17** | Les rôles s'appliquent **par comparaison du contenu**, non par numéro de ligne | indexation directe | La classification peut scinder une ligne en deux paragraphes (`**JAN.** Bonjour.`), ce qui décale tous les numéros suivants et attribuerait le rôle à la mauvaise ligne. |
+| **D18** | Écarter un livre par **fichier marqueur sur le Drive** | liste de noms dans `config.py` | La décision se prend en regardant le Drive ; l'y inscrire évite un commit par livre ajouté ou retiré (§9.9). |
+| **D19** | Une **déclaration d'échec du modèle** vaut `PAGE_ECHOUEE`, distincte d'une page vide | tout écrire dans `OCR.txt` | Sans cette distinction, « Erreur - Impossible d'OCR cette page » entrait dans le texte avec le statut « terminé » : jamais reprise, et indétectable par l'étape 3 qui comparait un `OCR.txt` déjà corrompu (§9.7). |
+| **D20** | Travail intermédiaire rangé dans `temp/<Livre>/` | disposition à plat à la racine | Avec une dizaine de pièces, la racine devenait illisible. `migrer_livre()` déplace l'existant : le critère de reprise portant sur le contenu des sidecars et non sur leur emplacement, rien n'est repayé. |
 
 ### 10.1 Révision de D2 — réutiliser une couche texte existante
 
@@ -1382,6 +1612,11 @@ relevé de ces décisions ; il n'y a plus de point bloquant.
 | 7 | Saut de page | **Avant chaque acte uniquement**, pas avant les scènes |
 | 8 | Corps des titres | **Acte 16 pt, scène 14 pt** ; personnage et texte 11 pt |
 | 9 | Discerner acte / scène / personnage | Exigence explicite ⇒ **classification à trois niveaux** (§9.1), refonte complète |
+| 10 | Rangement du Drive | Le dossier principal ne montre que PDF et DOCX ; tout le reste dans `temp/<Livre>/`, avec migration de l'existant (D20) |
+| 11 | Mise en forme des pages liminaires | **Étape 2c** : une passe d'IA dédiée, un appel par livre, bornée aux premières lignes et ne rendant que des rôles (D15, §9.6) |
+| 12 | Couche de mise en page produite par l'OCR | **Écartée hors liminaires** — seconde source de vérité concurrente de la convention typographique (D15) |
+| 13 | Séparer les noms d'une liste de rôles agglutinée | **Écartée** — cas de bord, mieux traité par §9.8 et l'étape 2c |
+| 14 | Livres déjà traités ailleurs | **Fichier marqueur sur le Drive** plutôt qu'une liste dans `config.py` (D18, §9.9) |
 
 ### 17.1 L'exigence qui a le plus changé la conception
 
@@ -1421,5 +1656,26 @@ rattraper.
 
 ---
 
+### 17.3 Ce qu'un usage réel a corrigé
+
+Les décisions 10 à 14 ne viennent pas de la conception mais de **pages de livres
+réels** soumises après la première livraison : Kelly, Koltès, Shakespeare,
+Brecht, Kermann, et un recueil en vers libres. Trois d'entre elles corrigent des
+défauts que les 346 tests initiaux ne pouvaient pas voir, faute d'avoir jamais
+rencontré la disposition en cause.
+
+Le plus instructif est le défaut de §9.8 : la liste des rôles avalait le corps
+entier de la pièce. Il était présent depuis l'origine, dans du code entièrement
+testé — mais aucun test ne faisait suivre une liste de rôles par une réplique
+sans titre d'acte intermédiaire. La disposition la plus courante des éditions
+françaises était précisément celle qu'aucun cas de test ne décrivait.
+
+D'où une conclusion de méthode, appliquée depuis : **écrire les cas de test
+depuis des pages imprimées**, non depuis la convention. La convention est ce que
+le code sait déjà traiter ; les livres sont ce qu'il doit traiter.
+
+---
+
 *Architecture validée le 2026-07-27. Implémentation achevée le 2026-07-28 :*
-*les 14 commits du plan de livraison sont livrés, 346 tests au vert.*
+*les 14 commits du plan de livraison sont livrés, plus l'étape 2c et les*
+*corrections issues de l'usage réel. 538 tests au vert.*
