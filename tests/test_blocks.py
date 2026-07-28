@@ -709,6 +709,51 @@ class TestRepliqueEnLigne(unittest.TestCase):
         self.assertIsNone(dedoubler_replique_en_ligne("**JAN.** –"))
 
 
+    def test_personnages_reconnus(self):
+        self.assertEqual(self.index.compter(TypeLigne.PERSONNAGE), 2)
+
+    def test_paragraphes_separes(self):
+        types = [l.type for l in self.lignes if l.type is not TypeLigne.VIDE]
+
+        self.assertEqual(
+            types,
+            [
+                TypeLigne.PERSONNAGE,
+                TypeLigne.TEXTE,
+                TypeLigne.DIDASCALIE,
+                TypeLigne.PERSONNAGE,
+                TypeLigne.TEXTE,
+                TypeLigne.PERSONNAGE,
+                TypeLigne.TEXTE,
+            ],
+        )
+
+    def test_aucune_asterisque_residuelle(self):
+        for ligne in self.lignes:
+            with self.subTest(ligne=ligne.brut):
+                self.assertNotIn("*", ligne.texte)
+
+    def test_emphase_simple_n_est_pas_dedoublee(self):
+        """
+        Garde-fou. Sans l'exigence de capitales, une emphase en tête de réplique
+        fabriquerait un personnage inexistant.
+        """
+        for essai in (
+            "**Attention** dit-il.",
+            "**Mot** en gras au début.",
+            "**Ça** compte.",
+        ):
+            with self.subTest(essai=essai):
+                self.assertIsNone(dedoubler_replique_en_ligne(essai))
+
+    def test_nom_seul_sur_sa_ligne_non_affecte(self):
+        """La forme canonique ne doit pas être happée par ce traitement."""
+        self.assertIsNone(dedoubler_replique_en_ligne("**JAN.**"))
+
+    def test_separateur_non_affecte(self):
+        self.assertIsNone(dedoubler_replique_en_ligne("***"))
+
+
 class TestGraphieUniforme(unittest.TestCase):
     """
     Un même personnage doit s'écrire partout de la même façon.
@@ -759,51 +804,6 @@ class TestGraphieUniforme(unittest.TestCase):
         index = construire_index_structure("**JAN.**\nA.\n")
 
         self.assertIsNone(index.affichage_de("ABSENT"))
-
-    def test_personnages_reconnus(self):
-        self.assertEqual(self.index.compter(TypeLigne.PERSONNAGE), 2)
-
-    def test_paragraphes_separes(self):
-        types = [l.type for l in self.lignes if l.type is not TypeLigne.VIDE]
-
-        self.assertEqual(
-            types,
-            [
-                TypeLigne.PERSONNAGE,
-                TypeLigne.TEXTE,
-                TypeLigne.DIDASCALIE,
-                TypeLigne.PERSONNAGE,
-                TypeLigne.TEXTE,
-                TypeLigne.PERSONNAGE,
-                TypeLigne.TEXTE,
-            ],
-        )
-
-    def test_aucune_asterisque_residuelle(self):
-        for ligne in self.lignes:
-            with self.subTest(ligne=ligne.brut):
-                self.assertNotIn("*", ligne.texte)
-
-    def test_emphase_simple_n_est_pas_dedoublee(self):
-        """
-        Garde-fou. Sans l'exigence de capitales, une emphase en tête de réplique
-        fabriquerait un personnage inexistant.
-        """
-        for essai in (
-            "**Attention** dit-il.",
-            "**Mot** en gras au début.",
-            "**Ça** compte.",
-        ):
-            with self.subTest(essai=essai):
-                self.assertIsNone(dedoubler_replique_en_ligne(essai))
-
-    def test_nom_seul_sur_sa_ligne_non_affecte(self):
-        """La forme canonique ne doit pas être happée par ce traitement."""
-        self.assertIsNone(dedoubler_replique_en_ligne("**JAN.**"))
-
-    def test_separateur_non_affecte(self):
-        self.assertIsNone(dedoubler_replique_en_ligne("***"))
-
 
 class TestLieuApresSeparateur(unittest.TestCase):
     """
