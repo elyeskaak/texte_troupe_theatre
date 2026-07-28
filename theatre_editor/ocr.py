@@ -361,7 +361,7 @@ def traiter_page(
     """
     libelle = f"page {numero}"
 
-    if io.unite_terminee(chemins.page_json(numero)):
+    if not io.unite_a_refaire(chemins.page_json(numero)):
         return PAGE_SAUTEE
 
     # Réutilisation d'une couche texte déjà présente : le seul chemin qui ne
@@ -420,12 +420,19 @@ def traiter_page(
 
     statut = io.statut_depuis_avertissements(avertissements)
 
+    # Compteur de reprises : borne les retentatives sur un avertissement
+    # reproductible, qu'un nouvel appel ne corrigerait jamais.
+    reprises = io.reprises_effectuees(chemins.page_json(numero))
+    if statut == config.STATUT_SUSPECT:
+        reprises += 1
+
     # Contenu d'abord, sidecar ensuite : l'ordre porte l'invariant de reprise.
     io.ecrire_texte_atomique(chemins.page_txt(numero), texte)
     io.ecrire_sidecar(
         chemins.page_json(numero),
         {
             "statut": statut,
+            "reprises": reprises,
             "unite": "page",
             "numero": numero,
             "date_traitement": journalisation.horodatage(),

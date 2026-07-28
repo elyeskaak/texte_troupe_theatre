@@ -201,8 +201,20 @@ TAILLE_MAX_IMAGE_MO = 18.0
 # 0,95 et 1,00 ; 0,80 laisse de la marge tout en détectant les troncatures.
 RATIO_MINIMAL_LONGUEUR = 0.80
 
-# Si True, un bloc déjà produit mais porteur d'avertissements est refait.
+# Si True, une unité déjà produite mais porteuse d'avertissements est refaite.
 RETRAITER_BLOCS_SUSPECTS = True
+
+# Nombre maximal de reprises d'une unité restée suspecte.
+#
+# Garde-fou indispensable. Sans plafond, une unité dont l'avertissement est
+# **reproductible** est refaite à chaque exécution, indéfiniment — et repayée
+# chaque fois. C'est le cas d'une page dont le texte imprimé contient une
+# astérisque, ou d'un bloc que le modèle abrège systématiquement : réessayer ne
+# peut rien changer.
+#
+# Passé ce nombre, l'unité est acceptée avec ses avertissements, qui restent
+# consignés dans son sidecar, dans le journal et dans le rapport.
+MAX_REPRISES_SUSPECTES = 2
 
 # Bornes de variation admises pour un extrait passé en raccord.
 #

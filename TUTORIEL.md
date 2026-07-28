@@ -354,6 +354,8 @@ Seul ce qui manquait est traité. Aucun appel n'est repayé.
 | `Existe : False` | Le dossier Drive n'est pas au chemin indiqué | Corrigez le chemin. Attention aux « Drive partagés », dont le chemin diffère |
 | `Dossier de travail introuvable` | Le Drive n'est pas monté | Relancez la section 1 |
 | `[ECHEC] ocr … introuvable` | Le modèle n'existe pas sur votre compte | Dans la section 3, ajoutez `config.MODEL_OCR = "gpt-4o"` et relancez |
+| `[ALERTE] page N : mise en forme ajoutée` | Le modèle a ajouté du `**gras**` ou de l'`*italique*`, alors que la transcription doit être en texte nu | La page est reprise automatiquement, jusqu'à 2 fois. Si l'alerte persiste, elle est conservée et signalée : lisez la page dans `Livre_OCR_pages/` pour juger |
+| `[ALERTE] page N : sortie vide` | Le modèle n'a rien rendu sans déclarer une page blanche | Reprise automatique. Si la page est réellement blanche, ce n'est pas grave |
 | `Erreur non réessayable … 400` | Le modèle refuse les images | Même correctif : repassez `MODEL_OCR` sur `"gpt-4o"` |
 | `insufficient_quota` | Plus de crédit OpenAI | Rechargez sur platform.openai.com → Billing |
 | `aucun fichier « _OCR.txt »` | Vous lancez l'étape 2 avant l'étape 1 | Faites le notebook 01 d'abord |

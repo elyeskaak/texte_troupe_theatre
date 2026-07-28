@@ -121,9 +121,15 @@ def bloc_deja_edite(bloc: blocks.Bloc, chemins: io.CheminsLivre) -> bool:
 
     Un bloc dont les frontières ont changé est donc réédité.
     """
-    sidecar = io.lire_sidecar(chemins.bloc_json(bloc.numero))
+    chemin_sidecar = chemins.bloc_json(bloc.numero)
+    sidecar = io.lire_sidecar(chemin_sidecar)
 
-    if sidecar is None or sidecar.get("statut") != config.STATUT_TERMINE:
+    if sidecar is None:
+        return False
+
+    # Les reprises d'un bloc suspect sont bornées : un avertissement
+    # reproductible ne doit pas provoquer une réédition à chaque exécution.
+    if io.unite_a_refaire(chemin_sidecar):
         return False
 
     memes_pages = (
@@ -212,6 +218,10 @@ def editer_bloc(
 
     statut = io.statut_depuis_avertissements(avertissements)
 
+    reprises = io.reprises_effectuees(chemins.bloc_json(bloc.numero))
+    if statut == config.STATUT_SUSPECT:
+        reprises += 1
+
     # Le bloc change : ses raccords deviennent périmés. À faire avant
     # d'enregistrer, pour qu'une coupure ne laisse pas un bloc à jour flanqué
     # de raccords obsolètes tenus pour valides.
@@ -223,6 +233,7 @@ def editer_bloc(
         chemins.bloc_json(bloc.numero),
         {
             "statut": statut,
+            "reprises": reprises,
             "unite": "bloc",
             "numero": bloc.numero,
             "page_debut": bloc.page_debut,

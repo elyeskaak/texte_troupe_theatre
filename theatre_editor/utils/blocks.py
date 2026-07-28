@@ -421,6 +421,23 @@ def nettoyer_enveloppe(texte: str) -> str:
     return resultat.strip()
 
 
+# Emphase Markdown ajoutée par un modèle : `**gras**`, ou une ligne entièrement
+# en `*italique*`.
+#
+# Le motif est **précis à dessein**. Une version antérieure signalait la moindre
+# astérisque, ce qui produisait un faux positif sur toute page dont le texte
+# imprimé en contient une — un séparateur `*  *  *`, un appel de note. La page
+# était alors marquée suspecte et retranscrite à chaque exécution, donc repayée
+# sans fin, puisqu'une astérisque imprimée ne disparaîtra jamais.
+#
+# Ce qu'il s'agit de détecter, c'est l'application de la convention
+# typographique de l'étape 2, non la présence d'un caractère.
+MOTIF_EMPHASE_MARKDOWN = re.compile(
+    r"\*\*[^*\n]+\*\*"  # **gras**
+    r"|^\*[^*\n]+\*$",  # ligne entièrement en italique
+    re.MULTILINE,
+)
+
 # Caractères trahissant un encodage perdu ou une extraction défaillante.
 CARACTERES_SUSPECTS = frozenset("�\x00\x01\x02\x03\x04\x05\x06\x07\x0b\x0c")
 
@@ -538,11 +555,11 @@ def verifier_page_ocr(texte: str) -> list[str]:
         if re.search(motif, texte, flags=re.MULTILINE):
             avertissements.append(f"motif indésirable détecté : {motif}")
 
-    # La marque d'illisibilité est la seule astérisque autorisée : on la retire
-    # avant de conclure que le modèle a ajouté de la mise en forme.
+    # La marque d'illisibilité est la seule emphase autorisée : on la retire
+    # avant de chercher de la mise en forme ajoutée.
     sans_marque = texte.replace(config.MARQUE_ILLISIBLE, "")
 
-    if "*" in sans_marque:
+    if MOTIF_EMPHASE_MARKDOWN.search(sans_marque):
         avertissements.append(
             "mise en forme ajoutée : la transcription doit être en texte nu"
         )

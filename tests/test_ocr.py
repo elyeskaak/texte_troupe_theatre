@@ -368,6 +368,54 @@ class TestReprise(BaseOcr):
 
         self.assertEqual(resultats[0].pages_sautees, self.NOMBRE_PAGES - 1)
 
+    def test_reprises_d_une_page_suspecte_sont_bornees(self):
+        """
+        Garde-fou contre la facturation sans fin.
+
+        Un avertissement reproductible — ici le modèle ajoute obstinément de la
+        mise en forme — provoquerait sinon une reprise à chaque exécution, et
+        une facturation à chaque fois, sans que rien ne puisse s'améliorer.
+        """
+        obstine = lambda **_kw: resultat_api("**JAN.**\nMort ?")
+
+        appels = []
+
+        for _ in range(config.MAX_REPRISES_SUSPECTES + 3):
+            _, appel = self.executer(effet=obstine)
+            appels.append(appel.call_count)
+
+        # Premier passage plus MAX_REPRISES_SUSPECTES reprises, puis plus rien.
+        self.assertEqual(appels[0], self.NOMBRE_PAGES)
+        self.assertEqual(appels[config.MAX_REPRISES_SUSPECTES], 0)
+        self.assertEqual(appels[-1], 0)
+
+    def test_compteur_de_reprises_consigne(self):
+        """Le compteur doit être lisible dans le sidecar, pour diagnostic."""
+        obstine = lambda **_kw: resultat_api("**JAN.**\nMort ?")
+
+        self.executer(effet=obstine)
+
+        self.assertEqual(io.reprises_effectuees(self.chemins.page_json(1)), 1)
+
+        self.executer(effet=obstine)
+
+        self.assertEqual(io.reprises_effectuees(self.chemins.page_json(1)), 2)
+
+    def test_avertissements_conserves_apres_acceptation(self):
+        """
+        Une page finalement acceptée doit garder trace de son problème : c'est
+        la seule façon de le retrouver après coup.
+        """
+        obstine = lambda **_kw: resultat_api("**JAN.**\nMort ?")
+
+        for _ in range(config.MAX_REPRISES_SUSPECTES + 1):
+            self.executer(effet=obstine)
+
+        sidecar = io.lire_sidecar(self.chemins.page_json(1))
+
+        self.assertEqual(sidecar["statut"], config.STATUT_SUSPECT)
+        self.assertTrue(sidecar["avertissements"])
+
 
 # ============================================================
 # 4. CONTRÔLES DE CONTENU
@@ -402,6 +450,32 @@ class TestControlesContenu(BaseOcr):
         resultats, _ = self.executer(["**JAN.**\nMort ?"])
 
         self.assertEqual(resultats[0].pages_suspectes, 1)
+
+    def test_asterisque_imprimee_n_est_pas_signalee(self):
+        """
+        Régression, et fuite d'argent.
+
+        Signaler la moindre astérisque produisait un faux positif sur toute page
+        dont le texte imprimé en contient une — séparateur `*  *  *`, appel de
+        note. La page était marquée suspecte, donc retranscrite et **repayée à
+        chaque exécution**, puisqu'une astérisque imprimée ne disparaîtra jamais.
+        """
+        for contenu in (
+            "JAN\nBonjour.\n\n*  *  *\n\nMARIA\nBonsoir.",
+            "Une note en bas de page*, puis la suite du texte imprimé.",
+            "***",
+        ):
+            with self.subTest(contenu=contenu[:24]):
+                self.assertEqual(blocks.verifier_page_ocr(contenu), [])
+
+    def test_emphase_markdown_reste_signalee(self):
+        """
+        Contrepartie : la vraie mise en forme ajoutée doit toujours être vue,
+        sinon le contrôle n'aurait plus d'objet.
+        """
+        for contenu in ("**JAN.**\nMort ?", "Texte\n*Pause.*\nSuite"):
+            with self.subTest(contenu=contenu[:24]):
+                self.assertTrue(blocks.verifier_page_ocr(contenu))
 
     def test_marque_illisible_est_acceptee(self):
         """Seule astérisque autorisée en sortie d'OCR."""

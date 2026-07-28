@@ -295,6 +295,50 @@ def statut_depuis_avertissements(avertissements: list[str]) -> str:
     return config.STATUT_TERMINE if not avertissements else config.STATUT_SUSPECT
 
 
+def reprises_effectuees(chemin_sidecar: Path) -> int:
+    """Nombre de fois qu'une unité a déjà été reprise pour cause de suspicion."""
+    sidecar = lire_sidecar(chemin_sidecar) or {}
+
+    try:
+        return int(sidecar.get("reprises", 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def unite_a_refaire(chemin_sidecar: Path) -> bool:
+    """
+    Détermine si une unité doit être (re)traitée.
+
+    Complète `unite_terminee()` en bornant les reprises. Une unité **suspecte**
+    est refaite, mais pas indéfiniment : sans plafond, un avertissement
+    reproductible — une page dont le texte imprimé contient une astérisque, un
+    bloc que le modèle abrège systématiquement — provoque une reprise à chaque
+    exécution, et une facturation à chaque fois, sans que rien ne puisse
+    s'améliorer.
+
+    Réessayer n'a de sens que pour un aléa. Passé `MAX_REPRISES_SUSPECTES`,
+    l'unité est acceptée avec ses avertissements, qui restent consignés.
+    """
+    sidecar = lire_sidecar(chemin_sidecar)
+
+    if sidecar is None:
+        return True
+
+    statut = sidecar.get("statut")
+
+    if statut == config.STATUT_TERMINE:
+        return False
+
+    if statut == config.STATUT_SUSPECT:
+        if not config.RETRAITER_BLOCS_SUSPECTS:
+            return False
+
+        return reprises_effectuees(chemin_sidecar) < config.MAX_REPRISES_SUSPECTES
+
+    # Échec, ou statut inconnu : on refait.
+    return True
+
+
 # ============================================================
 # 4. PROMPTS
 # ============================================================
