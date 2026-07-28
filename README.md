@@ -39,21 +39,22 @@ MyDrive/Troupe 122 - 2026-27/
 Le pipeline y ajoutera les DOCX, et rangera tout le travail intermédiaire dans
 `temp/<Nom du livre>/` — le dossier principal reste donc lisible.
 
-**Écarter un livre déjà traité.** Déposez à côté du PDF un fichier vide nommé
-`<Nom du livre>.ignorer` : le pipeline le passera sous silence, en annonçant au
-lancement qu'il l'a écarté et pourquoi. Écrivez la raison dans le fichier, elle
-sera reprise dans l'annonce.
+**Écarter un livre déjà traité.** Créez dans le dossier un fichier `ignorer.txt`
+et listez-y les livres à passer sous silence, un nom par ligne. Le pipeline les
+écarte et l'annonce au lancement.
 
 ```
 MyDrive/Troupe 122 - 2026-27/
     Le Malentendu.pdf
     Les Justes.pdf
-    Les Justes.ignorer      ← « déjà traité par l'ancien logiciel »
+    ignorer.txt             ← contient la ligne « Les Justes »
 ```
 
-Rien à modifier dans le code, et l'opération est réversible : supprimez le
-marqueur, le livre repart au traitement. Un livre écarté est **toujours
-annoncé** — écarté en silence, il serait indiscernable d'un livre oublié.
+L'extension `.pdf` est facultative, la casse indifférente, et les lignes vides
+ou commençant par `#` servent de commentaires. Rien à modifier dans le code, et
+l'opération est réversible : retirez la ligne, le livre repart au traitement.
+Un livre écarté est **toujours annoncé** — écarté en silence, il serait
+indiscernable d'un livre oublié.
 
 ### 2. Renseigner la clé API dans Colab
 
@@ -312,7 +313,7 @@ theatre_editor/
     main.py              orchestration CLI
 
 notebooks/               interfaces Colab (générées par outils/)
-tests/                   547 tests
+tests/                   551 tests
 archive/                 prototype d'origine, conservé
 ARCHITECTURE.md          conception détaillée et justifiée
 ```
@@ -339,7 +340,7 @@ MODEL_LIMINAIRES        = "gpt-5.5-2026-04-23"
 PAGES_PAR_BLOC          = 8
 LIGNES_LIMINAIRES       = 120     # plafond soumis à l'étape 2 bis
 RATIO_MINIMAL_LONGUEUR  = 0.80    # détection de troncature
-SUFFIXE_IGNORER         = ".ignorer"
+NOM_FICHIER_IGNORER     = "ignorer.txt"
 
 POLICE_TEXTE            = "EB Garamond"
 TAILLE_TITRE_ACTE_PT    = 16
@@ -369,7 +370,7 @@ stylistiquement hétérogènes, ce que la passe de raccord ne rattrape pas.
 python -m unittest discover -s tests -t .
 ```
 
-**547 tests, environ 20 secondes.** Aucune clé API, aucun Drive monté, aucun appel
+**551 tests, environ 20 secondes.** Aucune clé API, aucun Drive monté, aucun appel
 réseau : `openai` et `pymupdf` sont remplacés par des doublures, et les modules
 concernés diffèrent leur import pour rendre cela possible.
 

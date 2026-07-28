@@ -768,19 +768,23 @@ DEFINITIONS_STYLES: dict[str, dict[str, object]] = {
 
 DOSSIER_TEMPORAIRE = "temp"
 
-# Un livre est ignoré si un fichier portant ce nom existe à côté de son PDF :
+# Les livres à écarter du traitement sont listés dans un fichier unique,
+# `ignorer.txt`, posé dans le dossier de travail à côté des PDF :
 #
 #     Troupe 122 - 2026-27/
 #         La mastication des morts.pdf
-#         La mastication des morts.ignorer     ← ce livre est laissé de côté
+#         Roberto Zucco.pdf
+#         ignorer.txt        ← contient la ligne « La mastication des morts »
 #
-# Se gère entièrement depuis le Drive, sans toucher au code. Le contenu du
-# fichier n'a aucune importance : sa seule présence suffit. Vous pouvez y noter
-# la raison, elle apparaîtra dans le récapitulatif.
+# Un nom de livre par ligne (l'extension .pdf est facultative). Les lignes
+# vides et celles commençant par « # » sont ignorées : on peut y laisser des
+# commentaires. La comparaison neutralise la casse et l'extension, ce fichier
+# étant édité à la main.
 #
-# Les livres ignorés sont toujours **annoncés** au lancement : un livre écarté
-# en silence serait une mauvaise surprise trois semaines plus tard.
-SUFFIXE_IGNORER = ".ignorer"
+# Se gère entièrement depuis le Drive, sans toucher au code. Les livres écartés
+# sont toujours **annoncés** au lancement : un livre laissé de côté en silence
+# serait une mauvaise surprise trois semaines plus tard.
+NOM_FICHIER_IGNORER = "ignorer.txt"
 
 NOM_OCR = "OCR.txt"
 NOM_OCR_PAGES = "OCR_pages"

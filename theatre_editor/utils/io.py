@@ -185,9 +185,8 @@ def lister_livres_avec(
     resultats: list[CheminsLivre] = []
 
     for nom in lister_livres(base):
-        # Un livre marqué « ignorer » est écarté de toutes les étapes, pas
-        # seulement de l'OCR.
-        if livre_ignore(nom, base) is not None:
+        # Un livre écarté l'est pour toutes les étapes, pas seulement l'OCR.
+        if livre_ignore(nom, base):
             continue
 
         chemins = resoudre_chemins(nom, base)
@@ -462,8 +461,8 @@ def _est_fichier_utile(chemin: Path) -> bool:
         and not nom.startswith(".")
         and not nom.startswith("~$")
         and not nom.endswith(config.EXTENSION_TEMPORAIRE)
-        # Le marqueur d'exclusion n'est pas un fichier source.
-        and not nom.endswith(config.SUFFIXE_IGNORER)
+        # Le fichier-liste des exclusions n'est pas un fichier source.
+        and nom != config.NOM_FICHIER_IGNORER
     )
 
 
@@ -566,60 +565,97 @@ def livres_a_migrer(dossier: Path | None = None) -> list[str]:
     return sorted(noms, key=str.lower)
 
 
-def chemin_marqueur_ignorer(nom_livre: str, dossier: Path | None = None) -> Path:
-    """Emplacement du fichier marqueur excluant un livre du traitement."""
+def chemin_fichier_ignorer(dossier: Path | None = None) -> Path:
+    """Emplacement du fichier-liste des livres à écarter du traitement."""
     base = dossier if dossier is not None else config.DOSSIER_DRIVE
 
-    return base / f"{nom_livre}{config.SUFFIXE_IGNORER}"
+    return base / config.NOM_FICHIER_IGNORER
 
 
-def livre_ignore(nom_livre: str, dossier: Path | None = None) -> str | None:
+def _cle_ignorer(nom: str) -> str:
     """
-    Détermine si un livre doit être laissé de côté.
+    Normalise un nom de livre pour la comparaison des exclusions.
 
-    Le marqueur se gère depuis le Drive, sans toucher au code : il suffit de
-    déposer un fichier `<Livre>.ignorer` à côté du PDF.
-
-    Returns:
-        La raison notée dans le fichier, une mention par défaut si le fichier
-        est vide, ou None si le livre doit être traité. La raison est affichée
-        au lancement : un livre écarté en silence serait une mauvaise surprise.
+    Le fichier `ignorer.txt` étant édité à la main, la comparaison neutralise
+    l'extension `.pdf` (facultative) et la casse. Sans quoi « roberto zucco »
+    ou « Roberto Zucco.pdf » n'écarteraient pas le livre « Roberto Zucco ».
     """
-    marqueur = chemin_marqueur_ignorer(nom_livre, dossier)
+    nom = nom.strip()
 
-    if not marqueur.is_file():
-        return None
+    if nom.lower().endswith(".pdf"):
+        nom = nom[: -len(".pdf")]
 
-    try:
-        raison = lire_texte(marqueur).strip()
-    except OSError:
-        raison = ""
-
-    return raison or "marqueur présent, sans raison précisée"
+    return nom.strip().casefold()
 
 
-def livres_ignores(dossier: Path | None = None) -> dict[str, str]:
-    """Recense les livres écartés et la raison de leur exclusion."""
+def lire_livres_ignores(dossier: Path | None = None) -> list[str]:
+    """
+    Lit `ignorer.txt` : les livres à écarter, un nom par ligne.
+
+    L'extension `.pdf` est facultative. Les lignes vides et celles ouvrant par
+    « # » sont ignorées, ce qui autorise des commentaires. Les noms sont rendus
+    tels qu'écrits (simplement nettoyés) et dans l'ordre du fichier, afin que
+    l'annonce au lancement soit fidèle à ce que l'utilisateur a saisi.
+    """
+    contenu = lire_texte_si_present(chemin_fichier_ignorer(dossier))
+
+    if contenu is None:
+        return []
+
+    noms: list[str] = []
+
+    for ligne in contenu.splitlines():
+        nom = ligne.strip()
+
+        if not nom or nom.startswith("#"):
+            continue
+
+        if nom.lower().endswith(".pdf"):
+            nom = nom[: -len(".pdf")].strip()
+
+        if nom:
+            noms.append(nom)
+
+    return noms
+
+
+def livre_ignore(nom_livre: str, dossier: Path | None = None) -> bool:
+    """
+    Détermine si un livre figure dans `ignorer.txt`.
+
+    La liste se gère depuis le Drive, sans toucher au code. La comparaison est
+    indulgente : casse et extension `.pdf` neutralisées (voir `_cle_ignorer`).
+    """
+    cible = _cle_ignorer(nom_livre)
+
+    return any(_cle_ignorer(nom) == cible for nom in lire_livres_ignores(dossier))
+
+
+def marqueurs_ignorer_obsoletes(dossier: Path | None = None) -> list[str]:
+    """
+    Recense les anciens marqueurs `<Livre>.ignorer`, qui ne sont plus lus.
+
+    Le mécanisme est passé d'un marqueur par livre à un fichier-liste unique
+    (`ignorer.txt`, ARCHITECTURE.md §9.9). Un marqueur laissé sur le Drive n'a
+    donc plus aucun effet : il faut le signaler, sinon une exclusion voulue
+    disparaîtrait en silence et le livre repartirait au traitement — donc
+    repayé. Le suffixe `.ignorer` est ici codé en dur : c'est un vestige de
+    migration, non une convention encore vivante.
+    """
     base = dossier if dossier is not None else config.DOSSIER_DRIVE
     verifier_dossier_travail(base)
 
-    resultats: dict[str, str] = {}
-
-    for chemin in base.glob(f"*{config.SUFFIXE_IGNORER}"):
-        nom = chemin.name[: -len(config.SUFFIXE_IGNORER)]
-        raison = livre_ignore(nom, base)
-
-        if raison is not None:
-            resultats[nom] = raison
-
-    return dict(sorted(resultats.items(), key=lambda paire: paire[0].lower()))
+    return sorted(
+        (chemin.name for chemin in base.glob("*.ignorer") if chemin.is_file()),
+        key=str.lower,
+    )
 
 
 def lister_pdf(dossier: Path | None = None) -> list[Path]:
     """
     Liste les PDF à traiter, triés par nom.
 
-    Les livres portant un marqueur `.ignorer` sont écartés. `livres_ignores()`
+    Les livres listés dans `ignorer.txt` sont écartés. `lire_livres_ignores()`
     permet de les recenser et de les annoncer au lancement.
     """
     base = dossier if dossier is not None else config.DOSSIER_DRIVE
@@ -630,7 +666,7 @@ def lister_pdf(dossier: Path | None = None) -> list[Path]:
             chemin
             for chemin in _parcourir(base)
             if chemin.suffix.lower() == ".pdf"
-            and livre_ignore(chemin.stem, base) is None
+            and not livre_ignore(chemin.stem, base)
         ]
     )
 

@@ -1,11 +1,11 @@
 """
-Tests du marqueur `.ignorer`, qui exclut un livre du traitement.
+Tests du fichier-liste `ignorer.txt`, qui exclut des livres du traitement.
 
 Deux ouvrages étaient déjà traités par un autre outil : les relancer aurait
-consommé des tokens pour un résultat inutile. Le marqueur permet de les écarter
-**depuis le Drive**, en déposant un fichier à côté du PDF, sans toucher au code
-ni à `config.py` — une liste codée en dur aurait supposé un commit pour chaque
-livre ajouté ou retiré.
+consommé des tokens pour un résultat inutile. Le fichier-liste permet de les
+écarter **depuis le Drive**, en une ligne par livre, sans toucher au code ni à
+`config.py` — une liste codée en dur aurait supposé un commit pour chaque livre
+ajouté ou retiré (ARCHITECTURE.md §9.9).
 
 La propriété essentielle n'est pas l'exclusion elle-même mais son **annonce** :
 un livre écarté en silence serait indiscernable d'un livre oublié, et la
@@ -37,125 +37,144 @@ class BaseDossier(unittest.TestCase):
         self._dossier.cleanup()
         config.VERBOSITE = self._verbosite
 
-    def marquer(self, nom: str, raison: str = "") -> Path:
-        chemin = io.chemin_marqueur_ignorer(nom, self.base)
-        chemin.write_text(raison, encoding="utf-8")
+    def ecrire_liste(self, contenu: str) -> Path:
+        """Écrit `ignorer.txt` avec le contenu donné."""
+        chemin = io.chemin_fichier_ignorer(self.base)
+        chemin.write_text(contenu, encoding="utf-8")
+
+        return chemin
+
+    def marquer_ancien(self, nom: str) -> Path:
+        """Dépose un ancien marqueur `<Livre>.ignorer` (mécanisme retiré)."""
+        chemin = self.base / f"{nom}.ignorer"
+        chemin.write_text("", encoding="utf-8")
 
         return chemin
 
 
-class TestDetectionDuMarqueur(BaseDossier):
-    def test_sans_marqueur_le_livre_est_traite(self):
-        self.assertIsNone(io.livre_ignore("Kermann", self.base))
+class TestDetection(BaseDossier):
+    def test_sans_fichier_aucun_livre_ignore(self):
+        self.assertFalse(io.livre_ignore("Kermann", self.base))
+        self.assertEqual(io.lire_livres_ignores(self.base), [])
 
-    def test_raison_restituee(self):
-        self.marquer("Brecht", "déjà traité par l'ancien logiciel")
+    def test_nom_liste_est_ignore(self):
+        self.ecrire_liste("Brecht\n")
 
-        self.assertEqual(
-            io.livre_ignore("Brecht", self.base),
-            "déjà traité par l'ancien logiciel",
+        self.assertTrue(io.livre_ignore("Brecht", self.base))
+        self.assertFalse(io.livre_ignore("Kermann", self.base))
+
+    def test_comparaison_insensible_a_la_casse(self):
+        """Le fichier est saisi à la main : « brecht » doit écarter « Brecht »."""
+        self.ecrire_liste("brecht\n")
+
+        self.assertTrue(io.livre_ignore("Brecht", self.base))
+
+    def test_extension_pdf_toleree(self):
+        """Écrire « Brecht.pdf » est un réflexe naturel : il doit fonctionner."""
+        self.ecrire_liste("Brecht.pdf\n")
+
+        self.assertTrue(io.livre_ignore("Brecht", self.base))
+
+    def test_lignes_vides_et_commentaires_ignores(self):
+        self.ecrire_liste(
+            "# livres deja traites par l'ancien logiciel\n"
+            "\n"
+            "Brecht\n"
+            "\n"
+            "# Koltes est en relecture\n"
+            "Koltes\n"
         )
 
-    def test_marqueur_vide_donne_une_raison_par_defaut(self):
-        """
-        Le plus simple à créer depuis le Drive est un fichier vide. Il doit
-        fonctionner, et produire tout de même une mention affichable — sinon
-        l'annonce afficherait une ligne blanche.
-        """
-        self.marquer("Brecht")
+        self.assertEqual(io.lire_livres_ignores(self.base), ["Brecht", "Koltes"])
+        self.assertTrue(io.livre_ignore("Brecht", self.base))
+        self.assertTrue(io.livre_ignore("Koltes", self.base))
+        self.assertFalse(io.livre_ignore("Kermann", self.base))
 
-        raison = io.livre_ignore("Brecht", self.base)
+    def test_emplacement_du_fichier_previsible(self):
+        """Le chemin est ce que l'utilisateur reproduit sur son Drive."""
+        chemin = io.chemin_fichier_ignorer(self.base)
 
-        self.assertTrue(raison)
-        self.assertIsInstance(raison, str)
-
-    def test_raison_multiligne_nettoyee(self):
-        self.marquer("Brecht", "\n  déjà traité  \n\n")
-
-        self.assertEqual(io.livre_ignore("Brecht", self.base), "déjà traité")
-
-    def test_emplacement_du_marqueur_previsible(self):
-        """
-        Le chemin est ce que l'utilisateur doit reproduire à la main sur son
-        Drive : il doit être exactement « <nom du PDF> + suffixe ».
-        """
-        chemin = io.chemin_marqueur_ignorer("Kermann", self.base)
-
-        self.assertEqual(chemin.name, f"Kermann{config.SUFFIXE_IGNORER}")
+        self.assertEqual(chemin.name, config.NOM_FICHIER_IGNORER)
         self.assertEqual(chemin.parent, self.base)
 
 
 class TestExclusionEffective(BaseDossier):
-    def test_le_pdf_marque_disparait_de_la_liste(self):
-        self.marquer("Brecht", "déjà traité")
+    def test_le_livre_liste_disparait(self):
+        self.ecrire_liste("Brecht\n")
 
         noms = [chemin.stem for chemin in io.lister_pdf(self.base)]
 
         self.assertNotIn("Brecht", noms)
         self.assertEqual(noms, ["Kermann", "Koltes"])
 
-    def test_les_autres_livres_restent_traites(self):
-        """
-        L'exclusion doit être chirurgicale : le défaut redouté serait qu'un
-        marqueur écarte tout le dossier.
-        """
-        self.marquer("Brecht")
-        self.marquer("Koltes")
+    def test_exclusion_chirurgicale(self):
+        """Le défaut redouté serait qu'une entrée écarte tout le dossier."""
+        self.ecrire_liste("Brecht\nKoltes\n")
 
         noms = [chemin.stem for chemin in io.lister_pdf(self.base)]
 
         self.assertEqual(noms, ["Kermann"])
 
-    def test_marqueur_orphelin_sans_effet(self):
-        """Un marqueur sans PDF correspondant ne doit rien perturber."""
-        self.marquer("Livre inexistant", "vestige")
+    def test_nom_orphelin_sans_effet(self):
+        """Un nom sans PDF correspondant ne doit rien perturber."""
+        self.ecrire_liste("Livre inexistant\n")
 
         noms = [chemin.stem for chemin in io.lister_pdf(self.base)]
 
         self.assertEqual(noms, ["Brecht", "Kermann", "Koltes"])
 
-    def test_le_marqueur_n_est_pas_pris_pour_un_pdf(self):
-        self.marquer("Brecht")
+    def test_le_fichier_liste_n_est_pas_pris_pour_une_source(self):
+        self.ecrire_liste("Brecht\n")
 
         for chemin in io.lister_pdf(self.base):
             with self.subTest(chemin=chemin.name):
                 self.assertEqual(chemin.suffix.lower(), ".pdf")
 
-    def test_retirer_le_marqueur_reintegre_le_livre(self):
-        """
-        L'opération doit être réversible sans intervention : c'est ce qui rend le
-        mécanisme utilisable depuis le Drive.
-        """
-        marqueur = self.marquer("Brecht")
-
+    def test_retirer_le_nom_reintegre_le_livre(self):
+        """Réversible sans intervention : c'est ce qui rend le mécanisme
+        utilisable depuis le Drive."""
+        self.ecrire_liste("Brecht\n")
         self.assertNotIn("Brecht", [c.stem for c in io.lister_pdf(self.base)])
 
-        marqueur.unlink()
-
+        self.ecrire_liste("")
         self.assertIn("Brecht", [c.stem for c in io.lister_pdf(self.base)])
 
 
 class TestRecensement(BaseDossier):
-    def test_aucun_livre_ignore_par_defaut(self):
-        self.assertEqual(io.livres_ignores(self.base), {})
+    def test_vide_par_defaut(self):
+        self.assertEqual(io.lire_livres_ignores(self.base), [])
 
-    def test_recensement_avec_raisons(self):
-        self.marquer("Brecht", "déjà traité")
-        self.marquer("Koltes", "en cours de relecture")
-
-        self.assertEqual(
-            io.livres_ignores(self.base),
-            {"Brecht": "déjà traité", "Koltes": "en cours de relecture"},
-        )
-
-    def test_ordre_alphabetique_insensible_a_la_casse(self):
-        """L'annonce doit être lisible, donc ordonnée de façon prévisible."""
-        for nom in ("zola", "Brecht", "artaud"):
-            self.marquer(nom)
+    def test_ordre_du_fichier_preserve(self):
+        """L'annonce doit refléter fidèlement ce que l'utilisateur a saisi."""
+        self.ecrire_liste("zola\nBrecht\nartaud\n")
 
         self.assertEqual(
-            list(io.livres_ignores(self.base)), ["artaud", "Brecht", "zola"]
+            io.lire_livres_ignores(self.base), ["zola", "Brecht", "artaud"]
         )
+
+
+class TestMarqueursObsoletes(BaseDossier):
+    def test_ancien_marqueur_recense(self):
+        self.marquer_ancien("Brecht")
+
+        self.assertEqual(io.marqueurs_ignorer_obsoletes(self.base), ["Brecht.ignorer"])
+
+    def test_ancien_marqueur_sans_effet_sur_le_traitement(self):
+        """
+        Le mécanisme par marqueur est retiré : un `<Livre>.ignorer` laissé sur
+        le Drive n'exclut plus rien. On le recense pour l'annoncer, mais le
+        livre repart bel et bien au traitement.
+        """
+        self.marquer_ancien("Brecht")
+
+        noms = [chemin.stem for chemin in io.lister_pdf(self.base)]
+
+        self.assertIn("Brecht", noms)
+
+    def test_fichier_liste_n_est_pas_un_marqueur_obsolete(self):
+        self.ecrire_liste("Brecht\n")
+
+        self.assertEqual(io.marqueurs_ignorer_obsoletes(self.base), [])
 
 
 class TestAnnonce(BaseDossier):
@@ -166,18 +185,29 @@ class TestAnnonce(BaseDossier):
         """
         from theatre_editor import ocr
 
-        self.marquer("Brecht", "déjà traité par l'ancien logiciel")
-
+        self.ecrire_liste("Brecht\nKoltes\n")
         config.VERBOSITE = 1
 
         annonces = ocr._annoncer_livres_ignores(self.base)
 
-        self.assertEqual(annonces, {"Brecht": "déjà traité par l'ancien logiciel"})
+        self.assertEqual(annonces, ["Brecht", "Koltes"])
 
-    def test_aucune_annonce_sans_marqueur(self):
+    def test_marqueur_obsolete_annonce_sans_exclure(self):
+        """Un ancien marqueur est signalé, mais n'écarte plus le livre."""
         from theatre_editor import ocr
 
-        self.assertEqual(ocr._annoncer_livres_ignores(self.base), {})
+        self.marquer_ancien("Brecht")
+        config.VERBOSITE = 1
+
+        annonces = ocr._annoncer_livres_ignores(self.base)
+
+        self.assertEqual(annonces, [])
+        self.assertIn("Brecht", [c.stem for c in io.lister_pdf(self.base)])
+
+    def test_aucune_annonce_sans_fichier(self):
+        from theatre_editor import ocr
+
+        self.assertEqual(ocr._annoncer_livres_ignores(self.base), [])
 
 
 if __name__ == "__main__":

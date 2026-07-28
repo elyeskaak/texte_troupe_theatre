@@ -1125,16 +1125,28 @@ def _afficher_recapitulatif(
         )
 
 
-def _annoncer_livres_ignores(dossier: Path) -> dict[str, str]:
+def _annoncer_livres_ignores(dossier: Path) -> list[str]:
     """
-    Annonce les livres écartés par un marqueur, et pourquoi.
+    Annonce les livres écartés via `ignorer.txt`.
 
     Toujours affiché : un livre laissé de côté en silence serait une mauvaise
     surprise des semaines plus tard, quand on chercherait son DOCX.
-    """
-    ignores = io.livres_ignores(dossier)
 
-    for nom, raison in ignores.items():
-        journalisation.saute(f"{nom} — ignoré ({raison})")
+    Les anciens marqueurs `<Livre>.ignorer` ne sont plus lus ; s'il en subsiste,
+    ils sont signalés — sans quoi une exclusion faite avec l'ancien mécanisme
+    disparaîtrait en silence, et le livre repartirait au traitement.
+    """
+    ignores = io.lire_livres_ignores(dossier)
+
+    for nom in ignores:
+        journalisation.saute(
+            f"{nom} — ignoré (listé dans {config.NOM_FICHIER_IGNORER})"
+        )
+
+    for marqueur in io.marqueurs_ignorer_obsoletes(dossier):
+        journalisation.alerte(
+            f"marqueur obsolète sans effet : {marqueur} — "
+            f"reportez ce livre dans {config.NOM_FICHIER_IGNORER}"
+        )
 
     return ignores

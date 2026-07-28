@@ -220,7 +220,7 @@ Pour un livre nommé `Le Malentendu`, `DOSSIER_DRIVE` contient :
 Troupe 122 - 2026-27/
 ├── Le Malentendu.pdf                     ← ENTRÉE (fournie par vous)
 ├── Le Malentendu.docx                    ← SORTIE étape 4
-├── Les Justes.ignorer                    ← marqueur : livre écarté (§9.9)
+├── ignorer.txt                           ← livres à écarter, un par ligne (§9.9)
 │
 └── temp/                                 ← tout le travail intermédiaire
     ├── journal_ocr.json                  ← un journal par étape, tous livres
@@ -1155,15 +1155,29 @@ leurs répliques.
 Deux ouvrages du dossier avaient été traités par un autre outil. Les relancer
 aurait consommé des tokens pour rien.
 
-**Décision : un fichier marqueur sur le Drive**, nommé
-`<Livre>` + `SUFFIXE_IGNORER`, plutôt qu'une liste dans `config.py`. La liste
-codée en dur aurait supposé un commit — donc un aller-retour par le dépôt — pour
-chaque livre ajouté ou retiré, alors que la décision se prend en regardant le
-Drive. Le marqueur se crée et se supprime là où l'information se trouve.
+**Décision : un fichier-liste unique sur le Drive**, `ignorer.txt`
+(`NOM_FICHIER_IGNORER`), posé à côté des PDF. On y écrit un nom de livre par
+ligne ; les lignes vides et celles ouvrant par `#` sont ignorées, ce qui permet
+d'y laisser des commentaires. La comparaison est indulgente — casse et
+extension `.pdf` neutralisées — car ce fichier est édité à la main.
 
-Le contenu du fichier, s'il en a un, sert de raison. Un livre écarté est
-**toujours annoncé** au lancement : écarté en silence, il serait indiscernable
-d'un livre oublié, et la recherche partirait sur une fausse piste.
+Deux options ont été écartées. **Une liste dans `config.py`** supposerait un
+commit — donc un aller-retour par le dépôt — pour chaque livre ajouté ou
+retiré, alors que la décision se prend en regardant le Drive. **Un marqueur par
+livre** (`<Livre>.ignorer`, la première version) se créait bien là où
+l'information se trouve, mais l'éparpillait : pour savoir ce qui est écarté, il
+fallait parcourir tout le dossier. Le fichier unique se lit d'un coup d'œil et
+se gère toujours depuis le Drive, sans toucher au code.
+
+La liste ne porte que des noms, sans raison individuelle : la garder minimale
+la rend triviale à éditer. Un livre écarté est en revanche **toujours annoncé**
+au lancement — écarté en silence, il serait indiscernable d'un livre oublié, et
+la recherche partirait sur une fausse piste.
+
+Le remplacement de l'ancien marqueur est **complet** : `<Livre>.ignorer` n'est
+plus lu. S'il en subsiste sur le Drive, il est **signalé** au lancement plutôt
+qu'ignoré en silence — sans quoi une exclusion faite avec l'ancien mécanisme
+disparaîtrait, et le livre repartirait au traitement, donc serait repayé.
 
 ---
 
@@ -1684,4 +1698,4 @@ le code sait déjà traiter ; les livres sont ce qu'il doit traiter.
 
 *Architecture validée le 2026-07-27. Implémentation achevée le 2026-07-28 :*
 *les 14 commits du plan de livraison sont livrés, plus l'étape 2c et les*
-*corrections issues de l'usage réel. 547 tests au vert.*
+*corrections issues de l'usage réel. 551 tests au vert.*

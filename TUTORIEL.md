@@ -96,30 +96,30 @@ maintenant : accents et espaces sont acceptés, mais évitez les caractères
 
 ### Un livre que vous ne voulez pas traiter
 
-Si un PDF est déjà traité par ailleurs, ne le retirez pas du dossier : posez à
-côté un fichier texte vide portant **le même nom, suivi de `.ignorer`**.
+Si un PDF est déjà traité par ailleurs, ne le retirez pas du dossier : créez un
+fichier **`ignorer.txt`** dans le dossier et écrivez-y le nom du livre.
 
 ```
 Troupe 122 - 2026-27/
     Le Malentendu.pdf
     Les Justes.pdf
-    Les Justes.ignorer      ← ce livre sera sauté
+    ignorer.txt             ← contient la ligne « Les Justes »
 ```
 
-Pour le créer depuis le Drive : **Nouveau ▸ Google Docs**, renommez-le
-`Les Justes.ignorer`, écrivez-y la raison si vous voulez (« déjà traité »), et
-fermez. Vous pouvez aussi le créer sur votre ordinateur et le glisser dans le
-dossier.
+Un nom de livre par ligne (l'extension `.pdf` est facultative). Pour le créer
+depuis le Drive : **Nouveau ▸ Google Docs**, renommez-le `ignorer.txt`, écrivez
+un nom par ligne, et fermez. Vous pouvez aussi le créer sur votre ordinateur et
+le glisser dans le dossier.
 
 Au lancement, le programme affichera :
 
 ```
-   [DEJA]    Les Justes — ignoré (déjà traité)
+   [DEJA]    Les Justes — ignoré (listé dans ignorer.txt)
 ```
 
 Cette ligne est importante : elle vous confirme que le livre est **volontairement**
-sauté, et non oublié à cause d'une erreur. Pour le réintégrer, supprimez le
-fichier `.ignorer`.
+sauté, et non oublié à cause d'une erreur. Pour le réintégrer, retirez son nom
+de `ignorer.txt`.
 
 ---
 
@@ -437,7 +437,7 @@ intermédiaire est rangé à part.
 Troupe 122 - 2026-27/
     Roberto Zucco.pdf          ← votre source
     Roberto Zucco.docx         ← LE RÉSULTAT
-    Les Justes.ignorer         ← marqueur : ce livre est laissé de côté
+    ignorer.txt                ← liste des livres laissés de côté
     temp/
         journal_ocr.json …     ← trace de chaque appel et de son coût
         Roberto Zucco/

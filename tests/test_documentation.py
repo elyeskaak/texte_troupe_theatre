@@ -375,15 +375,15 @@ class TestDepannage(unittest.TestCase):
         sortie: list[str] = []
 
         with mock.patch.object(journalisation, "_afficher", sortie.append):
-            journalisation.saute("Les Justes — ignoré (déjà traité)")
+            journalisation.saute("Les Justes — ignoré (listé dans ignorer.txt)")
 
         self.assertIn(sortie[0], lire("TUTORIEL.md"))
 
-    def test_suffixe_du_marqueur_conforme(self):
-        """Le suffixe cité doit être celui que le code reconnaît."""
+    def test_nom_du_fichier_ignorer_conforme(self):
+        """Le nom de fichier cité doit être celui que le code reconnaît."""
         for document in ("README.md", "TUTORIEL.md"):
             with self.subTest(document=document):
-                self.assertIn(config.SUFFIXE_IGNORER, lire(document))
+                self.assertIn(config.NOM_FICHIER_IGNORER, lire(document))
 
 
 if __name__ == "__main__":
