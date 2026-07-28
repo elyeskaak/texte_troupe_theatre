@@ -25,6 +25,7 @@ PROMPTS_ATTENDUS = (
     "prompt_edition",
     "prompt_raccord",
     "prompt_validation",
+    "prompt_liminaires",
 )
 
 

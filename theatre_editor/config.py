@@ -80,6 +80,11 @@ MODEL_RACCORD = "gpt-5.4-mini-2026-03-17"
 # exigeante, on garde le modèle principal.
 MODEL_VALIDATION = "gpt-5.5-2026-04-23"
 
+# Étape 2 bis — rôles des pages liminaires. Un seul appel par livre, sur une
+# tâche de jugement éditorial : on garde le modèle principal, le gain d'un
+# modèle léger serait dérisoire face au risque d'un classement fautif.
+MODEL_LIMINAIRES = "gpt-5.5-2026-04-23"
+
 
 # ============================================================
 # DÉCOUPAGE
@@ -415,6 +420,47 @@ MOTIFS_DECLARATION_PAGE_VIDE: tuple[str, ...] = (
 # formules : une page de théâtre dépasse largement cette longueur.
 MAX_LONGUEUR_DECLARATION_VIDE = 200
 
+# Formulations par lesquelles un modèle signale qu'il n'a **pas pu** lire une
+# page. C'est distinct d'une page vide, et bien plus dangereux.
+#
+# Sans ces motifs, « Erreur - Impossible d'OCR cette page » était écrit dans
+# OCR.txt avec le statut « terminé » : le message d'erreur devenait le texte de
+# la pièce, sans la moindre alerte, et la page n'était jamais reprise.
+#
+# Une telle réponse doit au contraire compter comme un **échec**, donc être
+# retentée puis signalée.
+# Fragments réutilisés, pour éviter de les répéter — et de les corriger à
+# moitié. `_APOSTROPHE` couvre les trois formes que les modèles alternent ;
+# `_OBJET_PAGE` est ce qui distingue une déclaration d'échec d'une réplique.
+_APOSTROPHE = r"['’‘]"
+
+# L'objet du verbe est le discriminant décisif. « Je ne peux pas lire cette
+# page » est un échec ; « Je ne peux pas lire dans tes pensées » est une
+# réplique. Exiger que le complément soit la page elle-même sépare les deux,
+# là où un critère purement lexical les confondrait.
+_OBJET_PAGE = (
+    rf"(?:cette|ce|la|le|l{_APOSTROPHE}|votre|the|this)?\s*"
+    r"(?:page|image|document|texte|contenu|fichier)"
+)
+
+MOTIFS_ECHEC_TRANSCRIPTION: tuple[str, ...] = (
+    r"^\W*erreur\b",
+    rf"impossible\s+(?:d{_APOSTROPHE}|de\s+)?\s*(?:l{_APOSTROPHE})?\s*ocr",
+    r"impossible\s+de\s+(?:lire|transcrire|traiter|d[eé]chiffrer|ocris[eé]r)",
+    # Le `ne` peut être élidé — « je n'arrive pas » — et le `à` absent —
+    # « je ne peux pas lire ». Les deux formes étaient auparavant manquées.
+    rf"je\s+n(?:e\s+|{_APOSTROPHE})(?:peux|parviens|r[eé]ussis|arrive|suis)"
+    rf"\s+pas(?:\s+(?:à|en\s+mesure\s+de))?\s*"
+    rf"(?:lire|transcrire|traiter|d[eé]chiffrer)\s+{_OBJET_PAGE}",
+    rf"{_OBJET_PAGE}\s+(?:est\s+)?(?:illisible|corrompue?|inexploitable)",
+    rf"(?:unable|failed|cannot|can{_APOSTROPHE}t)\s+to\s+"
+    r"(?:read|process|transcribe|ocr)",
+    r"^\W*error\b",
+)
+
+# Une déclaration d'échec est courte elle aussi. Au-delà, c'est du texte.
+MAX_LONGUEUR_DECLARATION_ECHEC = 300
+
 # Catégories de constats admises dans un rapport de validation. Le code s'en
 # sert pour vérifier que le modèle a respecté le format imposé.
 CATEGORIES_VALIDATION: tuple[str, ...] = (
@@ -522,6 +568,64 @@ DEFINITIONS_STYLES: dict[str, dict[str, object]] = {
         "taille_pt": TAILLE_TITRE_OEUVRE_PT,
         "espace_avant_pt": 0,
         "espace_apres_pt": 36,
+        "saut_de_page": False,
+    },
+    # Auteur, traducteur, sous-titre, éditeur : les lignes qui accompagnent le
+    # titre sur la page de titre, et les intitulés de section des liminaires.
+    "titre_secondaire": {
+        "nom": "Titre_Secondaire",
+        "alignement": "centre",
+        "gras": False,
+        "italique": True,
+        "taille_pt": TAILLE_TITRE_SCENE_PT,
+        "espace_avant_pt": 6,
+        "espace_apres_pt": 12,
+        "saut_de_page": False,
+    },
+    # Citation en exergue : italique, justifiée, détachée du corps.
+    "epigraphe": {
+        "nom": "Epigraphe",
+        "alignement": "justifie",
+        "gras": False,
+        "italique": True,
+        "taille_pt": TAILLE_TEXTE_PT,
+        "espace_avant_pt": 18,
+        "espace_apres_pt": 4,
+        "saut_de_page": False,
+    },
+    # Source d'une épigraphe. Alignée à droite, comme dans l'usage imprimé —
+    # c'est le défaut que je n'avais pas su corriger sans cette passe.
+    "attribution": {
+        "nom": "Attribution",
+        "alignement": "droite",
+        "gras": False,
+        "italique": True,
+        "taille_pt": TAILLE_TEXTE_PT,
+        "espace_avant_pt": 2,
+        "espace_apres_pt": 18,
+        "saut_de_page": False,
+    },
+    # Note d'éditeur, mention de création, copyright, liste d'œuvres.
+    "note": {
+        "nom": "Note",
+        "alignement": "justifie",
+        "gras": False,
+        "italique": False,
+        "taille_pt": TAILLE_TEXTE_PT,
+        "espace_avant_pt": 6,
+        "espace_apres_pt": 6,
+        "saut_de_page": False,
+    },
+    # Prose continue précédant l'action. Justifiée en italique : c'est un récit,
+    # non une didascalie, et le centrer serait illisible.
+    "prologue": {
+        "nom": "Prologue",
+        "alignement": "justifie",
+        "gras": False,
+        "italique": True,
+        "taille_pt": TAILLE_TEXTE_PT,
+        "espace_avant_pt": 6,
+        "espace_apres_pt": 6,
         "saut_de_page": False,
     },
     "titre_acte": {
@@ -664,6 +768,20 @@ DEFINITIONS_STYLES: dict[str, dict[str, object]] = {
 
 DOSSIER_TEMPORAIRE = "temp"
 
+# Un livre est ignoré si un fichier portant ce nom existe à côté de son PDF :
+#
+#     Troupe 122 - 2026-27/
+#         La mastication des morts.pdf
+#         La mastication des morts.ignorer     ← ce livre est laissé de côté
+#
+# Se gère entièrement depuis le Drive, sans toucher au code. Le contenu du
+# fichier n'a aucune importance : sa seule présence suffit. Vous pouvez y noter
+# la raison, elle apparaîtra dans le récapitulatif.
+#
+# Les livres ignorés sont toujours **annoncés** au lancement : un livre écarté
+# en silence serait une mauvaise surprise trois semaines plus tard.
+SUFFIXE_IGNORER = ".ignorer"
+
 NOM_OCR = "OCR.txt"
 NOM_OCR_PAGES = "OCR_pages"
 NOM_EDIT = "EDIT.txt"
@@ -671,6 +789,41 @@ NOM_EDIT_BLOCS = "EDIT_blocs"
 NOM_EDIT_RACCORDS = "EDIT_raccords"
 NOM_REPORT = "REPORT.txt"
 NOM_REPORT_BLOCS = "REPORT_blocs"
+
+# Annotations des pages liminaires, produites par une passe IA dédiée.
+#
+# Mises en cache : l'appel est payé **une seule fois par livre**, et l'étape 4
+# reste gratuite et déterministe — vous pouvez régénérer le DOCX autant de fois
+# que vous voulez après avoir changé une marge.
+#
+# Si le fichier est absent, l'étape 4 fonctionne exactement comme avant : les
+# liminaires sont classés par les règles déterministes.
+NOM_LIMINAIRES = "LIMINAIRES.json"
+
+# Nombre maximal de lignes soumises à la passe des liminaires.
+#
+# Les ambiguïtés de rôle — titre, auteur, épigraphe, prologue, distribution —
+# vivent toutes dans les premières pages. Y consacrer un appel est
+# proportionné ; en consacrer un par bloc sur tout le livre ne le serait pas.
+LIGNES_LIMINAIRES = 120
+
+# Rôles admis en retour de cette passe. Un rôle inconnu est ignoré, la ligne
+# retombant sur son classement déterministe.
+ROLES_LIMINAIRES: frozenset[str] = frozenset({
+    "titre_oeuvre",
+    "titre_secondaire",
+    "epigraphe",
+    "attribution",
+    "note",
+    "distribution",
+    "entree_distribution",
+    "titre_acte",
+    "titre_scene",
+    "personnage",
+    "didascalie",
+    "prologue",
+    "texte",
+})
 
 SUFFIXE_DOCX = ".docx"
 

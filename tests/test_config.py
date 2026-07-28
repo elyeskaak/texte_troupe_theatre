@@ -29,7 +29,7 @@ CLES_ATTENDUES = {
 }
 
 # Alignements que `docx_export._alignement()` sait traduire.
-ALIGNEMENTS_VALIDES = {"centre", "justifie", "gauche"}
+ALIGNEMENTS_VALIDES = {"centre", "justifie", "gauche", "droite"}
 
 
 class TestHierarchieTypographique(unittest.TestCase):

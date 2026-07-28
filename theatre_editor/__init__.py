@@ -27,4 +27,4 @@ __version__ = "1.0.0"
 
 # Étapes exposées, dans l'ordre du pipeline. Sert à `main.py` pour valider
 # l'argument `--etape` sans avoir à importer les modules correspondants.
-ETAPES = ("ocr", "edition", "validation", "docx")
+ETAPES = ("ocr", "edition", "liminaires", "validation", "docx")

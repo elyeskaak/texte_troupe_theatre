@@ -482,10 +482,26 @@ def traiter_page(
 
     texte = blocks.nettoyer_enveloppe(resultat.texte)
 
+    # Un modèle qui déclare ne PAS AVOIR PU lire la page ne transcrit rien : sa
+    # phrase serait écrite dans OCR.txt comme du texte de la pièce, avec le
+    # statut « terminé », et la page ne serait jamais reprise. C'est un échec,
+    # pas une transcription.
+    if blocks.est_declaration_echec(texte):
+        _enregistrer_echec(
+            chemins=chemins,
+            numero=numero,
+            dpi=dpi,
+            taille_image=len(image),
+            erreur=f"le modèle a déclaré ne pas pouvoir lire la page : {texte[:120]}",
+            journal=journal,
+            nom_livre=nom_livre,
+        )
+        journalisation.echec(f"{libelle} : le modèle n'a pas pu lire la page")
+        return PAGE_ECHOUEE
+
     # Toute déclaration de page vide est reconnue, pas seulement la mention
     # exacte du prompt. Un modèle qui paraphrase — « Cette page est vide. » —
-    # verrait sinon sa phrase écrite dans OCR.txt comme du texte de la pièce,
-    # puis rendue dans le DOCX.
+    # verrait sinon sa phrase écrite dans OCR.txt comme du texte de la pièce.
     page_vide = blocks.est_declaration_page_vide(texte)
 
     if page_vide:
@@ -1046,7 +1062,9 @@ def executer(
 
     pdfs = io.lister_pdf(base)
     journalisation.info(f"Dossier : {base}")
-    journalisation.info(f"PDF trouvés : {len(pdfs)}")
+    journalisation.info(f"PDF à traiter : {len(pdfs)}")
+
+    _annoncer_livres_ignores(base)
 
     if not pdfs:
         journalisation.alerte("aucun PDF dans ce dossier")
@@ -1105,3 +1123,18 @@ def _afficher_recapitulatif(
         journalisation.alerte(
             f"à reprendre en relançant cette étape : {', '.join(a_reprendre)}"
         )
+
+
+def _annoncer_livres_ignores(dossier: Path) -> dict[str, str]:
+    """
+    Annonce les livres écartés par un marqueur, et pourquoi.
+
+    Toujours affiché : un livre laissé de côté en silence serait une mauvaise
+    surprise des semaines plus tard, quand on chercherait son DOCX.
+    """
+    ignores = io.livres_ignores(dossier)
+
+    for nom, raison in ignores.items():
+        journalisation.saute(f"{nom} — ignoré ({raison})")
+
+    return ignores

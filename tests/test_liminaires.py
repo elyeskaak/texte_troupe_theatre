@@ -235,5 +235,111 @@ class TestLiminaires(unittest.TestCase):
                 self.assertIs(lignes[0].type, blocks.TypeLigne.TEXTE)
 
 
+# ============================================================
+# 4. OÙ S'ARRÊTE LA LISTE DES RÔLES
+# ============================================================
+
+
+class TestFinDeLaDistribution(unittest.TestCase):
+    """
+    La distribution est lue **par position** : toute ligne suivant l'étiquette
+    lui appartient. Cette lecture est ce qui permet de traiter une liste en un
+    seul bloc, sans avoir à reconnaître chaque nom. Sa contrepartie est qu'il
+    faut savoir où elle s'arrête.
+
+    Le critère est l'enchaînement sur une réplique : une entrée de distribution
+    n'en est jamais suivie, un nom de personnage l'est toujours. Sans lui, la
+    liste avalait tout le document — défaut observé sur un livre réel.
+    """
+
+    def test_s_arrete_au_premier_nom_suivi_d_une_replique(self):
+        texte = (
+            "**PERSONNAGES**\n"
+            "Gilles Rimey.\n"
+            "Alphonsine Rouart.\n"
+            "\n"
+            "**JAN.**\n"
+            "Bonjour.\n"
+            "**JAN.**\n"
+            "Encore.\n"
+        )
+
+        index = blocks.construire_index_structure(texte)
+        types = {ligne.texte: ligne.type for ligne in blocks.classifier_document(texte, index)}
+
+        self.assertIs(types["Gilles Rimey."], blocks.TypeLigne.ENTREE_DISTRIBUTION)
+        self.assertIs(types["Bonjour."], blocks.TypeLigne.TEXTE)
+        self.assertIs(types["JAN."], blocks.TypeLigne.PERSONNAGE)
+
+    def test_s_arrete_devant_une_replique_en_ligne(self):
+        """Même défaut, avec la forme « **NOM.** texte » sur une seule ligne."""
+        texte = "**PERSONNAGES**\nGilles Rimey.\n**JAN.** Bonjour.\n**JAN.** Encore.\n"
+
+        _, indices = blocks.recenser_distribution(texte)
+
+        lignes = texte.split("\n")
+        retenues = {lignes[i] for i in indices}
+
+        self.assertIn("Gilles Rimey.", retenues)
+        self.assertNotIn("**JAN.** Bonjour.", retenues)
+
+    def test_liste_en_un_seul_bloc_n_emprunte_rien_au_dehors(self):
+        """
+        Cas Brecht : toute la distribution tient sur une seule ligne. Les
+        intitulés qui la suivent ne doivent pas être pris pour des rôles — ils
+        deviendraient des amorces, et chaque occurrence de l'intitulé dans le
+        corps du texte serait rendue en gras centré.
+
+        Cette liste ne fournit pour autant aucune amorce exploitable : les noms
+        y sont agglutinés, et les séparer demanderait de deviner où l'un finit.
+        C'est une limite assumée, que l'étape des liminaires absorbe. Ce test
+        garantit seulement l'innocuité, qui est le point important : une amorce
+        fausse dégrade toutes les pages, une amorce absente n'en dégrade aucune.
+        """
+        texte = (
+            "**PERSONNAGES**\n"
+            "LES TROIS DIEUX. SHEN TÉ. WANG, marchand d'eau.\n"
+            "\n"
+            "**LIEU DE L'ACTION**\n"
+            "La capitale du Se-Tchouan.\n"
+            "\n"
+            "**WANG.** Je suis porteur d'eau.\n"
+        )
+
+        noms, indices = blocks.recenser_distribution(texte)
+
+        # Aucune amorce ne provient d'une ligne située hors de la liste.
+        self.assertEqual(indices, frozenset({1}))
+
+        for nom in noms:
+            with self.subTest(nom=nom):
+                self.assertNotIn("LIEU", nom)
+                self.assertNotIn("CAPITALE", nom)
+
+    def test_roles_en_gras_un_par_ligne_conserves(self):
+        """
+        L'inverse du test précédent : une liste dont chaque rôle est en gras ne
+        doit pas être tronquée par le nouveau critère. Ces lignes s'enchaînent
+        entre elles, jamais sur une réplique.
+        """
+        texte = (
+            "**PERSONNAGES**\n"
+            "**MARK**, 18 ans.\n"
+            "**JAN**, 18 ans.\n"
+            "**LÉA**, 18 ans.\n"
+            "\n"
+            "**JAN.** Tu es venu ?\n"
+        )
+
+        index = blocks.construire_index_structure(texte)
+        entrees = [
+            ligne.texte
+            for ligne in blocks.classifier_document(texte, index)
+            if ligne.type is blocks.TypeLigne.ENTREE_DISTRIBUTION
+        ]
+
+        self.assertEqual(len(entrees), 3)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

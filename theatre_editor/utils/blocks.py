@@ -49,6 +49,11 @@ class TypeLigne(str, Enum):
     TITRE_ACTE = "titre_acte"
     TITRE_SCENE = "titre_scene"
     TITRE_OEUVRE = "titre_oeuvre"
+    TITRE_SECONDAIRE = "titre_secondaire"
+    EPIGRAPHE = "epigraphe"
+    ATTRIBUTION = "attribution"
+    NOTE = "note"
+    PROLOGUE = "prologue"
     DISTRIBUTION = "distribution"
     ENTREE_DISTRIBUTION = "entree_distribution"
     LIEU = "lieu"
@@ -587,6 +592,29 @@ def evaluer_couche_texte(texte: str) -> list[str]:
     return raisons
 
 
+def est_declaration_echec(texte: str) -> bool:
+    """
+    Vrai si une réponse de modèle signale qu'il n'a **pas pu** lire la page.
+
+    À ne pas confondre avec une page vide, et bien plus dangereux. Une réponse
+    du genre « Erreur - Impossible d'OCR cette page » était auparavant écrite
+    dans `OCR.txt` avec le statut « terminé » : le message d'erreur devenait le
+    texte de la pièce, sans alerte, et la page n'était jamais reprise.
+
+    Une telle réponse doit compter comme un échec, donc être retentée puis
+    signalée dans le récapitulatif.
+    """
+    nu = texte.strip()
+
+    if not nu or len(nu) > config.MAX_LONGUEUR_DECLARATION_ECHEC:
+        return False
+
+    return any(
+        re.search(motif, nu, flags=re.IGNORECASE)
+        for motif in config.MOTIFS_ECHEC_TRANSCRIPTION
+    )
+
+
 def est_declaration_page_vide(texte: str) -> bool:
     """
     Vrai si une réponse de modèle signale une page dépourvue de texte.
@@ -1064,12 +1092,29 @@ def _lire_distribution(
         if est_separateur(nue):
             break
 
+        # La pièce a commencé : on sort de la liste des rôles.
+        #
+        # Le signal décisif est **l'enchaînement sur une réplique**. Une entrée
+        # de distribution n'en est jamais suivie — elle précède un autre nom, ou
+        # une ligne vide. Un nom de personnage, lui, annonce toujours du texte.
+        #
+        # Sans ce critère, la liste avalait tout le reste du document : la
+        # première réplique recevait le style des entrées de distribution, et le
+        # corps entier de la pièce avec elle.
+        if dedoubler_replique_en_ligne(nue) is not None:
+            break
+
         label_gras = contenu_gras(nue)
+
         if label_gras is not None:
             normalise = normaliser_label(label_gras)
-            if _correspond_lexique(normalise, config.LEXIQUE_ACTE) or _correspond_lexique(
-                normalise, config.LEXIQUE_SCENE
-            ):
+
+            if _correspond_lexique(
+                normalise, config.LEXIQUE_ACTE
+            ) or _correspond_lexique(normalise, config.LEXIQUE_SCENE):
+                break
+
+            if _suit_une_replique(lignes, depart + decalage + 1):
                 break
 
         # Toute ligne du bloc appartient à la liste, et reçoit donc son style.
@@ -1532,6 +1577,43 @@ def _ajouter_avertissements(index: IndexStructure, distribution: set[str]) -> No
 # ============================================================
 
 
+def fin_des_liminaires(texte: str, index: IndexStructure) -> int:
+    """
+    Repère où les pages liminaires s'arrêtent et où la pièce commence.
+
+    La pièce commence au premier titre d'acte ou au premier nom de personnage
+    **reconnu avec certitude ou vraisemblance**. Les labels incertains ne
+    comptent pas : ce sont précisément ceux que la passe des liminaires doit
+    trancher, et s'arrêter à eux reviendrait à ne rien lui soumettre.
+
+    Returns:
+        Le nombre de lignes à soumettre, plafonné par `LIGNES_LIMINAIRES`.
+    """
+    ouvre_la_piece = {TypeLigne.TITRE_ACTE, TypeLigne.PERSONNAGE}
+    sures = {Confiance.CERTAINE, Confiance.PROBABLE}
+
+    for numero, ligne in enumerate(texte.split("\n")):
+        contenu = contenu_gras(ligne.strip())
+
+        if contenu is None:
+            dedouble = dedoubler_replique_en_ligne(ligne)
+            contenu = dedouble.nom if dedouble else None
+
+        if contenu is None:
+            continue
+
+        classement = index.classements.get(normaliser_label(contenu))
+
+        if (
+            classement is not None
+            and classement.type in ouvre_la_piece
+            and classement.confiance in sures
+        ):
+            return min(numero, config.LIGNES_LIMINAIRES)
+
+    return min(len(texte.split("\n")), config.LIGNES_LIMINAIRES)
+
+
 def classifier_ligne(ligne: str, index: IndexStructure) -> TypeLigne:
     """
     Classe une ligne isolée, sans tenir compte de son contexte.
@@ -1702,8 +1784,16 @@ def contenu_sans_marqueurs(ligne: str, type_ligne: TypeLigne) -> str:
         TypeLigne.LIEU,
         TypeLigne.DIDASCALIE,
         TypeLigne.DIDASCALIE_LONGUE,
+        TypeLigne.EPIGRAPHE,
+        TypeLigne.ATTRIBUTION,
+        TypeLigne.PROLOGUE,
+        TypeLigne.TITRE_SECONDAIRE,
+        TypeLigne.NOTE,
+        TypeLigne.ENTREE_DISTRIBUTION,
     ):
-        return (contenu_italique(nue) or nue).strip()
+        # Les marqueurs sont retirés s'ils existent ; sinon la ligne est rendue
+        # telle quelle. Un rôle annoté peut porter n'importe quelle forme.
+        return (contenu_italique(nue) or contenu_gras(nue) or nue).strip()
 
     return nue
 

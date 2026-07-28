@@ -68,6 +68,9 @@ class CheminsLivre:
     dossier_report: Path
     report: Path
 
+    # --- Étape 2 bis ------------------------------------------------
+    liminaires: Path
+
     # ------------------------------------------------------------
     # Chemins des unités de travail.
     # Le format sur quatre chiffres garantit un tri alphabétique
@@ -136,6 +139,7 @@ def resoudre_chemins(nom_livre: str, dossier: Path | None = None) -> CheminsLivr
         edit=travail / config.NOM_EDIT,
         dossier_report=travail / config.NOM_REPORT_BLOCS,
         report=travail / config.NOM_REPORT,
+        liminaires=travail / config.NOM_LIMINAIRES,
     )
 
 
@@ -181,6 +185,11 @@ def lister_livres_avec(
     resultats: list[CheminsLivre] = []
 
     for nom in lister_livres(base):
+        # Un livre marqué « ignorer » est écarté de toutes les étapes, pas
+        # seulement de l'OCR.
+        if livre_ignore(nom, base) is not None:
+            continue
+
         chemins = resoudre_chemins(nom, base)
 
         if (chemins.dossier_travail / fichier).is_file():
@@ -453,6 +462,8 @@ def _est_fichier_utile(chemin: Path) -> bool:
         and not nom.startswith(".")
         and not nom.startswith("~$")
         and not nom.endswith(config.EXTENSION_TEMPORAIRE)
+        # Le marqueur d'exclusion n'est pas un fichier source.
+        and not nom.endswith(config.SUFFIXE_IGNORER)
     )
 
 
@@ -555,13 +566,72 @@ def livres_a_migrer(dossier: Path | None = None) -> list[str]:
     return sorted(noms, key=str.lower)
 
 
+def chemin_marqueur_ignorer(nom_livre: str, dossier: Path | None = None) -> Path:
+    """Emplacement du fichier marqueur excluant un livre du traitement."""
+    base = dossier if dossier is not None else config.DOSSIER_DRIVE
+
+    return base / f"{nom_livre}{config.SUFFIXE_IGNORER}"
+
+
+def livre_ignore(nom_livre: str, dossier: Path | None = None) -> str | None:
+    """
+    Détermine si un livre doit être laissé de côté.
+
+    Le marqueur se gère depuis le Drive, sans toucher au code : il suffit de
+    déposer un fichier `<Livre>.ignorer` à côté du PDF.
+
+    Returns:
+        La raison notée dans le fichier, une mention par défaut si le fichier
+        est vide, ou None si le livre doit être traité. La raison est affichée
+        au lancement : un livre écarté en silence serait une mauvaise surprise.
+    """
+    marqueur = chemin_marqueur_ignorer(nom_livre, dossier)
+
+    if not marqueur.is_file():
+        return None
+
+    try:
+        raison = lire_texte(marqueur).strip()
+    except OSError:
+        raison = ""
+
+    return raison or "marqueur présent, sans raison précisée"
+
+
+def livres_ignores(dossier: Path | None = None) -> dict[str, str]:
+    """Recense les livres écartés et la raison de leur exclusion."""
+    base = dossier if dossier is not None else config.DOSSIER_DRIVE
+    verifier_dossier_travail(base)
+
+    resultats: dict[str, str] = {}
+
+    for chemin in base.glob(f"*{config.SUFFIXE_IGNORER}"):
+        nom = chemin.name[: -len(config.SUFFIXE_IGNORER)]
+        raison = livre_ignore(nom, base)
+
+        if raison is not None:
+            resultats[nom] = raison
+
+    return dict(sorted(resultats.items(), key=lambda paire: paire[0].lower()))
+
+
 def lister_pdf(dossier: Path | None = None) -> list[Path]:
-    """Liste les PDF du dossier de travail, triés par nom."""
+    """
+    Liste les PDF à traiter, triés par nom.
+
+    Les livres portant un marqueur `.ignorer` sont écartés. `livres_ignores()`
+    permet de les recenser et de les annoncer au lancement.
+    """
     base = dossier if dossier is not None else config.DOSSIER_DRIVE
     verifier_dossier_travail(base)
 
     return _trier(
-        [c for c in _parcourir(base) if c.suffix.lower() == ".pdf"]
+        [
+            chemin
+            for chemin in _parcourir(base)
+            if chemin.suffix.lower() == ".pdf"
+            and livre_ignore(chemin.stem, base) is None
+        ]
     )
 
 

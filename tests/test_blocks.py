@@ -844,6 +844,11 @@ class TestLieuApresSeparateur(unittest.TestCase):
         """
         types_styles = {
             TypeLigne.TITRE_OEUVRE,
+            TypeLigne.TITRE_SECONDAIRE,
+            TypeLigne.EPIGRAPHE,
+            TypeLigne.ATTRIBUTION,
+            TypeLigne.NOTE,
+            TypeLigne.PROLOGUE,
             TypeLigne.TITRE_ACTE,
             TypeLigne.TITRE_SCENE,
             TypeLigne.DISTRIBUTION,

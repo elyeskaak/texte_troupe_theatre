@@ -62,6 +62,11 @@ def _charger_etape(nom: str) -> Callable[[Path | None], list[Any]]:
 
         return edition.executer
 
+    if nom == "liminaires":
+        from theatre_editor import liminaires
+
+        return liminaires.executer
+
     if nom == "validation":
         from theatre_editor import validation
 

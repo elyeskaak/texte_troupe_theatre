@@ -122,6 +122,8 @@ def _alignement(nom: str):
         "centre": outils["ALIGN"].CENTER,
         "justifie": outils["ALIGN"].JUSTIFY,
         "gauche": outils["ALIGN"].LEFT,
+        # Aligné à droite : usage imprimé pour la source d'une épigraphe.
+        "droite": outils["ALIGN"].RIGHT,
     }
 
     if nom not in correspondances:
@@ -206,10 +208,13 @@ def _creer_style(document, cle: str, definition: dict[str, Any]) -> None:
     # Évite qu'un nom de personnage se retrouve seul en bas de page, séparé de
     # la réplique qu'il annonce.
     format_paragraphe.keep_with_next = cle in {
+        "titre_oeuvre",
         "titre_acte",
         "titre_scene",
+        "titre_secondaire",
         "distribution",
         "personnage",
+        "epigraphe",
     }
 
 
@@ -304,9 +309,18 @@ def _ajouter_runs(paragraphe, ligne: blocks.LigneClassee) -> None:
 # ============================================================
 
 
-def construire_docx(texte: str) -> tuple[Any, blocks.IndexStructure, int]:
+def construire_docx(
+    texte: str,
+    roles_liminaires: dict[int, blocks.TypeLigne] | None = None,
+) -> tuple[Any, blocks.IndexStructure, int]:
     """
     Construit le document à partir d'un texte édité.
+
+    Args:
+        texte: contenu de `EDIT.txt`.
+        roles_liminaires: rôles des premières lignes, produits par l'étape 2 bis.
+            Absents, les liminaires retombent sur les règles déterministes —
+            cette étape n'a donc **aucune dépendance** envers la précédente.
 
     Returns:
         `(document, index de structure, nombre de paragraphes)`.
@@ -314,13 +328,62 @@ def construire_docx(texte: str) -> tuple[Any, blocks.IndexStructure, int]:
     index = blocks.construire_index_structure(texte)
     document = creer_document()
 
+    lignes = blocks.classifier_document(texte, index)
+
+    if roles_liminaires:
+        lignes = _appliquer_roles_liminaires(lignes, texte, roles_liminaires)
+
     paragraphes = 0
 
-    for ligne in blocks.classifier_document(texte, index):
+    for ligne in lignes:
         if ajouter_paragraphe(document, ligne):
             paragraphes += 1
 
     return document, index, paragraphes
+
+
+def _appliquer_roles_liminaires(
+    lignes: list[blocks.LigneClassee],
+    texte: str,
+    roles: dict[int, blocks.TypeLigne],
+) -> list[blocks.LigneClassee]:
+    """
+    Substitue les rôles annotés aux classements déterministes des liminaires.
+
+    La correspondance se fait par **contenu brut** et non par indice : la
+    classification peut dédoubler une ligne portant un nom et sa réplique, si
+    bien que les positions de sortie ne correspondent plus à celles de l'entrée.
+    Aligner sur les indices produirait des décalages silencieux.
+    """
+    source = texte.split("\n")
+    par_brut: dict[str, blocks.TypeLigne] = {}
+
+    for numero, type_ligne in roles.items():
+        if 0 <= numero < len(source):
+            par_brut[source[numero]] = type_ligne
+
+    resultat: list[blocks.LigneClassee] = []
+    dejaappliques: set[str] = set()
+
+    for ligne in lignes:
+        type_annote = par_brut.get(ligne.brut)
+
+        # Une ligne dédoublée produit deux entrées de même `brut` : le rôle
+        # annoté ne s'applique qu'à la première, l'autre gardant son type.
+        if type_annote is not None and ligne.brut not in dejaappliques:
+            dejaappliques.add(ligne.brut)
+            resultat.append(
+                blocks.LigneClassee(
+                    brut=ligne.brut,
+                    texte=blocks.contenu_sans_marqueurs(ligne.brut, type_annote),
+                    type=type_annote,
+                )
+            )
+            continue
+
+        resultat.append(ligne)
+
+    return resultat
 
 
 def traiter_livre(
@@ -356,7 +419,17 @@ def _generer(*, chemins: io.CheminsLivre, resultat: ResultatLivre) -> None:
     if not texte.strip():
         raise ValueError(f"{chemins.edit.name} est vide")
 
-    document, index, paragraphes = construire_docx(texte)
+    # Rôles des liminaires, s'ils ont été annotés. Absents, la génération se
+    # déroule exactement comme avant : cette étape reste gratuite et
+    # déterministe, sans dépendance envers l'étape 2 bis.
+    from theatre_editor import liminaires
+
+    roles = liminaires.charger_roles(chemins)
+
+    if roles:
+        journalisation.info(f"   {len(roles)} rôle(s) liminaire(s) appliqué(s)")
+
+    document, index, paragraphes = construire_docx(texte, roles)
 
     # La table d'inspection est affichée AVANT l'écriture : vous voyez ce que le
     # parseur a compris au moment où le document peut encore être rejeté.
