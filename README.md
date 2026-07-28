@@ -312,7 +312,7 @@ theatre_editor/
     main.py              orchestration CLI
 
 notebooks/               interfaces Colab (générées par outils/)
-tests/                   538 tests
+tests/                   547 tests
 archive/                 prototype d'origine, conservé
 ARCHITECTURE.md          conception détaillée et justifiée
 ```
@@ -369,7 +369,7 @@ stylistiquement hétérogènes, ce que la passe de raccord ne rattrape pas.
 python -m unittest discover -s tests -t .
 ```
 
-**538 tests, environ 20 secondes.** Aucune clé API, aucun Drive monté, aucun appel
+**547 tests, environ 20 secondes.** Aucune clé API, aucun Drive monté, aucun appel
 réseau : `openai` et `pymupdf` sont remplacés par des doublures, et les modules
 concernés diffèrent leur import pour rendre cela possible.
 
@@ -418,10 +418,13 @@ ruptures dramaturgiques. Conséquence, un mot coupé entre deux blocs doit être
 ressoudé **entièrement d'un seul côté** par la passe de raccord, ce que le
 prompt impose explicitement.
 
-**La vision de `MODEL_OCR` n'a pas encore été éprouvée.**
+**La vision de `MODEL_OCR` a été éprouvée (2026-07-28).** Un test sur deux
+pages d'un vrai scan sans couche texte a confirmé que `gpt-5.5-2026-04-23`
+accepte les entrées image, et que `store=False` est bien honoré (la réponse est
+introuvable côté OpenAI après coup). Reste un point de vigilance :
 `--verifier-modeles` contrôle qu'un identifiant de modèle existe, non qu'il
-accepte les entrées image. Si `gpt-5.5-2026-04-23` refusait la vision, l'étape 1
-échouerait dès le premier appel par un code 400 — immédiatement et
+accepte les entrées image. Si un futur changement de modèle refusait la vision,
+l'étape 1 échouerait dès le premier appel par un code 400 — immédiatement et
 explicitement, sans consommer les quatre tentatives. Le repli est alors
 `MODEL_OCR = "gpt-4o"`, en une ligne. Raison de plus pour commencer par un PDF
 de dix pages.

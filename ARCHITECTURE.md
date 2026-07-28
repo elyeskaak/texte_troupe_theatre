@@ -544,7 +544,7 @@ Voir [§12](#12-journalisation).
 | **Entrée** | `<Livre>.pdf` |
 | **Sortie** | `<Livre>_OCR.txt` |
 | **Unité de reprise** | **la page** |
-| **Modèle** | `MODEL_OCR` (GPT-4o) |
+| **Modèle** | `MODEL_OCR` (`gpt-5.5-2026-04-23`) |
 | **Prompt** | `prompts/prompt_ocr.md` |
 
 Déroulé :
@@ -1004,8 +1004,12 @@ mécaniques, indépendants du modèle :
    troncature et résumé involontaire.
 2. **Motifs interdits** → `<<<PAGE_BREAK>>>` résiduel, ` ``` `, « Voici le
    texte corrigé », « je ne peux pas »… Détecte le bavardage et les refus.
-3. **Parité des astérisques** → détecte une convention typographique cassée,
-   qui casserait l'étape 4.
+3. **Parité des astérisques** (séparateurs `***` exclus) → détecte une
+   astérisque orpheline — un balisage `*…*` ou `**…**` non refermé qui
+   casserait l'étape 4. Le séparateur de scène `***`, impair mais parfaitement
+   légitime, est retiré avant le comptage : sans cela, tout bloc contenant un
+   nombre impair de séparateurs serait marqué suspect à tort, puis exclu
+   d'`EDIT.txt` (corrigé le 2026-07-28, après un vrai appel d'édition).
 
 Un bloc en échec sur l'un de ces contrôles est marqué `"suspect"` et sera
 retraité au prochain passage si `RETRAITER_BLOCS_SUSPECTS` est vrai. Ces
@@ -1399,16 +1403,18 @@ pas réécrire l'auteur. Une lettre mal lue devient une faute définitive.
 même raison qu'à l'édition : un alias non daté pourrait changer de comportement
 au milieu d'un livre.
 
-**Réserve à lever au premier appel réel.** Rien ici ne prouve que ce modèle
-accepte les entrées `input_image` : `--verifier-modeles` contrôle qu'un
-identifiant existe, non qu'il gère la vision. Si l'entrée image était refusée,
-l'appel échouerait par un code **400**, que `est_reessayable()` classe comme non
-réessayable — l'échec serait donc immédiat et explicite, sans consommer les
-quatre tentatives ni ~38 secondes d'attente. Le repli connu et éprouvé pour la
-vision reste `gpt-4o`.
+**Réserve levée le 2026-07-28.** Un test sur de vraies pages (deux pages d'un
+scan sans couche texte, `LIMITE_PAGES = 2`) a confirmé que `gpt-5.5-2026-04-23`
+accepte les entrées `input_image` : les deux pages ont été transcrites sans
+erreur, et `store=False` a été honoré côté API — la réponse est introuvable par
+son identifiant (404). `--verifier-modeles` ne contrôle toujours, lui, que
+l'existence de l'identifiant, non l'acceptation des images : si un futur
+changement de modèle refusait la vision, l'appel échouerait par un code **400**,
+que `est_reessayable()` classe comme non réessayable — l'échec serait immédiat et
+explicite, sans consommer les quatre tentatives ni ~38 secondes d'attente. Le
+repli connu pour la vision reste `gpt-4o`.
 
-C'est une raison de plus de commencer par un PDF de dix pages : cette réserve se
-lève au premier appel.
+C'est une raison de plus de commencer par un PDF de dix pages.
 
 ---
 
@@ -1421,7 +1427,7 @@ Un fichier par étape, à la racine de `DOSSIER_DRIVE`, structure identique :
   "etape": "ocr",
   "derniere_execution": "2026-07-27T14:32:10",
   "configuration": {
-    "modele": "gpt-4o",
+    "modele": "gpt-5.5-2026-04-23",
     "dpi": 200,
     "max_output_tokens": 16000
   },
@@ -1441,7 +1447,7 @@ Un fichier par étape, à la racine de `DOSSIER_DRIVE`, structure identique :
       "livre": "Le Malentendu",
       "unite": "page",
       "numero": 1,
-      "modele": "gpt-4o",
+      "modele": "gpt-5.5-2026-04-23",
       "response_id": "resp_abc123",
       "duree_secondes": 4.81,
       "longueur_entree": 248193,
@@ -1678,4 +1684,4 @@ le code sait déjà traiter ; les livres sont ce qu'il doit traiter.
 
 *Architecture validée le 2026-07-27. Implémentation achevée le 2026-07-28 :*
 *les 14 commits du plan de livraison sont livrés, plus l'étape 2c et les*
-*corrections issues de l'usage réel. 538 tests au vert.*
+*corrections issues de l'usage réel. 547 tests au vert.*
