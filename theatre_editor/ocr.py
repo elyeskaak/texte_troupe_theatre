@@ -53,12 +53,17 @@ PAGE_SAUTEE = "sautee"
 PAGE_SUSPECTE = "suspecte"
 PAGE_ECHOUEE = "echouee"
 
-# Page dont la couche texte du PDF a été réutilisée : aucun appel API.
+# Pages traitées sans aucun appel API.
 PAGE_COUCHE_TEXTE = "couche_texte"
+PAGE_BLANCHE = "blanche"
 
 # Origine du texte d'une page, consignée dans son sidecar.
 SOURCE_VISION = "vision"
 SOURCE_COUCHE_TEXTE = "couche_texte"
+SOURCE_PAGE_BLANCHE = "page_blanche"
+
+# Statuts n'ayant coûté aucun appel : ni pause à respecter, ni jeton consommé.
+STATUTS_SANS_APPEL = frozenset({PAGE_SAUTEE, PAGE_COUCHE_TEXTE, PAGE_BLANCHE})
 
 
 # ============================================================
@@ -80,6 +85,7 @@ class ResultatLivre:
     pages_sautees: int = 0
     pages_suspectes: int = 0
     pages_couche_texte: int = 0
+    pages_blanches: int = 0
     pages_echouees: int = 0
     duree_secondes: float = 0.0
     erreur: str | None = None
@@ -98,6 +104,7 @@ class ResultatLivre:
             "pages_totales": self.pages_totales,
             "pages_traitees": self.pages_traitees,
             "pages_couche_texte": self.pages_couche_texte,
+            "pages_blanches": self.pages_blanches,
             "pages_sautees": self.pages_sautees,
             "pages_suspectes": self.pages_suspectes,
             "pages_echouees": self.pages_echouees,
@@ -161,6 +168,59 @@ def ouvrir_pdf(chemin: Path):
 def rasteriser_page(page: Any, dpi: int) -> bytes:
     """Rend une page en PNG à la résolution demandée."""
     return page.get_pixmap(dpi=dpi).tobytes("png")
+
+
+# Table de traduction comptant les octets d'encre en une seule passe C.
+# Une boucle Python sur les octets d'un pixmap coûterait des dixièmes de
+# seconde par page, soit près d'une minute sur un livre entier.
+_TABLE_ENCRE = bytes(255 if valeur < config.SEUIL_ENCRE else 0 for valeur in range(256))
+
+
+def proportion_encre(page: Any, dpi: int | None = None) -> float:
+    """
+    Mesure la part d'encre d'une page, entre 0 et 1.
+
+    Rasterise à très basse résolution : une page blanche l'est à toute
+    résolution, et le test devient instantané.
+
+    Returns:
+        La proportion d'octets sombres. **1.0 en cas d'échec**, afin qu'une page
+        illisible ne soit jamais prise pour blanche — mieux vaut payer un appel
+        que perdre une page imprimée.
+    """
+    resolution = dpi if dpi is not None else config.DPI_TEST_BLANCHEUR
+
+    try:
+        echantillons = page.get_pixmap(dpi=resolution).samples
+    except Exception:
+        return 1.0
+
+    if not echantillons:
+        return 1.0
+
+    return echantillons.translate(_TABLE_ENCRE).count(255) / len(echantillons)
+
+
+def page_blanche(page: Any) -> bool:
+    """
+    Détermine si une page est blanche, **sans aucun appel API**.
+
+    Un livre imprimé en comporte normalement : dos de page de titre, séparation
+    entre parties, fin de cahier. Les soumettre au modèle coûte un appel pour
+    rien — et l'expose à répondre autre chose que la mention attendue, réponse
+    qui serait alors écrite dans `OCR.txt` comme du texte de la pièce.
+
+    Le test est **sévère** par construction. L'asymétrie est nette : manquer une
+    page blanche coûte un appel, sauter une page imprimée perdrait du texte.
+    """
+    if not config.DETECTER_PAGES_BLANCHES:
+        return False
+
+    # Une couche texte exploitable interdit de conclure à la blancheur.
+    if extraire_couche_texte(page).strip():
+        return False
+
+    return proportion_encre(page) <= config.PROPORTION_ENCRE_MAXIMALE
 
 
 def pages_retenues(pages_du_pdf: int, limite: int | None = None) -> int:
@@ -384,6 +444,19 @@ def traiter_page(
             f"{libelle} : couche texte écartée ({raisons[0]}), OCR Vision"
         )
 
+    # Page blanche reconnue localement : aucun appel, et aucun risque que le
+    # modèle réponde une phrase qui finirait dans le texte de la pièce.
+    if page_blanche(page):
+        _enregistrer_page_vide(
+            chemins=chemins,
+            numero=numero,
+            source=SOURCE_PAGE_BLANCHE,
+            journal=journal,
+            nom_livre=nom_livre,
+        )
+        journalisation.detail(f"{libelle} : page blanche, aucun appel")
+        return PAGE_BLANCHE
+
     image, dpi, avertissements = rasteriser_avec_degradation(page, libelle)
 
     try:
@@ -408,11 +481,16 @@ def traiter_page(
         return PAGE_ECHOUEE
 
     texte = blocks.nettoyer_enveloppe(resultat.texte)
-    page_vide = texte.strip() == config.MENTION_PAGE_SANS_TEXTE
+
+    # Toute déclaration de page vide est reconnue, pas seulement la mention
+    # exacte du prompt. Un modèle qui paraphrase — « Cette page est vide. » —
+    # verrait sinon sa phrase écrite dans OCR.txt comme du texte de la pièce,
+    # puis rendue dans le DOCX.
+    page_vide = blocks.est_declaration_page_vide(texte)
 
     if page_vide:
-        # On enregistre une page vide, et non le marqueur : celui-ci est un
-        # signal de protocole, pas du contenu à transmettre à l'étape 2.
+        # On enregistre une page vide, et non la déclaration : c'est un signal
+        # de protocole, pas du contenu à transmettre à l'étape 2.
         texte = ""
 
     avertissements += resultat.avertissements
@@ -461,6 +539,53 @@ def traiter_page(
         return PAGE_SUSPECTE
 
     return PAGE_TERMINEE
+
+
+def _enregistrer_page_vide(
+    *,
+    chemins: io.CheminsLivre,
+    numero: int,
+    source: str,
+    journal: journalisation.Journal,
+    nom_livre: str,
+) -> None:
+    """
+    Enregistre une page reconnue blanche localement, sans aucun appel.
+
+    Le sidecar porte `page_vide` et sa provenance, si bien que le décompte des
+    pages blanches d'un livre reste vérifiable après coup.
+    """
+    io.ecrire_texte_atomique(chemins.page_txt(numero), "")
+    io.ecrire_sidecar(
+        chemins.page_json(numero),
+        {
+            "statut": config.STATUT_TERMINE,
+            "unite": "page",
+            "numero": numero,
+            "source": source,
+            "modele": None,
+            "response_id": None,
+            "date_traitement": journalisation.horodatage(),
+            "duree_secondes": 0.0,
+            "page_vide": True,
+            "longueur_entree": 0,
+            "longueur_sortie": 0,
+            "avertissements": [],
+        },
+    )
+
+    journal.enregistrer_appel(
+        livre=nom_livre,
+        unite="page",
+        numero=numero,
+        source=source,
+        modele=None,
+        page_vide=True,
+        longueur_sortie=0,
+        tokens_entree=0,
+        tokens_sortie=0,
+        avertissements=[],
+    )
 
 
 def _enregistrer_couche_texte(
@@ -673,6 +798,7 @@ def _transcrire_pages(
             PAGE_SUSPECTE: 0,
             PAGE_ECHOUEE: 0,
             PAGE_COUCHE_TEXTE: 0,
+            PAGE_BLANCHE: 0,
         }
 
         for numero in range(1, nombre_pages + 1):
@@ -690,14 +816,14 @@ def _transcrire_pages(
             if statut == PAGE_ECHOUEE:
                 resultat.numeros_echoues.append(numero)
 
-            if statut not in (PAGE_SAUTEE, PAGE_COUCHE_TEXTE):
+            if statut not in STATUTS_SANS_APPEL:
                 # Le journal est sauvegardé à chaque page réellement traitée :
                 # une coupure ne doit pas emporter la trace des appels payés.
                 journal.sauvegarder()
                 api.patienter()
-            elif statut == PAGE_COUCHE_TEXTE:
-                # Pas d'appel API, donc pas de pause à respecter — mais le
-                # journal doit tout de même conserver la trace de la page.
+            elif statut != PAGE_SAUTEE:
+                # Aucun appel, donc aucune pause à respecter — mais le journal
+                # doit tout de même garder la trace de la page.
                 journal.sauvegarder()
 
             if numero % 10 == 0 or numero == nombre_pages:
@@ -705,6 +831,7 @@ def _transcrire_pages(
 
         resultat.pages_traitees = compteurs[PAGE_TERMINEE]
         resultat.pages_couche_texte = compteurs[PAGE_COUCHE_TEXTE]
+        resultat.pages_blanches = compteurs[PAGE_BLANCHE]
         resultat.pages_sautees = compteurs[PAGE_SAUTEE]
         resultat.pages_suspectes = compteurs[PAGE_SUSPECTE]
         resultat.pages_echouees = compteurs[PAGE_ECHOUEE]
@@ -960,8 +1087,9 @@ def _afficher_recapitulatif(
             "Livres traités": len(resultats),
             "Pages transcrites (API)": sum(r.pages_traitees for r in resultats),
             "Pages sans appel API": sum(
-                r.pages_couche_texte for r in resultats
+                r.pages_couche_texte + r.pages_blanches for r in resultats
             ),
+            "dont pages blanches": sum(r.pages_blanches for r in resultats),
             "Pages déjà faites": sum(r.pages_sautees for r in resultats),
             "Pages suspectes": sum(r.pages_suspectes for r in resultats),
             "Pages en échec": sum(r.pages_echouees for r in resultats),

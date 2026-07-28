@@ -192,6 +192,36 @@ FACTEUR_REDUCTION_DPI = 0.75
 TAILLE_MAX_IMAGE_MO = 18.0
 
 
+# ------------------------------------------------------------
+# Détection des pages blanches, avant tout appel
+# ------------------------------------------------------------
+# Un livre imprimé comporte normalement des pages blanches : dos de page de
+# titre, séparation entre parties, fin de cahier. Les soumettre au modèle
+# vision coûte un appel pour rien, et l'expose à répondre autre chose que la
+# mention attendue — une phrase qui serait alors écrite dans OCR.txt comme si
+# c'était le texte de la pièce.
+#
+# Une page est donc examinée localement avant tout appel. Le test est
+# volontairement **sévère** : une page réellement blanche l'est franchement,
+# tandis qu'une page à l'impression pâle doit passer par la vision. Manquer une
+# page blanche ne coûte qu'un appel ; sauter une page imprimée perdrait du
+# texte.
+DETECTER_PAGES_BLANCHES = True
+
+# Résolution du test de blancheur. Très basse à dessein : une page blanche
+# l'est à toute résolution, et 40 dpi rend le test instantané là où 200 dpi
+# demanderait de parcourir deux millions d'octets par page.
+DPI_TEST_BLANCHEUR = 40
+
+# Un octet inférieur à ce seuil est compté comme de l'encre.
+SEUIL_ENCRE = 200
+
+# Proportion maximale d'encre pour qu'une page soit tenue pour blanche.
+# 0,1 % laisse passer une poussière de numérisation, mais pas une ligne de
+# texte : une seule ligne couvre déjà plus de 0,5 % d'une page.
+PROPORTION_ENCRE_MAXIMALE = 0.001
+
+
 # ============================================================
 # CONTRÔLES QUALITÉ
 # ============================================================
@@ -366,6 +396,25 @@ MENTION_AUCUN_PROBLEME = "AUCUN PROBLEME DETECTE"
 # d'un échec d'appel.
 MENTION_PAGE_SANS_TEXTE = "[PAGE SANS TEXTE]"
 
+# Formulations par lesquelles un modèle signale une page sans texte.
+#
+# Le prompt impose la mention ci-dessus, mais un modèle paraphrase parfois.
+# Sans ces variantes, sa phrase — « Cette page est vide. » — serait écrite dans
+# OCR.txt **comme si c'était le texte de la pièce**, puis rendue dans le DOCX.
+# C'est pire qu'une erreur : une corruption silencieuse du texte.
+MOTIFS_DECLARATION_PAGE_VIDE: tuple[str, ...] = (
+    r"\[?\s*page\s+sans\s+texte\s*\]?",
+    r"page\s+(?:est\s+)?(?:vide|blanche)",
+    r"(?:aucun|pas\s+de|n'y\s+a\s+(?:pas|aucun))\s+(?:texte|contenu)",
+    r"page\s+(?:is\s+)?(?:blank|empty)",
+    r"no\s+(?:text|content)",
+)
+
+# Une déclaration de page vide est nécessairement courte. Ce plafond évite de
+# prendre pour telle une page réelle où figurerait par hasard une de ces
+# formules : une page de théâtre dépasse largement cette longueur.
+MAX_LONGUEUR_DECLARATION_VIDE = 200
+
 # Catégories de constats admises dans un rapport de validation. Le code s'en
 # sert pour vérifier que le modèle a respecté le format imposé.
 CATEGORIES_VALIDATION: tuple[str, ...] = (
@@ -408,9 +457,14 @@ POLICE_TEXTE = "EB Garamond"
 #
 # L'ordre TITRE_ACTE > TITRE_SCENE > TEXTE est vérifié par
 # tests/test_config.py, pour qu'une retouche ne l'aplatisse pas par accident.
+TAILLE_TITRE_OEUVRE_PT = 22
 TAILLE_TITRE_ACTE_PT = 16
 TAILLE_TITRE_SCENE_PT = 14
 TAILLE_TEXTE_PT = 11
+
+# Un intitulé n'est reconnu comme titre de l'œuvre que s'il figure dans les
+# toutes premières lignes du document. Au-delà, ce n'est plus une page de titre.
+MAX_LIGNE_TITRE_OEUVRE = 12
 
 # Marges généreuses, en centimètres, sur les quatre côtés.
 MARGE_CM = 3.0
@@ -428,6 +482,23 @@ SAUT_DE_PAGE_APRES_DISTRIBUTION = True
 # collision avec un style intégré de Word.
 PREFIXE_STYLE = "Theatre_"
 
+# Longueur au-delà de laquelle une ligne en italique est traitée comme de la
+# prose et non comme une didascalie brève.
+#
+# Une didascalie tient en quelques mots — « Pause. », « Elle sort. » — et se
+# centre. Un monologue liminaire ou une note d'éditeur en italique fait des
+# centaines de caractères : centré, il deviendrait illisible.
+LONGUEUR_DIDASCALIE_LONGUE = 180
+
+# Numéros de page décorés, que certaines éditions encadrent de filets :
+#
+#     ——— 7 ———        - 52 -        « 19 »
+#
+# L'étape 2 doit les supprimer, mais sa consigne ne parle que de « numéros de
+# pages imprimés isolés » : la version décorée peut lui échapper. Ce filet
+# déterministe les retire à l'étape 4, sans coût ni appel.
+MOTIF_NUMERO_DE_PAGE_DECORE = r"^[\s\-–—_=«»<>|.·•*]*\d{1,4}[\s\-–—_=«»<>|.·•*]*$"
+
 # Définition complète des six styles de paragraphe.
 #
 # L'alignement est exprimé en chaîne — et non via l'énumération de
@@ -437,6 +508,22 @@ PREFIXE_STYLE = "Theatre_"
 # `saut_de_page` vaut None quand la valeur est portée par une constante
 # dédiée ci-dessus, afin que le réglage reste à un seul endroit.
 DEFINITIONS_STYLES: dict[str, dict[str, object]] = {
+    # Titre de l'œuvre, sur la page de titre.
+    #
+    # Reconnu par une règle étroite (§ `blocks`) : le premier intitulé en gras
+    # du document, lorsqu'aucun autre indice ne permet de le classer. Sans elle,
+    # le titre d'un recueil se retrouvait rendu en corps 11 comme un nom de
+    # personnage.
+    "titre_oeuvre": {
+        "nom": "Titre_Oeuvre",
+        "alignement": "centre",
+        "gras": True,
+        "italique": False,
+        "taille_pt": TAILLE_TITRE_OEUVRE_PT,
+        "espace_avant_pt": 0,
+        "espace_apres_pt": 36,
+        "saut_de_page": False,
+    },
     "titre_acte": {
         "nom": "Titre_Acte",
         "alignement": "centre",
@@ -516,6 +603,21 @@ DEFINITIONS_STYLES: dict[str, dict[str, object]] = {
     "didascalie": {
         "nom": "Didascalie",
         "alignement": "centre",
+        "gras": False,
+        "italique": True,
+        "taille_pt": TAILLE_TEXTE_PT,
+        "espace_avant_pt": 6,
+        "espace_apres_pt": 6,
+        "saut_de_page": False,
+    },
+    # Didascalie longue, ou prose en italique : monologue liminaire, note de
+    # l'éditeur, épigraphe développée.
+    #
+    # Centrer un paragraphe de quarante lignes serait illisible. Le seuil de
+    # bascule est `LONGUEUR_DIDASCALIE_LONGUE`.
+    "didascalie_longue": {
+        "nom": "Didascalie_Longue",
+        "alignement": "justifie",
         "gras": False,
         "italique": True,
         "taille_pt": TAILLE_TEXTE_PT,

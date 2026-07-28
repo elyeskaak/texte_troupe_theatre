@@ -48,11 +48,13 @@ class TypeLigne(str, Enum):
 
     TITRE_ACTE = "titre_acte"
     TITRE_SCENE = "titre_scene"
+    TITRE_OEUVRE = "titre_oeuvre"
     DISTRIBUTION = "distribution"
     ENTREE_DISTRIBUTION = "entree_distribution"
     LIEU = "lieu"
     PERSONNAGE = "personnage"
     DIDASCALIE = "didascalie"
+    DIDASCALIE_LONGUE = "didascalie_longue"
     TEXTE = "texte"
 
     # Types sans style propre.
@@ -246,6 +248,9 @@ MOTIF_ARABE = re.compile(r"^\d+$")
 
 # Ponctuation finale retirée lors de la normalisation d'un label.
 MOTIF_PONCTUATION_FINALE = re.compile(r"[.:;,!?\s]+$")
+
+# Numéro de page décoré, à écarter du document final.
+MOTIF_NUMERO_DE_PAGE_DECORE = re.compile(config.MOTIF_NUMERO_DE_PAGE_DECORE)
 
 # Valeur numérique des nombres écrits, pour la détection de remise à zéro.
 _VALEURS_ECRITES: dict[str, int] = {
@@ -580,6 +585,28 @@ def evaluer_couche_texte(texte: str) -> list[str]:
             )
 
     return raisons
+
+
+def est_declaration_page_vide(texte: str) -> bool:
+    """
+    Vrai si une réponse de modèle signale une page dépourvue de texte.
+
+    Reconnaît la mention exacte imposée par le prompt, mais aussi les
+    paraphrases usuelles — sans quoi la phrase du modèle serait écrite dans
+    `OCR.txt` comme du texte de la pièce, puis rendue dans le DOCX.
+
+    Une réponse vide n'en est pas une : elle est traitée séparément, car elle
+    peut aussi trahir un incident d'appel.
+    """
+    nu = texte.strip()
+
+    if not nu or len(nu) > config.MAX_LONGUEUR_DECLARATION_VIDE:
+        return False
+
+    return any(
+        re.search(motif, nu, flags=re.IGNORECASE)
+        for motif in config.MOTIFS_DECLARATION_PAGE_VIDE
+    )
 
 
 def verifier_page_ocr(texte: str) -> list[str]:
@@ -1217,9 +1244,59 @@ def construire_index_structure(
         index.classements[label] = decision
 
     _resoudre_niveaux(index, observations, a_resoudre)
+    _reconnaitre_titre_oeuvre(index, observations)
     _ajouter_avertissements(index, distribution)
 
     return index
+
+
+def _reconnaitre_titre_oeuvre(
+    index: IndexStructure,
+    observations: dict[str, _Observation],
+) -> None:
+    """
+    Promeut le premier intitulé du document en titre de l'œuvre.
+
+    Règle **étroite à dessein**, et appliquée en dernier :
+
+    - le label doit être classé `INCERTAINE`, c'est-à-dire qu'aucun autre indice
+      n'a permis de le reconnaître. Un nom de personnage identifié par la
+      distribution ou par une réplique n'est donc jamais concerné ;
+    - il doit être le **premier** intitulé en gras du document ;
+    - il doit figurer dans les toutes premières lignes.
+
+    Sans cette règle, le titre d'un recueil — « La mastication des morts » —
+    était rendu en corps 11 comme un nom de personnage, alors qu'il ouvre une
+    page de titre.
+    """
+    incertains = [
+        classement for classement in index.classements.values()
+        if classement.confiance is Confiance.INCERTAINE
+    ]
+
+    if not incertains:
+        return
+
+    premier = min(
+        index.classements.values(),
+        key=lambda classement: observations[classement.label].premier_index,
+    )
+
+    if premier.confiance is not Confiance.INCERTAINE:
+        return
+
+    if observations[premier.label].premier_index > config.MAX_LIGNE_TITRE_OEUVRE:
+        return
+
+    index.classements[premier.label] = ClassementLabel(
+        label=premier.label,
+        affichage=premier.affichage,
+        type=TypeLigne.TITRE_OEUVRE,
+        confiance=Confiance.DEDUITE,
+        motif="premier intitulé du document : titre de l'œuvre",
+        occurrences=premier.occurrences,
+        suivi_replique=premier.suivi_replique,
+    )
 
 
 def _defaut(valeur, repli):
@@ -1471,11 +1548,25 @@ def classifier_ligne(ligne: str, index: IndexStructure) -> TypeLigne:
     if est_separateur(nue):
         return TypeLigne.SEPARATEUR
 
+    # Un numéro de page décoré — « ——— 7 ——— » — n'est pas du texte de
+    # l'auteur. L'étape 2 devrait l'avoir retiré ; ce filet le rattrape sans
+    # coût, plutôt que de le laisser paraître dans le document.
+    if MOTIF_NUMERO_DE_PAGE_DECORE.match(nue):
+        return TypeLigne.VIDE
+
     contenu = contenu_gras(nue)
     if contenu is not None:
         return index.type_de(normaliser_label(contenu))
 
-    if contenu_italique(nue) is not None:
+    italique = contenu_italique(nue)
+
+    if italique is not None:
+        # Une didascalie brève se centre ; un monologue liminaire ou une note
+        # d'éditeur en italique doit être justifié, sans quoi il serait centré
+        # sur des dizaines de lignes.
+        if len(italique) > config.LONGUEUR_DIDASCALIE_LONGUE:
+            return TypeLigne.DIDASCALIE_LONGUE
+
         return TypeLigne.DIDASCALIE
 
     return TypeLigne.TEXTE
@@ -1502,7 +1593,10 @@ def classifier_document(texte: str, index: IndexStructure) -> list[LigneClassee]
             if numero in index.lignes_distribution and type_ligne is TypeLigne.TEXTE:
                 type_ligne = TypeLigne.ENTREE_DISTRIBUTION
 
-            if type_ligne is TypeLigne.DIDASCALIE and type_precedent in _OUVRE_UNE_SCENE:
+            if (
+                type_ligne is TypeLigne.DIDASCALIE
+                and type_precedent in _OUVRE_UNE_SCENE
+            ):
                 type_ligne = TypeLigne.LIEU
 
             resultats.append(LigneClassee(brut=brut, texte=contenu, type=type_ligne))
@@ -1575,6 +1669,7 @@ def _classer_ligne_eventuellement_dedoublee(
 # doit donc être uniformisée à l'échelle du document.
 _TYPES_A_LABEL = frozenset(
     {
+        TypeLigne.TITRE_OEUVRE,
         TypeLigne.TITRE_ACTE,
         TypeLigne.TITRE_SCENE,
         TypeLigne.DISTRIBUTION,
@@ -1595,6 +1690,7 @@ def contenu_sans_marqueurs(ligne: str, type_ligne: TypeLigne) -> str:
     nue = ligne.strip()
 
     if type_ligne in (
+        TypeLigne.TITRE_OEUVRE,
         TypeLigne.TITRE_ACTE,
         TypeLigne.TITRE_SCENE,
         TypeLigne.DISTRIBUTION,
@@ -1602,7 +1698,11 @@ def contenu_sans_marqueurs(ligne: str, type_ligne: TypeLigne) -> str:
     ):
         return (contenu_gras(nue) or nue).strip()
 
-    if type_ligne in (TypeLigne.LIEU, TypeLigne.DIDASCALIE):
+    if type_ligne in (
+        TypeLigne.LIEU,
+        TypeLigne.DIDASCALIE,
+        TypeLigne.DIDASCALIE_LONGUE,
+    ):
         return (contenu_italique(nue) or nue).strip()
 
     return nue
@@ -1844,6 +1944,7 @@ _ENTETES = ("LABEL", "OCC.", "RÉPL.", "CLASSÉ", "CONFIANCE")
 _LARGEUR_LABEL = 24
 _LARGEUR_TYPE = 13
 _ORDRE_AFFICHAGE = (
+    TypeLigne.TITRE_OEUVRE,
     TypeLigne.TITRE_ACTE,
     TypeLigne.TITRE_SCENE,
     TypeLigne.DISTRIBUTION,

@@ -843,6 +843,7 @@ class TestLieuApresSeparateur(unittest.TestCase):
         DEFINITIONS_STYLES. Un style oublié doit échouer ici, pas en production.
         """
         types_styles = {
+            TypeLigne.TITRE_OEUVRE,
             TypeLigne.TITRE_ACTE,
             TypeLigne.TITRE_SCENE,
             TypeLigne.DISTRIBUTION,
@@ -850,6 +851,7 @@ class TestLieuApresSeparateur(unittest.TestCase):
             TypeLigne.LIEU,
             TypeLigne.PERSONNAGE,
             TypeLigne.DIDASCALIE,
+            TypeLigne.DIDASCALIE_LONGUE,
             TypeLigne.TEXTE,
         }
 
