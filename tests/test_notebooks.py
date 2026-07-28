@@ -64,9 +64,20 @@ def charger(nom: str) -> dict:
 
 
 def source_des_cellules(notebook: dict, type_cellule: str = "code") -> list[str]:
-    """Retourne le code source de chaque cellule d'un type donné."""
+    """
+    Retourne le code source de chaque cellule d'un type donné.
+
+    **La concaténation se fait sans séparateur**, exactement comme Jupyter.
+    C'est essentiel : une version antérieure de cette fonction joignait avec
+    `"\\n"`, ce qui **réinsérait les sauts de ligne manquants** et reconstruisait
+    du Python valide à partir de notebooks cassés. Les tests validaient alors
+    l'intention du générateur, non le fichier réellement produit — et les quatre
+    notebooks étaient inexécutables sans qu'aucun test ne le signale.
+
+    Un test doit lire l'artefact comme son consommateur le lit.
+    """
     return [
-        "\n".join(cellule["source"])
+        "".join(cellule["source"])
         for cellule in notebook["cells"]
         if cellule["cell_type"] == type_cellule
     ]
@@ -184,6 +195,50 @@ class TestValiditeFormelle(unittest.TestCase):
 
                 self.assertEqual(metadonnees["kernelspec"]["name"], "python3")
                 self.assertEqual(metadonnees["colab"]["name"], nom)
+
+    def test_chaque_ligne_porte_son_saut_de_ligne(self):
+        """
+        Contrôle direct de la convention `nbformat`, au plus près du format.
+
+        Jupyter concatène les éléments de `source` **sans séparateur**. Chaque
+        ligne doit donc contenir son propre `\\n`, sauf la dernière. Sans cela,
+        tout le contenu se retrouve sur une seule ligne — ce qui produit une
+        `SyntaxError` dans une cellule de code, et un texte illisible dans une
+        cellule Markdown.
+        """
+        for nom in NOTEBOOKS_ATTENDUS:
+            for index, cellule in enumerate(charger(nom)["cells"]):
+                lignes = cellule["source"]
+
+                if len(lignes) < 2:
+                    continue
+
+                for position, ligne in enumerate(lignes[:-1]):
+                    with self.subTest(notebook=nom, cellule=index, ligne=position):
+                        self.assertTrue(
+                            ligne.endswith("\n"),
+                            f"ligne sans saut de ligne : {ligne!r}",
+                        )
+
+                with self.subTest(notebook=nom, cellule=index, ligne="dernière"):
+                    self.assertFalse(lignes[-1].endswith("\n"))
+
+    def test_texte_reconstitue_identique_au_source(self):
+        """
+        La concaténation sans séparateur doit restituer un texte cohérent : des
+        lignes distinctes, et non un bloc collé.
+        """
+        for nom in NOTEBOOKS_ATTENDUS:
+            for index, source in enumerate(source_des_cellules(charger(nom))):
+                if "\n" not in source and len(source) < 60:
+                    continue
+
+                with self.subTest(notebook=nom, cellule=index):
+                    self.assertIn(
+                        "\n",
+                        source,
+                        "cellule multiligne reconstituée sur une seule ligne",
+                    )
 
     def test_code_syntaxiquement_valide(self):
         for nom in NOTEBOOKS_ATTENDUS:

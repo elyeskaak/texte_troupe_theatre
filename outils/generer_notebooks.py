@@ -34,12 +34,30 @@ NOM_SECRET_JETON = "GITHUB_TOKEN"
 # ============================================================
 
 
+def _lignes_source(texte: str) -> list[str]:
+    """
+    Découpe un texte au format attendu par `nbformat`.
+
+    **Chaque ligne doit porter son propre saut de ligne.** Jupyter concatène les
+    éléments de `source` sans y insérer de séparateur : un simple
+    `split("\\n")`, qui retire les terminateurs, colle tout le code sur une
+    seule ligne et produit une `SyntaxError` à l'exécution.
+
+    C'est exactement le bug qui a rendu les quatre notebooks inexécutables :
+    `from pathlib import Pathfrom theatre_editor import config…`
+
+    `splitlines(keepends=True)` conserve les terminateurs. La dernière ligne
+    n'en a pas, ce qui est conforme à la spécification.
+    """
+    return texte.strip().splitlines(keepends=True)
+
+
 def markdown(texte: str) -> dict:
     """Crée une cellule Markdown."""
     return {
         "cell_type": "markdown",
         "metadata": {},
-        "source": texte.strip().split("\n"),
+        "source": _lignes_source(texte),
     }
 
 
@@ -50,7 +68,7 @@ def code(texte: str) -> dict:
         "execution_count": None,
         "metadata": {},
         "outputs": [],
-        "source": texte.strip().split("\n"),
+        "source": _lignes_source(texte),
     }
 
 
