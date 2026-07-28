@@ -912,7 +912,47 @@ def dedoubler_replique_en_ligne(ligne: str) -> RepliqueEnLigne | None:
     if not replique:
         return None
 
+    # Un nom **au milieu d'une réplique** n'annonce pas une réplique.
+    #
+    # « **MARK** est parti sans rien dire. » est une réplique où le nom est mis
+    # en valeur, pas un appel de personnage. Scindée, elle produisait un nom
+    # centré en gras suivi d'un fragment commençant par une minuscule — un faux
+    # changement de locuteur, visible dans le document final.
+    #
+    # Le discriminant est la suite : un appel de personnage précède toujours le
+    # **début d'une phrase**, tandis qu'une mise en valeur se poursuit au milieu
+    # de l'une. Une minuscule initiale tranche donc, sans avoir à reconnaître le
+    # nom ni à consulter la distribution.
+    #
+    # Deux marques d'appel dispensent de ce contrôle, car une mise en valeur ne
+    # les porte jamais : le point final de l'éditeur, et la didascalie
+    # intercalée. Elles autorisent les répliques ouvrant sur une minuscule —
+    # courantes en vers libres — sans rouvrir le défaut.
+    ponctue_comme_un_appel = label.endswith(".") or didascalie is not None
+
+    if not ponctue_comme_un_appel and _commence_en_minuscule(replique):
+        return None
+
     return RepliqueEnLigne(nom=label, didascalie=didascalie, replique=replique)
+
+
+def _commence_en_minuscule(texte: str) -> bool:
+    """
+    Vrai si le texte s'ouvre sur une minuscule, donc poursuit une phrase.
+
+    Les caractères d'ouverture d'une réplique — guillemets, tirets, parenthèses,
+    apostrophes — sont ignorés : ils précèdent la première lettre sans rien dire
+    de sa casse.
+    """
+    for caractere in texte:
+        if caractere.isalpha():
+            return caractere.islower()
+
+        # Un chiffre ouvre une phrase aussi légitimement qu'une capitale.
+        if caractere.isdigit():
+            return False
+
+    return False
 
 
 def est_ligne_de_replique(ligne: str) -> bool:

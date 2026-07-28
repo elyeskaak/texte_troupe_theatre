@@ -341,5 +341,105 @@ class TestFinDeLaDistribution(unittest.TestCase):
         self.assertEqual(len(entrees), 3)
 
 
+# ============================================================
+# 5. UN NOM AU MILIEU D'UNE RÉPLIQUE
+# ============================================================
+
+
+class TestNomAuMilieuDUneReplique(unittest.TestCase):
+    """
+    Un nom mis en valeur dans une réplique n'annonce pas une réplique.
+
+    « **MARK** est parti sans rien dire. » était scindée en un nom centré gras
+    suivi d'un fragment ouvrant sur une minuscule : un faux changement de
+    locuteur, et la réplique coupée en deux dans le document final.
+
+    Le discriminant est la suite. Un appel de personnage précède le début d'une
+    phrase ; une mise en valeur se poursuit au milieu de l'une.
+    """
+
+    def test_nom_en_valeur_suivi_d_une_minuscule_n_est_pas_un_appel(self):
+        for ligne in (
+            "**MARK** est parti sans rien dire.",
+            "**MARK** ne veut plus me parler.",
+            "**MARK** arrive toujours en retard.",
+        ):
+            with self.subTest(ligne=ligne):
+                self.assertIsNone(blocks.dedoubler_replique_en_ligne(ligne))
+
+    def test_appel_veritable_conserve(self):
+        for ligne, nom in (
+            ("**JAN.** Bonjour.", "JAN."),
+            ("**JAN** Bonjour.", "JAN"),
+            ("**JAN.** « Je reviendrai », dit-il.", "JAN."),
+            ("**JAN.** — Bonjour.", "JAN."),
+            ("**JAN.** 7 heures déjà.", "JAN."),
+            ("**JAN.** (Il entre.) Bonjour.", "JAN."),
+        ):
+            with self.subTest(ligne=ligne):
+                resultat = blocks.dedoubler_replique_en_ligne(ligne)
+
+                self.assertIsNotNone(resultat, "appel légitime rejeté")
+                self.assertEqual(resultat.nom, nom)
+
+    def test_ponctuation_d_appel_autorise_une_minuscule(self):
+        """
+        Le point final est la ponctuation d'appel de l'éditeur, qu'une mise en
+        valeur ne porte jamais. Il faut donc qu'il dispense du contrôle de casse,
+        sans quoi les répliques ouvrant sur une minuscule — courantes en vers
+        libres — perdraient leur locuteur.
+        """
+        resultat = blocks.dedoubler_replique_en_ligne("**JAN.** bonjour, je suis là.")
+
+        self.assertIsNotNone(resultat)
+        self.assertEqual(resultat.nom, "JAN.")
+
+    def test_didascalie_intercalee_autorise_une_minuscule(self):
+        """Même raisonnement : une mise en valeur ne porte pas de didascalie."""
+        resultat = blocks.dedoubler_replique_en_ligne(
+            "**LES DIEUX, souriant.** bien sûr."
+        )
+
+        self.assertIsNotNone(resultat)
+        self.assertEqual(resultat.nom, "LES DIEUX")
+        self.assertEqual(resultat.didascalie, "souriant.")
+
+    def test_nom_ailleurs_dans_la_replique_jamais_un_appel(self):
+        """Les positions non initiales étaient déjà correctes : on le verrouille."""
+        texte = (
+            "**JAN.**\n"
+            "Tu as vu **MARK** hier soir ?\n"
+            "Je lui ai dit : MARK. Viens ici.\n"
+            "*Il regarde **MARK** puis se tourne.*\n"
+        )
+
+        index = blocks.construire_index_structure(texte)
+        types = {
+            ligne.texte: ligne.type
+            for ligne in blocks.classifier_document(texte, index)
+        }
+
+        self.assertIs(types["Tu as vu **MARK** hier soir ?"], blocks.TypeLigne.TEXTE)
+        self.assertIs(
+            types["Je lui ai dit : MARK. Viens ici."], blocks.TypeLigne.TEXTE
+        )
+
+    def test_replique_non_coupee_dans_le_document(self):
+        """
+        La propriété observable : la réplique reste un seul paragraphe, et aucun
+        locuteur n'est inventé.
+        """
+        texte = "**JAN.**\nMARK est parti.\n**MARK** ne reviendra pas.\n"
+
+        index = blocks.construire_index_structure(texte)
+        personnages = [
+            ligne.texte
+            for ligne in blocks.classifier_document(texte, index)
+            if ligne.type is blocks.TypeLigne.PERSONNAGE
+        ]
+
+        self.assertEqual(personnages, ["JAN."])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
