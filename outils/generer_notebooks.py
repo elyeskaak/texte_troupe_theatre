@@ -480,7 +480,7 @@ if NOM_LIVRE:
                 """
 ## 9. Essai sur les premières pages
 
-**À faire sur tout nouveau livre.** Éprouver les quatre étapes sur dix pages
+**À faire sur tout nouveau livre.** Éprouver la chaîne entière sur dix pages
 coûte quelques centimes et révèle les mauvaises surprises — modèle qui refuse la
 vision, couche texte trompeuse, structure mal reconnue — avant d'engager
 trois cents pages.
@@ -668,10 +668,32 @@ resultats = edition.executer(config.DOSSIER_DRIVE)
             ),
             markdown(
                 """
-## 10. Contrôle du résultat
+## 10. Rôles des pages liminaires
 
-Affiche le début de chaque `EDIT.txt` et la structure que l'étape 4 y verra.
-C'est le moment de vérifier que la convention typographique est bien appliquée.
+Un **seul appel par livre**, mis en cache. Cette passe ne touche pas au texte :
+elle attribue un rôle aux premières lignes — titre, auteur, épigraphe et sa
+source, note d'éditeur, liste des rôles, prologue — là où aucune règle
+mécanique ne peut trancher entre eux.
+
+Le résultat est écrit dans `LIMINAIRES.json` et relu par l'étape 4. Un second
+lancement n'appelle plus rien, et son échec n'empêche pas de produire le DOCX :
+la mise en forme retombe alors sur les règles déterministes.
+"""
+            ),
+            code(
+                """
+from theatre_editor import liminaires
+
+roles = liminaires.executer(config.DOSSIER_DRIVE)
+"""
+            ),
+            markdown(
+                """
+## 11. Contrôle du résultat
+
+Affiche le début de chaque `EDIT.txt`, la structure que l'étape 4 y verra, et
+les rôles retenus pour les pages liminaires. C'est le moment de vérifier que la
+convention typographique est bien appliquée.
 """
             ),
             code(
@@ -690,9 +712,16 @@ for resultat in resultats:
     print(texte[:1200])
     print()
     print(blocks.rapport_classification(blocks.construire_index_structure(texte)))
+
+    # Rôles attribués aux pages liminaires, s'ils ont été calculés.
+    lignes = texte.split("\\n")
+
+    for numero, role in sorted(liminaires.charger_roles(chemins).items()):
+        if numero < len(lignes):
+            print(f"   {role.value:<20} | {lignes[numero][:60]}")
 """
             ),
-            markdown("## 11. Journal"),
+            markdown("## 12. Journal"),
             cellule_journal("edition"),
         ],
     )

@@ -94,6 +94,33 @@ Troupe 122 - 2026-27/
 maintenant : accents et espaces sont acceptés, mais évitez les caractères
 `/ \ : * ? " < > |`.
 
+### Un livre que vous ne voulez pas traiter
+
+Si un PDF est déjà traité par ailleurs, ne le retirez pas du dossier : posez à
+côté un fichier texte vide portant **le même nom, suivi de `.ignorer`**.
+
+```
+Troupe 122 - 2026-27/
+    Le Malentendu.pdf
+    Les Justes.pdf
+    Les Justes.ignorer      ← ce livre sera sauté
+```
+
+Pour le créer depuis le Drive : **Nouveau ▸ Google Docs**, renommez-le
+`Les Justes.ignorer`, écrivez-y la raison si vous voulez (« déjà traité »), et
+fermez. Vous pouvez aussi le créer sur votre ordinateur et le glisser dans le
+dossier.
+
+Au lancement, le programme affichera :
+
+```
+   [DEJA]    Les Justes — ignoré (déjà traité)
+```
+
+Cette ligne est importante : elle vous confirme que le livre est **volontairement**
+sauté, et non oublié à cause d'une erreur. Pour le réintégrer, supprimez le
+fichier `.ignorer`.
+
 ---
 
 ## 5. Ouvrir le premier notebook dans Colab
@@ -258,9 +285,34 @@ fichiers laissés par la précédente sur le Drive.
 
 | Notebook | Ce qu'il fait | À regarder |
 |---|---|---|
-| **02_Edition** | Corrige les erreurs de lecture, met en forme | la section 10 affiche le texte édité et la structure détectée |
+| **02_Edition** | Corrige les erreurs de lecture, met en forme, identifie les pages liminaires | la section 11 affiche le texte édité, la structure détectée et les rôles retenus |
 | **03_Verification** | Compare l'original et l'édition | le rapport : ce qui aurait été perdu |
 | **04_DOCX** | Fabrique le document Word | **la table d'inspection, section 6** |
+
+### Les pages du début : titre, épigraphe, personnages
+
+Le notebook 02 comporte une **section 10** à part, qui ne coûte qu'un seul appel
+par livre. Elle s'occupe des premières pages : page de titre, nom de l'auteur,
+épigraphe et sa source, note d'éditeur, liste des personnages, prologue.
+
+Pourquoi une étape séparée ? Parce que dans un livre imprimé, tous ces éléments
+se ressemblent : centrés, en gras ou en italique, seuls sur leur ligne. Aucune
+règle automatique ne peut deviner que « Heiner Müller » est la source d'une
+épigraphe et non un personnage. Un modèle le fait une fois, et le résultat est
+conservé.
+
+La section 11 vous montre ensuite ce qui a été retenu :
+
+```
+   titre_oeuvre         | La mastication des morts
+   titre_secondaire     | Patrick Kermann
+   epigraphe            | Les morts ont le sommeil léger
+   attribution          | Heiner Müller
+   distribution         | PERSONNAGES
+```
+
+Si cette liste est vide, ce n'est pas grave : le document se fabriquera quand
+même, avec la mise en forme automatique habituelle.
 
 ### Le point à ne pas survoler : la table d'inspection
 
@@ -385,6 +437,7 @@ intermédiaire est rangé à part.
 Troupe 122 - 2026-27/
     Roberto Zucco.pdf          ← votre source
     Roberto Zucco.docx         ← LE RÉSULTAT
+    Les Justes.ignorer         ← marqueur : ce livre est laissé de côté
     temp/
         journal_ocr.json …     ← trace de chaque appel et de son coût
         Roberto Zucco/
@@ -393,6 +446,7 @@ Troupe 122 - 2026-27/
             EDIT.txt           ← TEXTE PROPRE, à corriger à la main au besoin
             EDIT_blocs/
             EDIT_raccords/
+            LIMINAIRES.json    ← rôles des premières pages, calculés une fois
             REPORT.txt         ← ce qui aurait été perdu, à relire une fois
             REPORT_blocs/
 ```

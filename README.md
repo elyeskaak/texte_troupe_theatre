@@ -8,6 +8,10 @@ Pièce.pdf ──▶ Pièce_OCR.txt ──▶ Pièce_EDIT.txt ──▶ Pièce_R
               (OCR Vision)      (édition +          (contrôle qualité)
                                  raccord)                  │
                                      │                     │
+                                     ├──▶ LIMINAIRES.json  │
+                                     │    (rôles des       │
+                                     │     premières pages)│
+                                     │         │           │
                                      └──▶ Pièce.docx ◀─────┘
                                           (sans IA)
 ```
@@ -34,6 +38,22 @@ MyDrive/Troupe 122 - 2026-27/
 
 Le pipeline y ajoutera les DOCX, et rangera tout le travail intermédiaire dans
 `temp/<Nom du livre>/` — le dossier principal reste donc lisible.
+
+**Écarter un livre déjà traité.** Déposez à côté du PDF un fichier vide nommé
+`<Nom du livre>.ignorer` : le pipeline le passera sous silence, en annonçant au
+lancement qu'il l'a écarté et pourquoi. Écrivez la raison dans le fichier, elle
+sera reprise dans l'annonce.
+
+```
+MyDrive/Troupe 122 - 2026-27/
+    Le Malentendu.pdf
+    Les Justes.pdf
+    Les Justes.ignorer      ← « déjà traité par l'ancien logiciel »
+```
+
+Rien à modifier dans le code, et l'opération est réversible : supprimez le
+marqueur, le livre repart au traitement. Un livre écarté est **toujours
+annoncé** — écarté en silence, il serait indiscernable d'un livre oublié.
 
 ### 2. Renseigner la clé API dans Colab
 
@@ -75,7 +95,7 @@ les pages 11 à 16 disparaîtraient silencieusement d'`EDIT.txt`.
 | Notebook | Étape | Durée indicative (300 pages) | Coût |
 |---|---|---|---|
 | [`01_OCR.ipynb`](notebooks/01_OCR.ipynb) | Transcription des pages | 20 à 30 min | le plus élevé |
-| [`02_Edition.ipynb`](notebooks/02_Edition.ipynb) | Correction + raccord | 15 à 25 min | modéré |
+| [`02_Edition.ipynb`](notebooks/02_Edition.ipynb) | Correction + raccord + liminaires | 15 à 25 min | modéré |
 | [`03_Verification.ipynb`](notebooks/03_Verification.ipynb) | Contrôle qualité | 10 à 20 min | modéré |
 | [`04_DOCX.ipynb`](notebooks/04_DOCX.ipynb) | Mise en forme | quelques secondes | **gratuit** |
 
@@ -156,6 +176,22 @@ un doublon ou rétablir une didascalie.
 
 Le texte de l'auteur n'est jamais réécrit.
 
+### Étape 2 bis — Rôles des pages liminaires
+
+Lancée depuis le même notebook, juste après l'édition. **Un seul appel par
+livre**, mis en cache.
+
+Les premières pages d'une édition imprimée — titre, auteur, épigraphe et sa
+source, note d'éditeur, liste des rôles, prologue — sont typographiquement
+indiscernables les unes des autres : toutes en gras ou en italique, centrées,
+seules sur leur ligne. Aucune règle mécanique ne peut les départager. Un modèle
+les annote une fois pour toutes dans `LIMINAIRES.json`.
+
+Cette passe **ne touche pas au texte** : elle ne produit que des rôles, et
+uniquement pour les premières lignes. Son échec n'empêche pas de produire le
+DOCX — la mise en forme retombe alors sur les règles déterministes, exactement
+comme si l'étape n'existait pas.
+
 ### Étape 3 — Contrôle qualité
 
 Compare `OCR.txt` et `EDIT.txt`. **Le texte n'est jamais modifié** : cette étape
@@ -193,6 +229,10 @@ C'est le pivot du projet : elle rend l'étape 4 entièrement déterministe.
 
 `EDIT.txt` reste donc **lisible et corrigeable à la main** — ce qui compte, car
 c'est le fichier que vous relirez.
+
+Cette convention a une limite assumée : elle ne distingue pas les éléments des
+**pages liminaires**, qui s'écrivent tous `**en gras**` ou `*en italique*`. C'est
+l'étape 2 bis qui les départage, et elle seule.
 
 ---
 
@@ -258,7 +298,7 @@ sur un Drive monté en FUSE.
 ```
 theatre_editor/
     config.py            toutes les constantes, aucune logique
-    prompts/             les 4 prompts, en Markdown
+    prompts/             les 5 prompts, en Markdown
     utils/
         io.py            chemins, écriture atomique, reprise
         blocks.py        logique texte PURE — testable sans rien installer
@@ -266,12 +306,13 @@ theatre_editor/
         api.py           Responses API, réessais
     ocr.py               étape 1
     edition.py           étape 2
+    liminaires.py        étape 2 bis — un appel par livre
     validation.py        étape 3
     docx_export.py       étape 4 — aucune IA
     main.py              orchestration CLI
 
 notebooks/               interfaces Colab (générées par outils/)
-tests/                   346 tests
+tests/                   532 tests
 archive/                 prototype d'origine, conservé
 ARCHITECTURE.md          conception détaillée et justifiée
 ```
@@ -293,9 +334,12 @@ MODEL_OCR               = "gpt-5.5-2026-04-23"   # vision
 MODEL_EDITION           = "gpt-5.5-2026-04-23"
 MODEL_RACCORD           = "gpt-5.4-mini-2026-03-17"   # léger : tâche étroite
 MODEL_VALIDATION        = "gpt-5.5-2026-04-23"
+MODEL_LIMINAIRES        = "gpt-5.5-2026-04-23"
 
 PAGES_PAR_BLOC          = 8
+LIGNES_LIMINAIRES       = 120     # plafond soumis à l'étape 2 bis
 RATIO_MINIMAL_LONGUEUR  = 0.80    # détection de troncature
+SUFFIXE_IGNORER         = ".ignorer"
 
 POLICE_TEXTE            = "EB Garamond"
 TAILLE_TITRE_ACTE_PT    = 16
@@ -325,7 +369,7 @@ stylistiquement hétérogènes, ce que la passe de raccord ne rattrape pas.
 python -m unittest discover -s tests -t .
 ```
 
-**346 tests, environ 7 secondes.** Aucune clé API, aucun Drive monté, aucun appel
+**532 tests, environ 12 secondes.** Aucune clé API, aucun Drive monté, aucun appel
 réseau : `openai` et `pymupdf` sont remplacés par des doublures, et les modules
 concernés diffèrent leur import pour rendre cela possible.
 
@@ -348,6 +392,7 @@ Pour un livre de 300 pages, à titre indicatif :
 | OCR | 300 (un par page) | dominante |
 | Édition | ~38 blocs | modérée |
 | Raccord | ~37 jonctions | faible (modèle léger) |
+| Liminaires | 1 (par livre, mis en cache) | négligeable |
 | Validation | ~38 blocs | modérée |
 | DOCX | 0 | nulle |
 
@@ -384,6 +429,19 @@ de dix pages.
 **Les contrôles mécaniques sont conservateurs.** Ils préfèrent manquer un rôle
 disparu plutôt que d'en signaler un à tort : un rapport bruyant ne serait pas
 lu. La passe sémantique couvre ce qu'ils laissent passer.
+
+**Une distribution imprimée en un seul bloc ne fournit aucune amorce.** Quand
+tous les rôles tiennent sur une même ligne — « LES TROIS DIEUX. SHEN TÉ. WANG,
+marchand d'eau. » — les séparer demanderait de deviner où chaque nom finit. Le
+classement mécanique s'abstient donc plutôt que de risquer un faux nom, qui
+serait autrement appliqué à chaque page du livre. Les personnages restent
+reconnus par leurs répliques, et l'étape 2 bis identifie la liste elle-même.
+
+**Une page dont tout le contenu se déclare illisible est comptée comme un
+échec**, même si un personnage y parlait d'une lettre effacée. Le choix est
+délibéré : un échec est annoncé au récapitulatif, donc visible et corrigible,
+tandis que l'erreur inverse écrirait le message d'erreur du modèle dans le texte
+de la pièce, sans rien signaler.
 
 ---
 

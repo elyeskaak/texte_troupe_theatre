@@ -17,6 +17,7 @@ import json
 import re
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from theatre_editor import config
 
@@ -173,6 +174,43 @@ class TestSectionsDeNotebook(unittest.TestCase):
         self.assertTrue(citees, "aucune section citée : le motif est-il correct ?")
         self.assertEqual(citees - reelles, set())
 
+    @staticmethod
+    def numero_de_section(nom_notebook: str, debut_du_titre: str) -> int:
+        """Numéro de la section dont le titre commence par `debut_du_titre`."""
+        notebook = json.loads(lire(f"notebooks/{nom_notebook}"))
+
+        for cellule in notebook["cells"]:
+            if cellule["cell_type"] != "markdown":
+                continue
+
+            for ligne in cellule["source"]:
+                correspondance = re.match(r"^##\s+(\d+)\.\s+(.+)", ligne)
+
+                if correspondance and correspondance.group(2).startswith(
+                    debut_du_titre
+                ):
+                    return int(correspondance.group(1))
+
+        raise AssertionError(f"section « {debut_du_titre} » absente de {nom_notebook}")
+
+    def test_sections_de_l_etape_liminaires_citees_juste(self):
+        """
+        `test_sections_citees_existent` valide toutes les citations contre les
+        sections du **seul** notebook 01 : une citation portant sur le notebook 02
+        n'y est vérifiée que par coïncidence de longueur.
+
+        Ce contrôle est exact pour les deux sections que le tutoriel décrit en
+        détail : leurs numéros sont **calculés** depuis le notebook, jamais
+        recopiés. Une insertion en amont les décale, et ce test le voit.
+        """
+        tuto = lire("TUTORIEL.md")
+
+        liminaires = self.numero_de_section("02_Edition.ipynb", "Rôles des pages")
+        controle = self.numero_de_section("02_Edition.ipynb", "Contrôle du résultat")
+
+        self.assertIn(f"**section {liminaires}**", tuto)
+        self.assertIn(f"section {controle} vous montre", tuto)
+
     def test_sections_numerotees_sans_trou(self):
         """Une renumérotation manquée laisserait un trou ou un doublon."""
         for notebook in (
@@ -301,6 +339,29 @@ class TestDepannage(unittest.TestCase):
 
         self.assertIn("gpt-4o", tuto)
         self.assertIn("MODEL_OCR", tuto)
+
+    def test_annonce_d_un_livre_ecarte_conforme(self):
+        """
+        Le tutoriel reproduit la ligne affichée pour un livre écarté. Elle avait
+        d'abord été **inventée** : le lecteur aurait cherché en vain un message
+        que le code ne produit pas, et conclu à une panne.
+
+        Le format est donc reconstitué depuis le code, et non recopié.
+        """
+        from theatre_editor.utils import logging as journalisation
+
+        sortie: list[str] = []
+
+        with mock.patch.object(journalisation, "_afficher", sortie.append):
+            journalisation.saute("Les Justes — ignoré (déjà traité)")
+
+        self.assertIn(sortie[0], lire("TUTORIEL.md"))
+
+    def test_suffixe_du_marqueur_conforme(self):
+        """Le suffixe cité doit être celui que le code reconnaît."""
+        for document in ("README.md", "TUTORIEL.md"):
+            with self.subTest(document=document):
+                self.assertIn(config.SUFFIXE_IGNORER, lire(document))
 
 
 if __name__ == "__main__":

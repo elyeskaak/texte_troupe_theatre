@@ -41,6 +41,7 @@ NOTEBOOKS_ATTENDUS = (
 MODULES_APPELABLES = {
     "ocr": "theatre_editor.ocr",
     "edition": "theatre_editor.edition",
+    "liminaires": "theatre_editor.liminaires",
     "validation": "theatre_editor.validation",
     "docx_export": "theatre_editor.docx_export",
     "config": "theatre_editor.config",
@@ -323,6 +324,35 @@ class TestFinesseDesNotebooks(unittest.TestCase):
         source = "\n".join(source_des_cellules(charger("04_DOCX.ipynb")))
 
         self.assertNotIn("charger_cle_api", source)
+
+    def test_liminaires_lancee_avec_l_edition(self):
+        """
+        La passe des liminaires appelle un modèle. Elle appartient donc au
+        notebook 02, et non au 04 : l'étape DOCX est annoncée gratuite,
+        déterministe et rejouable à volonté, ce qu'un appel d'API démentirait.
+        """
+        edition = "\n".join(source_des_cellules(charger("02_Edition.ipynb")))
+        export = "\n".join(source_des_cellules(charger("04_DOCX.ipynb")))
+
+        self.assertIn("liminaires.executer(", edition)
+        self.assertNotIn("liminaires.executer(", export)
+
+    def test_sections_numerotees_sans_trou_ni_doublon(self):
+        """
+        Les titres sont numérotés à la main dans le générateur. Insérer une
+        section sans renuméroter les suivantes produit un notebook où deux
+        sections portent le même numéro — sans qu'aucun autre test s'en
+        aperçoive, l'utilisateur devant s'y repérer.
+        """
+        for nom in NOTEBOOKS_ATTENDUS:
+            numeros = [
+                int(correspondance.group(1))
+                for source in source_des_cellules(charger(nom), "markdown")
+                for correspondance in re.finditer(r"(?m)^## (\d+)\.", source)
+            ]
+
+            with self.subTest(notebook=nom):
+                self.assertEqual(numeros, list(range(1, len(numeros) + 1)))
 
 
 class TestCoherenceAvecLeCode(unittest.TestCase):
