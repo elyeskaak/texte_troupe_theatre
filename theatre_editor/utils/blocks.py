@@ -141,6 +141,19 @@ class IndexStructure:
 
         return classement.type if classement else TypeLigne.PERSONNAGE
 
+    def affichage_de(self, label_normalise: str) -> str | None:
+        """
+        Graphie à retenir pour un label, dans tout le document.
+
+        Un même personnage peut apparaître sous plusieurs graphies — « WANG. »
+        et « WANG » — selon la disposition de la ligne d'origine. Les rendre
+        toutes telles quelles produirait un document irrégulier : on retient
+        donc partout la forme la plus fréquente.
+        """
+        classement = self.classements.get(label_normalise)
+
+        return classement.affichage if classement else None
+
     def labels_de_type(self, type_ligne: TypeLigne) -> list[ClassementLabel]:
         """Liste les classements d'un type donné, triés par label."""
         return sorted(
@@ -200,6 +213,14 @@ MOTIF_REPLIQUE_EN_LIGNE = re.compile(
 # Bornes d'un nom de personnage plausible en tête de réplique.
 MIN_LETTRES_REPRISE = 2
 MAX_LONGUEUR_REPRISE = 40
+
+# Tiret d'appel séparant le nom de sa réplique chez certains éditeurs :
+#
+#     PREMIER GARDIEN. – Qu'est-ce qu'un type ferait sur le toit ?
+#
+# C'est un signe de ponctuation propre à la mise en page, non du texte de
+# l'auteur : le conserver le ferait apparaître en tête de chaque réplique.
+MOTIF_TIRET_D_APPEL = re.compile(r"^[–—−-]\s*")
 
 # Emphase à l'intérieur d'une ligne. Le gras est la première alternative :
 # sur `**mot**`, une alternance qui commencerait par l'italique capturerait
@@ -759,19 +780,53 @@ def contenu_italique(ligne: str) -> str | None:
     return correspondance.group("contenu").strip() if correspondance else None
 
 
-def dedoubler_replique_en_ligne(ligne: str) -> tuple[str, str] | None:
+@dataclass(frozen=True)
+class RepliqueEnLigne:
+    """Nom de personnage, didascalie éventuelle et réplique extraits d'une ligne."""
+
+    nom: str
+    didascalie: str | None
+    replique: str
+
+
+def _est_nom_de_personnage(label: str) -> bool:
+    """
+    Vrai si un label peut être un nom de personnage en tête de réplique.
+
+    Exige que **toutes** les lettres soient en capitales. Sans cela, une simple
+    emphase — `**Attention** dit-il.` — serait prise pour un rôle, ce qui
+    fabriquerait des personnages inexistants.
+    """
+    lettres = [caractere for caractere in label if caractere.isalpha()]
+
+    if len(lettres) < MIN_LETTRES_REPRISE or len(label) > MAX_LONGUEUR_REPRISE:
+        return False
+
+    return all(caractere.isupper() for caractere in lettres)
+
+
+def dedoubler_replique_en_ligne(ligne: str) -> RepliqueEnLigne | None:
     """
     Sépare un nom de personnage de sa réplique lorsqu'ils partagent une ligne.
 
-    `**LÉA.** Tu penses à quoi ?` devient `("LÉA.", "Tu penses à quoi ?")`.
+    Trois dispositions observées dans des éditions réelles sont reconnues :
 
-    Le nom doit être **entièrement en capitales** pour que la ligne soit
-    dédoublée. Sans cette exigence, une simple emphase en tête de réplique —
-    `**Attention** dit-il.` — serait prise pour un nom de personnage, ce qui
-    fabriquerait des rôles inexistants.
+    | Sur la page | Résultat |
+    |---|---|
+    | `LÉA. Tu penses à quoi ?` | nom, réplique |
+    | `PREMIER GARDIEN. – Qu'est-ce…` | nom, réplique (tiret d'appel retiré) |
+    | `LES DIEUX, souriant. Bien sûr.` | nom, didascalie, réplique |
+
+    Le tiret cadratin qui suit le nom chez certains éditeurs est un **signe de
+    ponctuation d'appel**, non du texte de l'auteur : le conserver le ferait
+    apparaître en tête de chaque réplique du document final.
+
+    La didascalie intercalée dans l'appel — fréquente chez Brecht — est extraite
+    séparément, car le style du nom de personnage est en gras et ne doit pas
+    s'appliquer à elle.
 
     Returns:
-        `(nom, réplique)`, ou None si la ligne n'a pas cette forme.
+        Les trois parties, ou None si la ligne n'a pas cette forme.
     """
     correspondance = MOTIF_REPLIQUE_EN_LIGNE.match(ligne.strip())
 
@@ -779,15 +834,25 @@ def dedoubler_replique_en_ligne(ligne: str) -> tuple[str, str] | None:
         return None
 
     label = correspondance.group("label").strip()
-    lettres = [caractere for caractere in label if caractere.isalpha()]
+    didascalie: str | None = None
 
-    if len(lettres) < MIN_LETTRES_REPRISE or len(label) > MAX_LONGUEUR_REPRISE:
+    # `LES DIEUX, souriant.` — la partie qui suit la virgule est une didascalie.
+    if "," in label:
+        avant, apres = label.split(",", 1)
+
+        if _est_nom_de_personnage(avant.strip()) and apres.strip():
+            label = avant.strip()
+            didascalie = apres.strip()
+
+    if not _est_nom_de_personnage(label):
         return None
 
-    if not all(caractere.isupper() for caractere in lettres):
+    replique = MOTIF_TIRET_D_APPEL.sub("", correspondance.group("suite").strip())
+
+    if not replique:
         return None
 
-    return label, correspondance.group("suite").strip()
+    return RepliqueEnLigne(nom=label, didascalie=didascalie, replique=replique)
 
 
 def est_ligne_de_replique(ligne: str) -> bool:
@@ -983,6 +1048,22 @@ class _Observation:
     occurrences: int = 0
     suivi_replique: int = 0
     premier_index: int = 0
+    # Formes rencontrées et leur fréquence. Un même personnage peut s'écrire
+    # « WANG. » ou « WANG » selon qu'il portait une didascalie d'appel : le
+    # document final doit retenir une seule forme, la plus fréquente.
+    formes: dict[str, int] = field(default_factory=dict)
+
+    def enregistrer_forme(self, forme: str) -> None:
+        """Compte une graphie rencontrée pour ce label."""
+        self.formes[forme] = self.formes.get(forme, 0) + 1
+
+    @property
+    def forme_dominante(self) -> str:
+        """Graphie la plus fréquente, à retenir pour tout le document."""
+        if not self.formes:
+            return self.affichage
+
+        return max(sorted(self.formes), key=lambda forme: self.formes[forme])
 
 
 def _collecter_labels(texte: str) -> dict[str, _Observation]:
@@ -1007,7 +1088,7 @@ def _collecter_labels(texte: str) -> dict[str, _Observation]:
             if dedouble is None:
                 continue
 
-            contenu, _ = dedouble
+            contenu = dedouble.nom
             replique_immediate = True
 
         label = normaliser_label(contenu)
@@ -1019,6 +1100,7 @@ def _collecter_labels(texte: str) -> dict[str, _Observation]:
             label, _Observation(affichage=contenu.strip(), premier_index=index)
         )
         observation.occurrences += 1
+        observation.enregistrer_forme(contenu.strip())
 
         if replique_immediate or _suit_une_replique(lignes, index + 1):
             observation.suivi_replique += 1
@@ -1129,7 +1211,7 @@ def _appliquer_regles(
     def classer(type_ligne: TypeLigne, confiance: Confiance, motif: str) -> ClassementLabel:
         return ClassementLabel(
             label=label,
-            affichage=observation.affichage,
+            affichage=observation.forme_dominante,
             type=type_ligne,
             confiance=confiance,
             motif=motif,
@@ -1261,7 +1343,7 @@ def _resoudre_niveaux(
 
         index.classements[label] = ClassementLabel(
             label=label,
-            affichage=observation.affichage,
+            affichage=observation.forme_dominante,
             type=type_ligne,
             confiance=Confiance.DEDUITE,
             motif=motif,
@@ -1421,20 +1503,42 @@ def _classer_ligne_eventuellement_dedoublee(
     dedouble = dedoubler_replique_en_ligne(ligne)
 
     if dedouble is not None:
-        nom, replique = dedouble
-        type_nom = index.type_de(normaliser_label(nom))
+        type_nom = index.type_de(normaliser_label(dedouble.nom))
 
         # On ne dédouble que pour un personnage. Un titre suivi de texte sur la
         # même ligne est trop inhabituel pour qu'on l'interprète.
         if type_nom is TypeLigne.PERSONNAGE:
-            return [
-                (ligne, TypeLigne.PERSONNAGE, nom),
-                (ligne, TypeLigne.TEXTE, replique),
-            ]
+            nom = index.affichage_de(normaliser_label(dedouble.nom)) or dedouble.nom
+            morceaux = [(ligne, TypeLigne.PERSONNAGE, nom)]
+
+            if dedouble.didascalie:
+                morceaux.append((ligne, TypeLigne.DIDASCALIE, dedouble.didascalie))
+
+            morceaux.append((ligne, TypeLigne.TEXTE, dedouble.replique))
+
+            return morceaux
 
     type_ligne = classifier_ligne(ligne, index)
+    contenu = contenu_sans_marqueurs(ligne, type_ligne)
 
-    return [(ligne, type_ligne, contenu_sans_marqueurs(ligne, type_ligne))]
+    # Pour un label en gras, on retient la graphie dominante du document plutôt
+    # que celle de cette occurrence : c'est ce qui rend le rendu régulier.
+    if type_ligne in _TYPES_A_LABEL:
+        contenu = index.affichage_de(normaliser_label(contenu)) or contenu
+
+    return [(ligne, type_ligne, contenu)]
+
+
+# Types dont le contenu est un label recensé dans l'index, et dont la graphie
+# doit donc être uniformisée à l'échelle du document.
+_TYPES_A_LABEL = frozenset(
+    {
+        TypeLigne.TITRE_ACTE,
+        TypeLigne.TITRE_SCENE,
+        TypeLigne.DISTRIBUTION,
+        TypeLigne.PERSONNAGE,
+    }
+)
 
 
 def contenu_sans_marqueurs(ligne: str, type_ligne: TypeLigne) -> str:

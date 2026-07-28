@@ -644,10 +644,121 @@ class TestRepliqueEnLigne(unittest.TestCase):
         self.lignes = classifier_document(self.TEXTE, self.index)
 
     def test_dedoublement(self):
-        self.assertEqual(
-            dedoubler_replique_en_ligne("**LÉA.** Tu penses à quoi ?"),
-            ("LÉA.", "Tu penses à quoi ?"),
+        resultat = dedoubler_replique_en_ligne("**LÉA.** Tu penses à quoi ?")
+
+        self.assertEqual(resultat.nom, "LÉA.")
+        self.assertIsNone(resultat.didascalie)
+        self.assertEqual(resultat.replique, "Tu penses à quoi ?")
+
+    def test_tiret_d_appel_retire(self):
+        """
+        Certains éditeurs séparent le nom de sa réplique par un tiret cadratin :
+        « PREMIER GARDIEN. – Qu'est-ce… ». C'est une ponctuation de mise en page,
+        non du texte de l'auteur : le conserver le ferait apparaître en tête de
+        chaque réplique du document.
+        """
+        for tiret in ("–", "—", "-", "−"):
+            with self.subTest(tiret=tiret):
+                resultat = dedoubler_replique_en_ligne(
+                    f"**PREMIER GARDIEN.** {tiret} Qu'est-ce qu'un type ferait ?"
+                )
+
+                self.assertEqual(resultat.nom, "PREMIER GARDIEN.")
+                self.assertEqual(
+                    resultat.replique, "Qu'est-ce qu'un type ferait ?"
+                )
+
+    def test_didascalie_dans_l_appel(self):
+        """
+        Disposition fréquente chez Brecht : « LES DIEUX, souriant. Bien sûr. »
+
+        La didascalie est extraite séparément, car le style du nom est en gras
+        et ne doit pas s'appliquer à elle.
+        """
+        resultat = dedoubler_replique_en_ligne("**LES DIEUX, souriant.** Bien sûr.")
+
+        self.assertEqual(resultat.nom, "LES DIEUX")
+        self.assertEqual(resultat.didascalie, "souriant.")
+        self.assertEqual(resultat.replique, "Bien sûr.")
+
+    def test_didascalie_longue_dans_l_appel(self):
+        resultat = dedoubler_replique_en_ligne(
+            "**WANG, revenant vers les Dieux.** Monsieur Tcheng est là."
         )
+
+        self.assertEqual(resultat.nom, "WANG")
+        self.assertEqual(resultat.didascalie, "revenant vers les Dieux.")
+
+    def test_trois_paragraphes_pour_une_didascalie_d_appel(self):
+        texte = "**LES DIEUX, souriant.** Bien sûr.\n"
+        index = construire_index_structure(texte)
+
+        types = [
+            l.type
+            for l in classifier_document(texte, index)
+            if l.type is not TypeLigne.VIDE
+        ]
+
+        self.assertEqual(
+            types,
+            [TypeLigne.PERSONNAGE, TypeLigne.DIDASCALIE, TypeLigne.TEXTE],
+        )
+
+    def test_replique_vide_apres_retrait_du_tiret(self):
+        """Un tiret seul ne constitue pas une réplique."""
+        self.assertIsNone(dedoubler_replique_en_ligne("**JAN.** –"))
+
+
+class TestGraphieUniforme(unittest.TestCase):
+    """
+    Un même personnage doit s'écrire partout de la même façon.
+
+    Selon la disposition de la ligne d'origine, le même rôle peut ressortir
+    « WANG. » ou « WANG » — la seconde forme provenant d'un appel à didascalie,
+    dont la virgule a été retirée. Rendre chaque occurrence telle quelle
+    produirait un document irrégulier, ce qui est un défaut d'édition.
+    """
+
+    TEXTE = (
+        "**WANG.** Attendez.\n"
+        "**WANG.** Même si elle n'est pas préparée ?\n"
+        "**WANG, revenant vers les Dieux.** Monsieur Tcheng est là.\n"
+    )
+
+    def test_forme_dominante_retenue(self):
+        index = construire_index_structure(self.TEXTE)
+        lignes = classifier_document(self.TEXTE, index)
+
+        noms = {l.texte for l in lignes if l.type is TypeLigne.PERSONNAGE}
+
+        self.assertEqual(noms, {"WANG."})
+
+    def test_forme_dominante_est_la_plus_frequente(self):
+        """Ce n'est pas la première rencontrée, mais bien la plus fréquente."""
+        texte = (
+            "**WANG, souriant.** Un.\n"
+            "**WANG.** Deux.\n"
+            "**WANG.** Trois.\n"
+        )
+
+        index = construire_index_structure(texte)
+
+        self.assertEqual(index.affichage_de("WANG"), "WANG.")
+
+    def test_titres_aussi_uniformises(self):
+        texte = "**ACTE PREMIER**\n\n**JAN.**\nA.\n\n**Acte premier**\n\n**JAN.**\nB.\n"
+
+        index = construire_index_structure(texte)
+        lignes = classifier_document(texte, index)
+
+        titres = {l.texte for l in lignes if l.type is TypeLigne.TITRE_ACTE}
+
+        self.assertEqual(len(titres), 1)
+
+    def test_label_inconnu_conserve_sa_graphie(self):
+        index = construire_index_structure("**JAN.**\nA.\n")
+
+        self.assertIsNone(index.affichage_de("ABSENT"))
 
     def test_personnages_reconnus(self):
         self.assertEqual(self.index.compter(TypeLigne.PERSONNAGE), 2)
