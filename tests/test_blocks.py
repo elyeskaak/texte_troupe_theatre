@@ -215,6 +215,30 @@ class TestVerifierSortie(unittest.TestCase):
 
         self.assertTrue(any("impair" in a for a in avertissements))
 
+    def test_separateur_de_scene_ne_casse_pas_la_parite(self):
+        """Régression : `***` porte trois astérisques (impair) mais est un
+        séparateur légitime. Le compter marquait le bloc suspect et l'excluait
+        d'EDIT.txt — bug révélé par un vrai appel d'édition sur *ADN*."""
+        source = (
+            "MARK\nIl faut qu'on vous parle.\nLÉA\nOh, merde.\n"
+            "Un bois. Lou, John Tate et Danny.\nLOU\nC'est la merde."
+        )
+        sortie = (
+            "**MARK.**\nIl faut qu'on vous parle.\n\n**LÉA.**\nOh, merde.\n\n"
+            "***\n\n*Un bois. Lou, John Tate et Danny.*\n\n"
+            "**LOU.**\nC'est la merde."
+        )
+
+        self.assertEqual(verifier_sortie(source, sortie), [])
+
+    def test_asterisque_orpheline_detectee_malgre_un_separateur(self):
+        """Exempter le séparateur ne doit pas masquer une vraie orpheline. Le
+        bug original le faisait : `***` (3) + `**JAN.*` (3) donnait un total
+        pair, dissimulant le balisage non refermé."""
+        avertissements = verifier_sortie("JAN Mort ?", "***\n\n**JAN.*\nMort ?")
+
+        self.assertTrue(any("impair" in a for a in avertissements))
+
     def test_le_marqueur_de_page_ne_compte_pas_dans_le_ratio(self):
         """Supprimer [PAGE X] est légitime et ne doit pas faire chuter le ratio."""
         source = "[PAGE 1]\n" + "mot " * 200

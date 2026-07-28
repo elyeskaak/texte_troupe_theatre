@@ -234,6 +234,15 @@ class TestControlesMecaniques(unittest.TestCase):
 
         self.assertTrue(any("astérisques" in c for c in constats))
 
+    def test_separateur_de_scene_n_est_pas_une_convention_cassee(self):
+        """Régression : un `***` (impair) est légitime et ne doit pas être
+        signalé comme convention cassée."""
+        constats = blocks.controler_convention(
+            "**JAN.**\nBonjour.\n\n***\n\n**LÉA.**\nOui."
+        )
+
+        self.assertEqual(constats, [])
+
     def test_artefact_non_supprime_detecte(self):
         constats = blocks.controler_convention("**JAN.**\n<<<PAGE_BREAK>>>\nBonjour.")
 

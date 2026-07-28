@@ -667,6 +667,26 @@ def verifier_page_ocr(texte: str) -> list[str]:
     return avertissements
 
 
+def _asterisques_hors_separateurs(texte: str) -> int:
+    """
+    Compte les astérisques d'un texte, séparateurs de scène exclus.
+
+    Le contrôle de parité cherche une astérisque **orpheline** — un `*…*` ou
+    `**…**` dont le balisage n'a pas été refermé. Mais un séparateur de scène
+    `***` (`MOTIF_SEPARATEUR`) porte un nombre impair d'astérisques tout en
+    étant parfaitement conforme à la convention (§8). Le compter ferait passer
+    pour « cassé » tout bloc contenant un nombre impair de séparateurs — le
+    marquant suspect et l'excluant de `EDIT.txt`, alors que rien ne l'est.
+
+    Les lignes-séparateurs sont donc retirées avant le comptage.
+    """
+    return sum(
+        ligne.count("*")
+        for ligne in texte.splitlines()
+        if not MOTIF_SEPARATEUR.match(ligne.strip())
+    )
+
+
 def verifier_sortie(source: str, sortie: str) -> list[str]:
     """
     Contrôle mécanique d'une sortie de modèle.
@@ -701,8 +721,9 @@ def verifier_sortie(source: str, sortie: str) -> list[str]:
             avertissements.append(f"motif indésirable détecté : {motif}")
 
     # Une astérisque orpheline casse la convention typographique, et donc
-    # l'étape 4 : mieux vaut la détecter ici que dans le DOCX.
-    if sortie.count("*") % 2 != 0:
+    # l'étape 4 : mieux vaut la détecter ici que dans le DOCX. Les séparateurs
+    # de scène `***`, impairs mais légitimes, sont exclus du comptage.
+    if _asterisques_hors_separateurs(sortie) % 2 != 0:
         avertissements.append("nombre impair d'astérisques")
 
     return avertissements
@@ -2039,7 +2060,7 @@ def controler_convention(edit: str) -> list[str]:
     """
     avertissements: list[str] = []
 
-    if edit.count("*") % 2 != 0:
+    if _asterisques_hors_separateurs(edit) % 2 != 0:
         avertissements.append(
             "nombre impair d'astérisques : la convention typographique est cassée"
         )
