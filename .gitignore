@@ -21,10 +21,18 @@ secrets.json
 # Les données de travail vivent sur Google Drive, pas dans le dépôt.
 # On ignore ici les artefacts au cas où un test serait lancé en local.
 # ============================================================
+# Disposition courante : tout le travail intermédiaire d'un livre vit sous
+# config.DOSSIER_TEMPORAIRE ("temp/"), à côté de son PDF — voir
+# utils/io.py:resoudre_chemins(). Cela couvre OCR.txt, EDIT.txt, REPORT.txt,
+# LIMINAIRES.json et les journaux, sans dépendre de leur nom exact.
+temp/
+*.docx
+
+# Anciens noms à plat, conservés pour les dépôts pas encore migrés
+# (utils/io.py:migrer_livre()).
 *_OCR.txt
 *_EDIT.txt
 *_REPORT.txt
-*.docx
 *_OCR_pages/
 *_EDIT_blocs/
 *_EDIT_raccords/
