@@ -31,6 +31,7 @@ corrigée qu'une jonction corrompue.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -174,6 +175,24 @@ def invalider_raccords_voisins(chemins: io.CheminsLivre, numero: int) -> None:
             chemin.unlink()
 
 
+def _texte_brut_sans_marqueurs(contenu: str) -> str:
+    """
+    Retire les marqueurs de page d'un bloc OCR pour l'accepter tel quel.
+
+    Dernier recours quand le modèle ne parvient pas à éditer un bloc (réponse
+    vide reproductible) : on conserve le texte source, débarrassé de ses
+    `[PAGE X]` et de ses séparateurs, plutôt que de bloquer le pipeline ou de
+    perdre le passage. Le texte n'est alors pas édité, seulement nettoyé.
+    """
+    sans_sep = contenu.replace(config.SEPARATEUR_PAGE, "\n\n")
+    lignes = [
+        ligne
+        for ligne in sans_sep.splitlines()
+        if not re.match(r"^\s*\[PAGE\s+\d+\]\s*$", ligne)
+    ]
+    return "\n".join(lignes).strip()
+
+
 def editer_bloc(
     *,
     bloc: blocks.Bloc,
@@ -201,10 +220,55 @@ def editer_bloc(
             libelle=libelle,
         )
     except api.EchecAppelAPI as erreur:
+        reprises = io.reprises_effectuees(chemins.bloc_json(bloc.numero)) + 1
+
+        # Réponse vide reproductible : le modèle boucle sur un contenu qu'il ne
+        # sait pas éditer (p. ex. un colophon en fin d'ouvrage) et ne rend aucun
+        # texte. Passé le même plafond que les blocs suspects, on accepte le
+        # TEXTE OCR BRUT — le texte est conservé, non édité — plutôt que de
+        # bloquer le pipeline sans fin. On distingue ce cas d'une panne
+        # transitoire (quota, réseau) : celle-ci reste un échec, à reprendre.
+        if isinstance(erreur.__cause__, api.ReponseVide) and reprises >= config.MAX_REPRISES_SUSPECTES:
+            texte = _texte_brut_sans_marqueurs(bloc.contenu)
+            avertissements = [
+                f"bloc non édité (réponse vide du modèle), texte brut conservé "
+                f"après {reprises} tentative(s)"
+            ]
+            invalider_raccords_voisins(chemins, bloc.numero)
+            io.ecrire_texte_atomique(chemins.bloc_txt(bloc.numero), texte)
+            io.ecrire_sidecar(
+                chemins.bloc_json(bloc.numero),
+                {
+                    "statut": config.STATUT_TERMINE,
+                    "reprises": reprises,
+                    "unite": "bloc",
+                    "numero": bloc.numero,
+                    "page_debut": bloc.page_debut,
+                    "page_fin": bloc.page_fin,
+                    "modele": config.MODEL_EDITION,
+                    "date_traitement": journalisation.horodatage(),
+                    "longueur_entree": len(bloc.contenu),
+                    "longueur_sortie": len(texte),
+                    "avertissements": avertissements,
+                },
+            )
+            journal.enregistrer_appel(
+                livre=nom_livre,
+                unite="bloc",
+                numero=bloc.numero,
+                modele=config.MODEL_EDITION,
+                longueur_entree=len(bloc.contenu),
+                longueur_sortie=len(texte),
+                avertissements=avertissements,
+            )
+            journalisation.alerte(f"{libelle} : {avertissements[0]}")
+            return UNITE_TERMINEE
+
         _enregistrer_echec_bloc(
             chemins=chemins,
             bloc=bloc,
             erreur=str(erreur),
+            reprises=reprises,
             journal=journal,
             nom_livre=nom_livre,
         )
@@ -221,6 +285,14 @@ def editer_bloc(
     reprises = io.reprises_effectuees(chemins.bloc_json(bloc.numero))
     if statut == config.STATUT_SUSPECT:
         reprises += 1
+        # Même borne que les raccords : un avertissement reproductible ne doit
+        # pas bloquer le pipeline sans fin. Passé le plafond, le bloc est accepté
+        # tel quel (son édition est conservée), l'avertissement restant consigné.
+        if reprises >= config.MAX_REPRISES_SUSPECTES:
+            avertissements.append(
+                f"bloc accepté avec ses avertissements après {reprises} tentative(s)"
+            )
+            statut = config.STATUT_TERMINE
 
     # Le bloc change : ses raccords deviennent périmés. À faire avant
     # d'enregistrer, pour qu'une coupure ne laisse pas un bloc à jour flanqué
@@ -256,9 +328,8 @@ def editer_bloc(
 
     if avertissements:
         journalisation.alerte(f"{libelle} : {', '.join(avertissements)}")
-        return UNITE_SUSPECTE
 
-    return UNITE_TERMINEE
+    return UNITE_SUSPECTE if statut == config.STATUT_SUSPECT else UNITE_TERMINEE
 
 
 def _enregistrer_echec_bloc(
@@ -266,14 +337,21 @@ def _enregistrer_echec_bloc(
     chemins: io.CheminsLivre,
     bloc: blocks.Bloc,
     erreur: str,
+    reprises: int,
     journal: journalisation.Journal,
     nom_livre: str,
 ) -> None:
-    """Consigne l'échec définitif d'un bloc, sans écrire de `.txt`."""
+    """
+    Consigne l'échec d'un bloc, sans écrire de `.txt`.
+
+    Le compteur `reprises` est conservé : c'est lui qui, d'une passe à l'autre,
+    permet de distinguer un aléa d'un échec reproductible (voir `editer_bloc`).
+    """
     io.ecrire_sidecar(
         chemins.bloc_json(bloc.numero),
         {
             "statut": config.STATUT_ECHEC,
+            "reprises": reprises,
             "unite": "bloc",
             "numero": bloc.numero,
             "page_debut": bloc.page_debut,

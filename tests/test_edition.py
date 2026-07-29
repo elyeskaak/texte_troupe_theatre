@@ -369,6 +369,70 @@ class TestGardeFouRaccord(BaseEdition):
         self.assertEqual(resultats[0].raccords.suspectes, 0)
 
 
+class TestBlocIrrecuperable(BaseEdition):
+    """
+    Un bloc que le modèle ne parvient pas à éditer ne doit pas bloquer le
+    pipeline sans fin — comme pour les raccords, il est accepté passé un plafond.
+    Révélé par un vrai traitement : un colophon de fin faisait boucler le
+    raisonnement du modèle, qui renvoyait une réponse vide à chaque tentative.
+    """
+
+    def _echec_bloc(self, cause: Exception):
+        def effet(**kwargs):
+            if kwargs["libelle"].startswith("bloc"):
+                try:
+                    raise cause
+                except type(cause) as levee:
+                    raise api.EchecAppelAPI("échec (bloc)") from levee
+            gauche, droite = extraire_extraits_du_message(kwargs["message"])
+            return resultat_api(reponse_raccord(gauche, droite), config.MODEL_RACCORD)
+
+        return effet
+
+    def test_reponse_vide_acceptee_en_brut_apres_le_plafond(self):
+        effet = self._echec_bloc(api.ReponseVide("le modèle n'a rien renvoyé"))
+
+        # Les premières passes : blocs en échec, édition incomplète.
+        for _ in range(config.MAX_REPRISES_SUSPECTES - 1):
+            resultats, _ = self.executer(effet)
+            self.assertFalse(resultats[0].complet)
+
+        # Passe du plafond : les blocs sont acceptés en brut, édition complète.
+        resultats, _ = self.executer(effet)
+        self.assertTrue(resultats[0].complet)
+
+        # Le texte source est conservé, débarrassé des marqueurs de page.
+        edit = io.lire_texte(self.chemins.edit)
+        self.assertIn("Réplique de la page 1", edit)
+        self.assertNotIn("[PAGE 1]", edit)
+
+    def test_echec_transitoire_n_est_jamais_accepte(self):
+        """Une panne réseau/quota n'est pas une réponse vide : elle doit rester
+        en échec et être reprise, jamais acceptée en brut (sinon on figerait du
+        texte non édité alors que le service reviendra)."""
+        effet = self._echec_bloc(RuntimeError("panne réseau"))
+
+        for _ in range(config.MAX_REPRISES_SUSPECTES + 1):
+            resultats, _ = self.executer(effet)
+            self.assertFalse(resultats[0].complet)
+
+    def test_bloc_suspect_accepte_apres_le_plafond(self):
+        """Un avertissement reproductible (ici une sortie trop courte) ne doit
+        pas bloquer non plus : passé le plafond, le bloc est accepté tel quel."""
+        def effet(**kwargs):
+            if kwargs["libelle"].startswith("bloc"):
+                return resultat_api("Court.")  # ratio trop faible → suspect
+            gauche, droite = extraire_extraits_du_message(kwargs["message"])
+            return resultat_api(reponse_raccord(gauche, droite), config.MODEL_RACCORD)
+
+        for _ in range(config.MAX_REPRISES_SUSPECTES - 1):
+            resultats, _ = self.executer(effet)
+            self.assertFalse(resultats[0].complet)
+
+        resultats, _ = self.executer(effet)
+        self.assertTrue(resultats[0].complet)
+
+
 # ============================================================
 # 3. MÉCANIQUE DU RACCORD
 # ============================================================
