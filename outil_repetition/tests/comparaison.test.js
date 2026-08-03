@@ -88,7 +88,7 @@ describe('substitutions', () => {
   test('un mot substitué compte pour une faute, pas deux', () => {
     // Sans la fusion oubli + ajout, le score chuterait deux fois plus vite que
     // la mémoire ne défaille.
-    const resultat = comparer('Il prend la chaire.', 'Il prend la chaise.');
+    const resultat = comparer('Il prend la chaire.', 'Il prend la banane.');
 
     assert.deepEqual(etats(resultat), [
       ETAT.CORRECT,
@@ -100,15 +100,17 @@ describe('substitutions', () => {
   });
 
   test('le mot réellement dit est conservé', () => {
-    const resultat = comparer('la chaire', 'la chaise');
+    const resultat = comparer('la chaire', 'la banane');
     const substitue = resultat.details.find((d) => d.etat === ETAT.SUBSTITUE);
 
     assert.equal(substitue.mot, 'chaire');
-    assert.equal(substitue.dit, 'chaise');
+    assert.equal(substitue.dit, 'banane');
   });
 
   test('une substitution en milieu de réplique', () => {
-    const resultat = comparer('un deux trois quatre', 'un deux TROIX quatre');
+    // « TROIX » sonnait comme « trois » : depuis que la comparaison porte sur
+    // les sons, ce n'est plus une faute. Il faut un mot qui sonne autrement.
+    const resultat = comparer('un deux trois quatre', 'un deux banane quatre');
 
     assert.deepEqual(etats(resultat), [
       ETAT.CORRECT,

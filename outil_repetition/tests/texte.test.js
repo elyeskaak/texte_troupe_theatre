@@ -14,6 +14,8 @@ import {
   acronyme,
   amorce,
   amorceCouvreTout,
+  clePhonetique,
+  clesPhonetiques,
   contient,
   estMot,
   positionsDesMots,
@@ -417,5 +419,54 @@ describe('abréviations et exposants', () => {
       mots(replique).filter(estMot).length,
       motsNormalises(replique).length,
     );
+  });
+});
+
+
+describe('clé phonétique', () => {
+  const cle = (mot) => clePhonetique(normaliser(mot));
+
+  test('« Lo » et « L’eau » sont le même son', () => {
+    // Le cas signalé à l'usage : le moteur de Safari entend « L'eau » là où le
+    // texte porte « Lo ». Ce n'est pas une faute de mémoire.
+    assert.equal(cle('Lo'), cle('L’eau'));
+  });
+
+  test('les consonnes finales muettes ne comptent pas', () => {
+    assert.equal(cle('vert'), cle('verre'));
+    assert.equal(cle('vert'), cle('vers'));
+  });
+
+  test('les orthographes d’un même son se rejoignent', () => {
+    assert.equal(cle('quand'), cle('kand'));
+    assert.equal(cle('hôtel'), cle('otel'));
+    assert.equal(cle('eau'), cle('o'));
+  });
+
+  test('des mots différents restent différents', () => {
+    // C'est le revers à surveiller : une réduction trop gourmande gonflerait les
+    // scores en faisant correspondre n'importe quoi.
+    const paires = [
+      ['maison', 'poisson'],
+      ['oui', 'non'],
+      ['jour', 'nuit'],
+      ['Brown', 'Costello'],
+      ['Clarissa', 'Pippa'],
+    ];
+
+    for (const [a, b] of paires) {
+      assert.notEqual(cle(a), cle(b), `${a} confondu avec ${b}`);
+    }
+  });
+
+  test('la clé n’est jamais vide', () => {
+    // Un mot entièrement réduit vaudrait tout autre mot entièrement réduit.
+    for (const mot of ['a', 'y', 'est', 'et', 'eu', 'ah', 'oh']) {
+      assert.ok(cle(mot).length > 0, mot);
+    }
+  });
+
+  test('clesPhonetiques suit le découpage normalisé', () => {
+    assert.deepEqual(clesPhonetiques('Lo ! Madame'), [cle('Lo'), cle('Madame')]);
   });
 });

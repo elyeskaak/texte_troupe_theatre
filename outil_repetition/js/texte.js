@@ -151,6 +151,74 @@ export function motsNormalises(texte) {
 }
 
 // ============================================================
+// CLÉ PHONÉTIQUE
+// ============================================================
+
+/**
+ * Réductions appliquées dans l'ordre, sur un mot déjà normalisé.
+ *
+ * Chacune corrige une divergence **d'orthographe pour un même son**, celles que
+ * la transcription vocale produit le plus souvent en français.
+ */
+const REDUCTIONS = [
+  [/'/g, ''],            // l'eau → leau : l'élision n'a pas de son propre
+  [/eaux?/g, 'o'],       // eau, eaux → o
+  [/au/g, 'o'],          // au → o
+  [/ph/g, 'f'],          // philosophe → filosofe
+  [/qu/g, 'k'],          // quand → kand
+  [/c([ei])/g, 's$1'],   // ceci → sesi
+  [/c/g, 'k'],           // car → kar
+  [/(ai|ei|es)(?=[a-z])/g, 'e'], // aider → eder
+  [/h/g, ''],            // hôtel → otel
+  [/(.)\1+/g, '$1'],     // verre → vere
+  [/[stdxzpg]+$/g, ''],  // vert, vers, verd → ver
+  [/e$/g, ''],           // vere → ver
+];
+
+/**
+ * Clé phonétique approximative d'un mot français.
+ *
+ * **Pourquoi comparer des sons et non des lettres.** Réciter est un acte parlé.
+ * La transcription vocale convertit du son en texte, et ce choix d'orthographe
+ * n'est pas le mien : entendre « L'eau » là où le texte porte « Lo » n'est pas une
+ * faute de mémoire, c'est une décision du moteur de Safari. Comparer les
+ * orthographes revenait à noter la transcription.
+ *
+ * La réduction est **volontairement grossière**, et il faut connaître son revers :
+ * elle rend « vert », « verre » et « vers » équivalents. Pour un outil de
+ * répétition c'est le bon compromis — un spectateur qui vous écoute n'entend pas
+ * la différence non plus. Elle serait inacceptable pour un correcteur
+ * orthographique, ce que cet outil n'est pas.
+ *
+ * Ce n'est ni Soundex ni Métaphone : ces algorithmes sont pensés pour l'anglais
+ * ou pour l'appariement de noms propres. Ici, une poignée de règles couvre les
+ * confusions réellement observées.
+ *
+ * @param {string} mot - un mot déjà passé par `normaliser`
+ * @returns {string}
+ */
+export function clePhonetique(mot) {
+  let cle = mot;
+
+  for (const [motif, remplacement] of REDUCTIONS) {
+    cle = cle.replace(motif, remplacement);
+  }
+
+  // Une réduction totale ne doit pas rendre deux mots différents identiques par
+  // le vide : « es » se réduirait à rien, et tout mot vide vaudrait tout autre.
+  return cle.length > 0 ? cle : mot;
+}
+
+/**
+ * Clés phonétiques des mots d'un texte.
+ *
+ * @param {string} texte
+ */
+export function clesPhonetiques(texte) {
+  return motsNormalises(texte).map(clePhonetique);
+}
+
+// ============================================================
 // ABRÉVIATIONS
 // ============================================================
 

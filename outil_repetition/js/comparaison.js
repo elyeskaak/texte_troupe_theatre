@@ -21,7 +21,12 @@
  */
 
 import { CONFIG } from './config.js';
-import { estMot, motsNormalises, mots as decouperMots } from './texte.js';
+import {
+  clePhonetique,
+  estMot,
+  motsNormalises,
+  mots as decouperMots,
+} from './texte.js';
 
 /** États possibles d'un mot dans le résultat d'une comparaison. */
 export const ETAT = Object.freeze({
@@ -65,7 +70,14 @@ export function comparer(attendu, recite) {
     return { score: 0, attendus: 0, corrects: 0, tronque, details: [] };
   }
 
-  const operations = _fusionnerSubstitutions(_aligner(gauche, droite));
+  // La comparaison porte sur les **sons**, non sur les lettres. Réciter est un
+  // acte parlé : la transcription convertit du son en texte, et son choix
+  // d'orthographe n'est pas le mien. Entendre « L'eau » là où le texte porte
+  // « Lo » n’est pas une faute de mémoire, c’est une décision du moteur de
+  // Safari — la pénaliser revenait à noter la transcription.
+  const operations = _fusionnerSubstitutions(
+    _aligner(gauche.map(clePhonetique), droite.map(clePhonetique), droite),
+  );
 
   const details = [];
   let corrects = 0;
@@ -153,7 +165,12 @@ function _formesAffichees(attendu, attendus) {
  * @param {string[]} recites
  * @returns {Array<{etat: string, dit?: string}>}
  */
-function _aligner(attendus, recites) {
+/*
+ * L'alignement porte sur les clés phonétiques, mais `dit` rapporte le mot
+ * réellement transcrit : afficher « troi » à la place de « trois » n'aiderait
+ * personne à comprendre ce qui a été entendu.
+ */
+function _aligner(attendus, recites, motsRecites = recites) {
   const n = attendus.length;
   const m = recites.length;
 
@@ -182,7 +199,7 @@ function _aligner(attendus, recites) {
       operations.push({ etat: ETAT.OUBLIE });
       i += 1;
     } else {
-      operations.push({ etat: ETAT.AJOUTE, dit: recites[j] });
+      operations.push({ etat: ETAT.AJOUTE, dit: motsRecites[j] ?? recites[j] });
       j += 1;
     }
   }
@@ -193,7 +210,7 @@ function _aligner(attendus, recites) {
   }
 
   while (j < m) {
-    operations.push({ etat: ETAT.AJOUTE, dit: recites[j] });
+    operations.push({ etat: ETAT.AJOUTE, dit: motsRecites[j] ?? recites[j] });
     j += 1;
   }
 
