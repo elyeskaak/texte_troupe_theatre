@@ -6,15 +6,30 @@
 <title>Lecture projetée — Troupe 122</title>
 <style>
   /* ------------------------------------------------------------
-     Écran de préparation provisoire (étape 3) : sera remplacé par
-     l'écran défini en §6 de ARCHITECTURE.md à l'étape 4 (import,
-     attribution personnage → slot). Pour l'instant, juste de quoi
-     charger une pièce d'essai et vérifier le rendu projeté.
+     Écran de préparation (§6 de ARCHITECTURE.md) : import, attribution
+     personnage → slot, reprise de session.
      ------------------------------------------------------------ */
   html, body { height: 100%; margin: 0; }
   body { font-family: system-ui, sans-serif; background: #f4f4f4; color: #111; }
   #ecran-preparation { padding: 2rem; max-width: 60rem; }
-  pre { background: #222; color: #eee; padding: 1rem; overflow: auto; max-height: 40vh; white-space: pre-wrap; }
+  #ecran-preparation section { margin-bottom: 1.6rem; }
+  #ecran-preparation table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
+  #ecran-preparation th, #ecran-preparation td {
+    border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: left;
+  }
+  #ecran-preparation .swatch {
+    display: inline-block; width: 0.9em; height: 0.9em; border-radius: 50%;
+    margin-right: 0.4em; vertical-align: middle;
+  }
+  .message-erreur {
+    color: #7a0010; background: #fdeaea; border: 1px solid #7a0010;
+    padding: 0.6rem 0.9rem; border-radius: 0.3rem; font-weight: bold;
+  }
+  .message-bandeau {
+    color: #6b4b00; background: #fff6dd; border: 1px solid #d1a300;
+    padding: 0.6rem 0.9rem; border-radius: 0.3rem;
+  }
+  #bouton-demarrer:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* ------------------------------------------------------------
      Rendu projeté (§8 de ARCHITECTURE.md). Une diapo par élément de
@@ -133,19 +148,40 @@
 <body>
 
 <div id="ecran-preparation">
-<h1>Outil de lecture projetée — en construction</h1>
-<p>
-  Étape 3 du plan de livraison (voir <code>ARCHITECTURE.md</code>) : le rendu
-  projeté existe, mais l'écran de préparation définitif (import + attribution
-  personnage → slot, §6) arrive à l'étape 4. En attendant, cet écran
-  provisoire attribue les slots automatiquement dans l'ordre des personnages,
-  uniquement pour vérifier la navigation clavier sur une pièce d'essai.
-</p>
-<p>
-  <label for="debug-import">Charger un <code>REPET.json</code> :</label>
-  <input type="file" id="debug-import" accept="application/json,.json">
-</p>
-<pre id="debug-output">(en attente d'un fichier)</pre>
+  <h1>Lecture projetée — préparation</h1>
+
+  <section id="section-reprise" hidden>
+    <p class="message-bandeau" id="message-reprise"></p>
+    <button id="bouton-reprendre" type="button">Reprendre la lecture</button>
+  </section>
+
+  <section id="section-bandeau-stockage"></section>
+
+  <section id="section-import">
+    <h2>1. Charger la pièce</h2>
+    <p>
+      <label for="import-fichier">Fichier <code>REPET.json</code> (produit par
+      <code>outil_edition</code>) :</label><br>
+      <input type="file" id="import-fichier" accept="application/json,.json">
+    </p>
+    <p id="erreur-import" class="message-erreur" hidden></p>
+  </section>
+
+  <section id="section-attribution" hidden>
+    <h2>2. Attribuer les personnages aux lecteurs</h2>
+    <p>
+      Un lecteur (slot) peut jouer plusieurs personnages : plusieurs menus
+      peuvent pointer vers le même slot. Aucune valeur n'est devinée.
+    </p>
+    <table>
+      <thead>
+        <tr><th>Personnage</th><th>Répliques</th><th>Slot</th><th>Aperçu</th></tr>
+      </thead>
+      <tbody id="corps-attribution"></tbody>
+    </table>
+    <p id="erreur-attribution" class="message-erreur" hidden></p>
+    <button id="bouton-demarrer" type="button" disabled>Démarrer la lecture</button>
+  </section>
 </div>
 
 <div id="ecran-projection">
@@ -577,7 +613,7 @@ function _construireDiapoSimple(el, classeCss) {
   return diapo;
 }
 
-function _construireDiapoReplique(el, cast) {
+function _construireDiapoReplique(el, cast, prenoms) {
   const slot = cast[el.personnage] || null;
   const couleur = slot ? CONFIG.COULEURS_SLOT[slot] : '#555555';
 
@@ -588,7 +624,9 @@ function _construireDiapoReplique(el, cast) {
 
   const qui = document.createElement('div');
   qui.className = 'qui';
-  qui.textContent = slot || '?';
+  // Un champ prénom vide retombe sur le nom brut du slot (§7.3) — jamais
+  // une chaîne vide affichée à la place d'un nom.
+  qui.textContent = (slot && prenoms[slot]) || slot || '?';
   qui.style.background = couleur;
   qui.style.color = couleurTexteContrastee(couleur);
   diapo.appendChild(qui);
@@ -623,7 +661,7 @@ function _construireDiapoReplique(el, cast) {
 }
 
 /** Construit une diapo par élément de la liste plate, non montées. */
-function construireDiapos(elements, cast) {
+function construireDiapos(elements, cast, prenoms) {
   return elements.map((el, index) => {
     let diapo;
 
@@ -636,7 +674,7 @@ function construireDiapos(elements, cast) {
     } else if (el.kind === 'texte_sans_personnage') {
       diapo = _construireDiapoSimple(el, 'kind-texte-sans-personnage');
     } else {
-      diapo = _construireDiapoReplique(el, cast);
+      diapo = _construireDiapoReplique(el, cast, prenoms);
     }
 
     diapo.dataset.index = String(index);
@@ -645,15 +683,30 @@ function construireDiapos(elements, cast) {
 }
 
 /** Monte toutes les diapos une fois dans `container` (§8.1). */
-function monterProjection(container, elements, cast) {
+function monterProjection(container, elements, cast, prenoms) {
   container.innerHTML = '';
-  const diapos = construireDiapos(elements, cast);
+  const diapos = construireDiapos(elements, cast, prenoms);
 
   for (const diapo of diapos) {
     container.appendChild(diapo);
   }
 
   return diapos;
+}
+
+/**
+ * Met à jour l'étiquette de tous les slots affichés, sans reconstruire le
+ * DOM (§8.2) : appelée quand la fenêtre de contrôle diffuse de nouveaux
+ * prénoms (§7.2, câblée à l'étape 5).
+ */
+function mettreAJourPrenoms(container, prenoms) {
+  for (const slot of CONFIG.SLOTS) {
+    const label = (prenoms && prenoms[slot]) || slot;
+
+    container.querySelectorAll(`[data-slot="${slot}"] .qui`).forEach((qui) => {
+      qui.textContent = label;
+    });
+  }
 }
 
 /** Change l'élément visible par une seule écriture de classe (§8.1). */
@@ -675,20 +728,99 @@ function texteProgressionScene(sommaire, position) {
 }
 
 // ============================================================
-// 8-9. RENDU CONTRÔLE / PRÉPARATION — arrivent aux étapes 4 et 5.
+// 8. RENDU CONTRÔLE — arrive à l'étape 5 (§7 de ARCHITECTURE.md).
 // ============================================================
 
 // ============================================================
-// 10. CABLAGE — provisoire : import + navigation clavier de la projection
-//     seule (étape 3). L'écran de préparation définitif, l'attribution des
-//     slots et la fenêtre de contrôle arrivent aux étapes 4 et 5 : ce
-//     câblage sera alors remplacé, pas complété en place.
+// 9. RENDU PRÉPARATION — import et attribution personnage → slot (§6)
+// ============================================================
+
+/** Une ligne de la table d'attribution : personnage, volume, slot, aperçu. */
+function construireLigneAttribution(personnage, slotActuel) {
+  const tr = document.createElement('tr');
+  tr.dataset.personnage = personnage.nom;
+
+  const tdNom = document.createElement('td');
+  tdNom.textContent = personnage.nom;
+  tr.appendChild(tdNom);
+
+  const tdRepliques = document.createElement('td');
+  tdRepliques.textContent = String(personnage.repliques);
+  tr.appendChild(tdRepliques);
+
+  const tdSlot = document.createElement('td');
+  const select = document.createElement('select');
+  select.className = 'select-slot';
+
+  const optionVide = document.createElement('option');
+  optionVide.value = '';
+  optionVide.textContent = '— choisir —';
+  select.appendChild(optionVide);
+
+  for (const slot of CONFIG.SLOTS) {
+    const option = document.createElement('option');
+    option.value = slot;
+    option.textContent = slot;
+    option.selected = slot === slotActuel;
+    select.appendChild(option);
+  }
+
+  tdSlot.appendChild(select);
+  tr.appendChild(tdSlot);
+
+  const tdApercu = document.createElement('td');
+  const swatch = document.createElement('span');
+  swatch.className = 'swatch';
+  tdApercu.appendChild(swatch);
+  tr.appendChild(tdApercu);
+
+  const rafraichirSwatch = () => {
+    swatch.style.background = select.value ? CONFIG.COULEURS_SLOT[select.value] : '#ccc';
+  };
+
+  select.addEventListener('change', rafraichirSwatch);
+  rafraichirSwatch();
+
+  return tr;
+}
+
+/** (Re)construit la table d'attribution, pré-remplie depuis `castInitial`. */
+function construireTableAttribution(corps, personnages, castInitial) {
+  corps.innerHTML = '';
+
+  for (const personnage of personnages) {
+    corps.appendChild(construireLigneAttribution(personnage, castInitial[personnage.nom] || ''));
+  }
+}
+
+/** Lit l'attribution courante depuis la table (§6 : uniquement les slots choisis). */
+function lireCastDepuisTable(corps) {
+  const cast = {};
+
+  corps.querySelectorAll('tr').forEach((tr) => {
+    const select = tr.querySelector('select');
+
+    if (select.value) {
+      cast[tr.dataset.personnage] = select.value;
+    }
+  });
+
+  return cast;
+}
+
+// ============================================================
+// 10. CABLAGE — import, attribution, démarrage, navigation, reprise (§9-10)
 // ============================================================
 
 (() => {
+  let piece = null;
+  let slug = null;
+  let personnagesCourants = [];
   let diapos = [];
   let sommaire = [];
   let position = 0;
+  let prenoms = {};
+  let ecritureSessionEnAttente = null;
 
   const ecranPreparation = document.getElementById('ecran-preparation');
   const ecranProjection = document.getElementById('ecran-projection');
@@ -696,40 +828,93 @@ function texteProgressionScene(sommaire, position) {
   const progressionScene = document.getElementById('progression-scene');
   const progressionPosition = document.getElementById('progression-position');
 
+  const importFichier = document.getElementById('import-fichier');
+  const erreurImport = document.getElementById('erreur-import');
+  const sectionAttribution = document.getElementById('section-attribution');
+  const corpsAttribution = document.getElementById('corps-attribution');
+  const erreurAttribution = document.getElementById('erreur-attribution');
+  const boutonDemarrer = document.getElementById('bouton-demarrer');
+  const sectionReprise = document.getElementById('section-reprise');
+  const messageReprise = document.getElementById('message-reprise');
+  const boutonReprendre = document.getElementById('bouton-reprendre');
+  const sectionBandeauStockage = document.getElementById('section-bandeau-stockage');
+
+  // --- stockage, jamais d'échec silencieux (§11) --------------------------
+
+  let bandeauStockageAffiche = false;
+
+  function signalerEchecStockage(erreur) {
+    if (bandeauStockageAffiche) {
+      return;
+    }
+
+    bandeauStockageAffiche = true;
+    const p = document.createElement('p');
+    p.className = 'message-bandeau';
+    p.textContent =
+      `Le stockage local est indisponible (${erreur}) : la pièce et ` +
+      'l’attribution ne seront pas conservées d’une session à l’autre.';
+    sectionBandeauStockage.appendChild(p);
+  }
+
+  function ecrire(cle, valeur) {
+    const resultat = ecrireStockage(cle, valeur);
+
+    if (!resultat.ok) {
+      signalerEchecStockage(resultat.erreur);
+    }
+
+    return resultat.ok;
+  }
+
+  function lire(cle) {
+    const resultat = lireStockage(cle);
+
+    if (!resultat.ok) {
+      signalerEchecStockage(resultat.erreur);
+      return null;
+    }
+
+    return resultat.valeur;
+  }
+
+  prenoms = lire(cleStockage('prenoms')) || {};
+
+  // --- projection ----------------------------------------------------------
+
   function rafraichirProgression() {
     progressionScene.textContent = texteProgressionScene(sommaire, position);
     progressionPosition.textContent = `${position + 1}/${diapos.length}`;
+  }
+
+  /** Écriture différée de la session (§10.2), pour ne pas écrire à chaque frappe. */
+  function planifierEcritureSession() {
+    if (ecritureSessionEnAttente) {
+      clearTimeout(ecritureSessionEnAttente);
+    }
+
+    ecritureSessionEnAttente = setTimeout(() => {
+      ecrire(cleStockage('session'), { pieceSlug: slug, position });
+    }, CONFIG.DELAI_ECRITURE_MS);
   }
 
   function allerA(nouvellePosition) {
     position = irA({ position }, nouvellePosition, diapos.length).position;
     afficherPosition(diapos, position);
     rafraichirProgression();
+    planifierEcritureSession();
   }
 
-  /**
-   * Attribution temporaire round-robin des personnages aux slots, dans
-   * l'ordre de `piece.personnages`. Remplacée à l'étape 4 par l'écran
-   * d'attribution manuel (§6) : aucune valeur devinée ne doit survivre
-   * jusqu'à l'écran définitif.
-   */
-  function castTemporaire(personnages) {
-    const cast = {};
+  function demarrerProjection(piecePreparee, cast, positionDepart) {
+    piece = piecePreparee;
+    slug = pieceSlug(piece.piece);
 
-    personnages.forEach((p, index) => {
-      cast[p.nom] = CONFIG.SLOTS[index % CONFIG.SLOTS.length];
-    });
-
-    return cast;
-  }
-
-  function demarrerProjection(piece) {
     const elements = aplatirEnElements(piece);
-    const cast = castTemporaire(piece.personnages);
-
     sommaire = calculerSommaire(elements);
-    diapos = monterProjection(contenu, elements, cast);
-    position = 0;
+    diapos = monterProjection(contenu, elements, cast, prenoms);
+
+    const bornee = typeof positionDepart === 'number' ? positionDepart : 0;
+    position = irA({ position: 0 }, bornee, diapos.length).position;
 
     ecranPreparation.style.display = 'none';
     ecranProjection.classList.add('visible');
@@ -752,13 +937,83 @@ function texteProgressionScene(sommaire, position) {
     }
   });
 
-  document.getElementById('debug-import').addEventListener('change', (evenement) => {
+  // --- reprise de session (§13 point 3, validé : implémentée) -------------
+
+  (function proposerReprise() {
+    const session = lire(cleStockage('session'));
+
+    if (!session || !session.pieceSlug) {
+      return;
+    }
+
+    const pieceSauvegardee = lire(cleStockage(`piece:${session.pieceSlug}`));
+    const castSauvegarde = lire(cleStockage(`cast:${session.pieceSlug}`));
+
+    if (!pieceSauvegardee || !castSauvegarde) {
+      return;
+    }
+
+    const resultat = validerRepet(pieceSauvegardee);
+
+    if (!resultat.valide) {
+      return; // donnée corrompue : jamais de reprise sur une pièce invalide
+    }
+
+    if (personnagesSansSlot(resultat.piece.personnages, castSauvegarde).length > 0) {
+      return; // attribution incomplète : on repasse par l'écran normal
+    }
+
+    messageReprise.textContent = `« ${resultat.piece.piece} » — reprendre à la position sauvegardée.`;
+    sectionReprise.hidden = false;
+
+    boutonReprendre.addEventListener('click', () => {
+      demarrerProjection(resultat.piece, castSauvegarde, session.position);
+    });
+  })();
+
+  // --- import et attribution (§6) ------------------------------------------
+
+  function rafraichirEtatDemarrage() {
+    const cast = lireCastDepuisTable(corpsAttribution);
+    const manquants = personnagesSansSlot(personnagesCourants, cast);
+
+    if (manquants.length > 0) {
+      erreurAttribution.hidden = false;
+      erreurAttribution.textContent = `Personnages sans slot : ${manquants.join(', ')}.`;
+      boutonDemarrer.disabled = true;
+    } else {
+      erreurAttribution.hidden = true;
+      boutonDemarrer.disabled = false;
+    }
+
+    return cast;
+  }
+
+  corpsAttribution.addEventListener('change', rafraichirEtatDemarrage);
+
+  boutonDemarrer.addEventListener('click', () => {
+    const cast = rafraichirEtatDemarrage();
+
+    if (boutonDemarrer.disabled) {
+      return;
+    }
+
+    const slugCourant = pieceSlug(piece.piece);
+    ecrire(cleStockage(`piece:${slugCourant}`), piece);
+    ecrire(cleStockage(`cast:${slugCourant}`), cast);
+
+    demarrerProjection(piece, cast);
+  });
+
+  importFichier.addEventListener('change', (evenement) => {
     const fichier = evenement.target.files[0];
-    const sortie = document.getElementById('debug-output');
 
     if (!fichier) {
       return;
     }
+
+    erreurImport.hidden = true;
+    sectionAttribution.hidden = true;
 
     const lecteur = new FileReader();
 
@@ -768,19 +1023,27 @@ function texteProgressionScene(sommaire, position) {
       try {
         donnees = JSON.parse(lecteur.result);
       } catch (erreur) {
-        sortie.textContent = `Fichier non JSON : ${erreur.message}`;
+        erreurImport.hidden = false;
+        erreurImport.textContent = `Le fichier n'est pas un JSON valide : ${erreur.message}`;
         return;
       }
 
       const resultat = validerRepet(donnees);
 
       if (!resultat.valide) {
-        sortie.textContent = `Refusé : ${resultat.erreur}`;
+        erreurImport.hidden = false;
+        erreurImport.textContent = resultat.erreur;
         return;
       }
 
-      sortie.textContent = `Pièce valide : ${resultat.piece.piece} — démarrage de la projection…`;
-      demarrerProjection(resultat.piece);
+      piece = resultat.piece;
+      personnagesCourants = piece.personnages;
+
+      const castSauvegarde = lire(cleStockage(`cast:${pieceSlug(piece.piece)}`)) || {};
+
+      construireTableAttribution(corpsAttribution, personnagesCourants, castSauvegarde);
+      sectionAttribution.hidden = false;
+      rafraichirEtatDemarrage();
     };
 
     lecteur.readAsText(fichier, 'utf-8');
