@@ -5,26 +5,156 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lecture projetée — Troupe 122</title>
 <style>
-  /* La feuille de style complète arrive avec le rendu (étape 3). Pour
-     l'instant, juste de quoi lire la sortie de débogage confortablement. */
-  body { font-family: system-ui, sans-serif; background: #111; color: #eee; padding: 2rem; }
-  pre { background: #000; padding: 1rem; overflow: auto; max-height: 70vh; white-space: pre-wrap; }
+  /* ------------------------------------------------------------
+     Écran de préparation provisoire (étape 3) : sera remplacé par
+     l'écran défini en §6 de ARCHITECTURE.md à l'étape 4 (import,
+     attribution personnage → slot). Pour l'instant, juste de quoi
+     charger une pièce d'essai et vérifier le rendu projeté.
+     ------------------------------------------------------------ */
+  html, body { height: 100%; margin: 0; }
+  body { font-family: system-ui, sans-serif; background: #f4f4f4; color: #111; }
+  #ecran-preparation { padding: 2rem; max-width: 60rem; }
+  pre { background: #222; color: #eee; padding: 1rem; overflow: auto; max-height: 40vh; white-space: pre-wrap; }
+
+  /* ------------------------------------------------------------
+     Rendu projeté (§8 de ARCHITECTURE.md). Une diapo par élément de
+     la liste plate, montées une fois, une seule visible à la fois
+     via .actif (§8.1) — jamais de re-rendu au changement de position.
+     ------------------------------------------------------------ */
+  :root {
+    --fond-projection: #0b0b0e;
+    --texte-clair: #f5f5f5;
+    --attenue: #9a9a9a;
+  }
+
+  #ecran-projection {
+    position: fixed;
+    inset: 0;
+    display: none;
+    flex-direction: column;
+    background: var(--fond-projection);
+    color: var(--texte-clair);
+    font-family: Georgia, 'Times New Roman', serif;
+  }
+
+  #ecran-projection.visible { display: flex; }
+
+  #contenu-projection { flex: 1; position: relative; }
+
+  .diapo {
+    display: none;
+    position: absolute;
+    inset: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 4vw 8vw;
+    text-align: center;
+  }
+
+  .diapo.actif { display: flex; }
+
+  .diapo.kind-scene {
+    font-size: 3.6vw;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--attenue);
+  }
+
+  .diapo.kind-lieu,
+  .diapo.kind-didascalie {
+    font-style: italic;
+    color: var(--attenue);
+    font-size: 2.6vw;
+    max-width: 80%;
+  }
+
+  .diapo.kind-texte-sans-personnage {
+    font-size: 2.4vw;
+    color: #e0c341;
+    border: 0.15vw dashed #e0c341;
+    padding: 2vw 4vw;
+    border-radius: 0.6vw;
+    max-width: 80%;
+  }
+
+  .diapo.kind-texte-sans-personnage::before {
+    content: 'texte non attribué';
+    display: block;
+    font-size: 0.5em;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.6em;
+  }
+
+  .diapo.kind-replique .qui {
+    font-size: 1.8vw;
+    font-weight: bold;
+    padding: 0.3em 0.9em;
+    border-radius: 999px;
+    margin-bottom: 0.6em;
+  }
+
+  .diapo.kind-replique .personnage {
+    font-size: 1.3vw;
+    color: var(--attenue);
+    margin-bottom: 0.8em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .diapo.kind-replique .texte {
+    font-size: 4.2vw;
+    line-height: 1.35;
+    max-width: 90%;
+    border-left: 0.4vw solid var(--couleur, #555);
+    padding-left: 1.2vw;
+  }
+
+  .didascalie-interne {
+    font-style: italic;
+    color: var(--attenue);
+    font-size: 0.55em;
+    padding: 0 0.3em;
+  }
+
+  #barre-progression {
+    flex: none;
+    padding: 0.6vw 1.4vw;
+    font-size: 0.9vw;
+    color: var(--attenue);
+    border-top: 1px solid #222;
+    display: flex;
+    justify-content: space-between;
+  }
 </style>
 </head>
 <body>
 
+<div id="ecran-preparation">
 <h1>Outil de lecture projetée — en construction</h1>
 <p>
-  Étape 2 du plan de livraison (voir <code>ARCHITECTURE.md</code>) : la
-  logique pure (config, validation, modèle, état, stockage) est câblée, sans
-  encore d'écran définitif. Ce harnais sert uniquement à la vérifier à la
-  console avant d'écrire le rendu projeté.
+  Étape 3 du plan de livraison (voir <code>ARCHITECTURE.md</code>) : le rendu
+  projeté existe, mais l'écran de préparation définitif (import + attribution
+  personnage → slot, §6) arrive à l'étape 4. En attendant, cet écran
+  provisoire attribue les slots automatiquement dans l'ordre des personnages,
+  uniquement pour vérifier la navigation clavier sur une pièce d'essai.
 </p>
 <p>
-  <label for="debug-import">Charger un <code>REPET.json</code> pour test :</label>
+  <label for="debug-import">Charger un <code>REPET.json</code> :</label>
   <input type="file" id="debug-import" accept="application/json,.json">
 </p>
 <pre id="debug-output">(en attente d'un fichier)</pre>
+</div>
+
+<div id="ecran-projection">
+  <div id="contenu-projection"></div>
+  <div id="barre-progression">
+    <span id="progression-scene"></span>
+    <span id="progression-position"></span>
+  </div>
+</div>
 
 <script>
 // ============================================================
@@ -350,55 +480,312 @@ function lireStockage(cle) {
 }
 
 // ============================================================
-// Harnais de débogage temporaire (étape 2 seulement) — sera remplacé par
-// la préparation, le rendu et le câblage des étapes suivantes.
+// 6. SYNCHRO — BroadcastChannel entre projection et contrôle.
+//    Arrive à l'étape 5 (§7 de ARCHITECTURE.md). Rien ici pour l'instant :
+//    la projection fonctionne seule (§9 « ce que la fenêtre de contrôle
+//    affiche » ne s'applique pas encore).
 // ============================================================
 
-document.getElementById('debug-import').addEventListener('change', (evenement) => {
-  const fichier = evenement.target.files[0];
-  const sortie = document.getElementById('debug-output');
+// ============================================================
+// 7. RENDU PROJECTION — montage une fois, décoration par classe (§8)
+// ============================================================
 
-  if (!fichier) {
-    return;
+/** Libellé d'en-tête pour une transition de scène. */
+function libelleScene(acte, scene) {
+  return [acte, scene].filter(Boolean).join(' — ') || 'Scène';
+}
+
+/**
+ * Couleur de texte lisible (noir ou blanc) sur un fond hexadécimal donné.
+ * Évite de coder en dur une couleur de texte par slot : certains slots de
+ * la palette (§12) sont clairs (jaune, cyan), d'autres sombres (brun,
+ * sarcelle), et un texte noir fixe deviendrait illisible sur ces derniers.
+ */
+function couleurTexteContrastee(hex) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+
+  return luminance > 0.6 ? '#111111' : '#ffffff';
+}
+
+/**
+ * Découpe le texte d'une réplique en segments ordonnés, en insérant les
+ * didascalies internes au bon rang de mot (§2.1 de ARCHITECTURE.md et
+ * `repet_export.py:separer_parole_et_jeu`, dont `avant_mot` reprend ici
+ * exactement la même définition : un rang de mot obtenu en découpant sur
+ * les espaces). Les retours à la ligne (vers) sont préservés comme
+ * segments `saut`, jamais recollés.
+ *
+ * @param {string} texte
+ * @param {{avant_mot: number, texte: string}[]} didascaliesInternes
+ * @returns {{type: 'mot'|'didascalie'|'saut', texte?: string}[]}
+ */
+function segmenterAvecDidascalies(texte, didascaliesInternes) {
+  const parRang = new Map();
+
+  for (const d of didascaliesInternes || []) {
+    if (!parRang.has(d.avant_mot)) {
+      parRang.set(d.avant_mot, []);
+    }
+
+    parRang.get(d.avant_mot).push(d.texte);
   }
 
-  const lecteur = new FileReader();
+  const segments = [];
+  let rangMot = 0;
 
-  lecteur.onload = () => {
-    let donnees;
-
-    try {
-      donnees = JSON.parse(lecteur.result);
-    } catch (erreur) {
-      sortie.textContent = `Fichier non JSON : ${erreur.message}`;
+  const inserer = (rang) => {
+    if (!parRang.has(rang)) {
       return;
     }
 
-    const resultat = validerRepet(donnees);
-
-    if (!resultat.valide) {
-      sortie.textContent = `Refusé : ${resultat.erreur}`;
-      return;
+    for (const texteDidascalie of parRang.get(rang)) {
+      segments.push({ type: 'didascalie', texte: texteDidascalie });
     }
-
-    const elements = aplatirEnElements(resultat.piece);
-    const sommaire = calculerSommaire(elements);
-    const slug = pieceSlug(resultat.piece.piece);
-
-    window.LECTURE_DEBUG = { piece: resultat.piece, elements, sommaire, slug };
-
-    sortie.textContent = [
-      `Pièce : ${resultat.piece.piece} (slug: ${slug})`,
-      `Personnages : ${resultat.piece.personnages.map((p) => p.nom).join(', ')}`,
-      `Éléments aplatis : ${elements.length}`,
-      `Scènes : ${sommaire.length}`,
-      '',
-      'Objet complet disponible dans la console : window.LECTURE_DEBUG',
-    ].join('\n');
   };
 
-  lecteur.readAsText(fichier, 'utf-8');
-});
+  texte.split('\n').forEach((ligne, indexLigne) => {
+    if (indexLigne > 0) {
+      segments.push({ type: 'saut' });
+    }
+
+    for (const mot of ligne.split(/\s+/).filter(Boolean)) {
+      inserer(rangMot);
+      segments.push({ type: 'mot', texte: mot });
+      rangMot += 1;
+    }
+  });
+
+  inserer(rangMot);
+
+  return segments;
+}
+
+function _construireDiapoScene(el) {
+  const diapo = document.createElement('div');
+  diapo.className = 'diapo kind-scene';
+  diapo.textContent = libelleScene(el.acte, el.scene);
+  return diapo;
+}
+
+function _construireDiapoSimple(el, classeCss) {
+  const diapo = document.createElement('div');
+  diapo.className = `diapo ${classeCss}`;
+  diapo.textContent = el.texte;
+  return diapo;
+}
+
+function _construireDiapoReplique(el, cast) {
+  const slot = cast[el.personnage] || null;
+  const couleur = slot ? CONFIG.COULEURS_SLOT[slot] : '#555555';
+
+  const diapo = document.createElement('div');
+  diapo.className = 'diapo kind-replique';
+  diapo.dataset.slot = slot || '';
+  diapo.style.setProperty('--couleur', couleur);
+
+  const qui = document.createElement('div');
+  qui.className = 'qui';
+  qui.textContent = slot || '?';
+  qui.style.background = couleur;
+  qui.style.color = couleurTexteContrastee(couleur);
+  diapo.appendChild(qui);
+
+  const perso = document.createElement('div');
+  perso.className = 'personnage';
+  perso.textContent = el.personnage;
+  diapo.appendChild(perso);
+
+  const texte = document.createElement('div');
+  texte.className = el.vers ? 'texte vers' : 'texte';
+
+  for (const segment of segmenterAvecDidascalies(el.texte, el.didascaliesInternes)) {
+    if (segment.type === 'saut') {
+      texte.appendChild(document.createElement('br'));
+      continue;
+    }
+
+    if (segment.type === 'didascalie') {
+      const span = document.createElement('span');
+      span.className = 'didascalie-interne';
+      span.textContent = segment.texte;
+      texte.appendChild(span);
+      continue;
+    }
+
+    texte.appendChild(document.createTextNode(`${segment.texte} `));
+  }
+
+  diapo.appendChild(texte);
+  return diapo;
+}
+
+/** Construit une diapo par élément de la liste plate, non montées. */
+function construireDiapos(elements, cast) {
+  return elements.map((el, index) => {
+    let diapo;
+
+    if (el.kind === 'scene') {
+      diapo = _construireDiapoScene(el);
+    } else if (el.kind === 'lieu') {
+      diapo = _construireDiapoSimple(el, 'kind-lieu');
+    } else if (el.kind === 'didascalie') {
+      diapo = _construireDiapoSimple(el, 'kind-didascalie');
+    } else if (el.kind === 'texte_sans_personnage') {
+      diapo = _construireDiapoSimple(el, 'kind-texte-sans-personnage');
+    } else {
+      diapo = _construireDiapoReplique(el, cast);
+    }
+
+    diapo.dataset.index = String(index);
+    return diapo;
+  });
+}
+
+/** Monte toutes les diapos une fois dans `container` (§8.1). */
+function monterProjection(container, elements, cast) {
+  container.innerHTML = '';
+  const diapos = construireDiapos(elements, cast);
+
+  for (const diapo of diapos) {
+    container.appendChild(diapo);
+  }
+
+  return diapos;
+}
+
+/** Change l'élément visible par une seule écriture de classe (§8.1). */
+function afficherPosition(diapos, position) {
+  diapos.forEach((diapo, index) => {
+    diapo.classList.toggle('actif', index === position);
+  });
+}
+
+function texteProgressionScene(sommaire, position) {
+  const entree = scenePourPosition(sommaire, position);
+
+  if (!entree) {
+    return '—';
+  }
+
+  const rang = sommaire.indexOf(entree) + 1;
+  return `${libelleScene(entree.acte, entree.scene)}  ·  scène ${rang}/${sommaire.length}`;
+}
+
+// ============================================================
+// 8-9. RENDU CONTRÔLE / PRÉPARATION — arrivent aux étapes 4 et 5.
+// ============================================================
+
+// ============================================================
+// 10. CABLAGE — provisoire : import + navigation clavier de la projection
+//     seule (étape 3). L'écran de préparation définitif, l'attribution des
+//     slots et la fenêtre de contrôle arrivent aux étapes 4 et 5 : ce
+//     câblage sera alors remplacé, pas complété en place.
+// ============================================================
+
+(() => {
+  let diapos = [];
+  let sommaire = [];
+  let position = 0;
+
+  const ecranPreparation = document.getElementById('ecran-preparation');
+  const ecranProjection = document.getElementById('ecran-projection');
+  const contenu = document.getElementById('contenu-projection');
+  const progressionScene = document.getElementById('progression-scene');
+  const progressionPosition = document.getElementById('progression-position');
+
+  function rafraichirProgression() {
+    progressionScene.textContent = texteProgressionScene(sommaire, position);
+    progressionPosition.textContent = `${position + 1}/${diapos.length}`;
+  }
+
+  function allerA(nouvellePosition) {
+    position = irA({ position }, nouvellePosition, diapos.length).position;
+    afficherPosition(diapos, position);
+    rafraichirProgression();
+  }
+
+  /**
+   * Attribution temporaire round-robin des personnages aux slots, dans
+   * l'ordre de `piece.personnages`. Remplacée à l'étape 4 par l'écran
+   * d'attribution manuel (§6) : aucune valeur devinée ne doit survivre
+   * jusqu'à l'écran définitif.
+   */
+  function castTemporaire(personnages) {
+    const cast = {};
+
+    personnages.forEach((p, index) => {
+      cast[p.nom] = CONFIG.SLOTS[index % CONFIG.SLOTS.length];
+    });
+
+    return cast;
+  }
+
+  function demarrerProjection(piece) {
+    const elements = aplatirEnElements(piece);
+    const cast = castTemporaire(piece.personnages);
+
+    sommaire = calculerSommaire(elements);
+    diapos = monterProjection(contenu, elements, cast);
+    position = 0;
+
+    ecranPreparation.style.display = 'none';
+    ecranProjection.classList.add('visible');
+
+    afficherPosition(diapos, position);
+    rafraichirProgression();
+  }
+
+  document.addEventListener('keydown', (evenement) => {
+    if (!ecranProjection.classList.contains('visible')) {
+      return;
+    }
+
+    if (evenement.key === 'ArrowRight') {
+      allerA(position + 1);
+    } else if (evenement.key === 'ArrowLeft') {
+      allerA(position - 1);
+    } else if (evenement.key === 'f' || evenement.key === 'F') {
+      document.documentElement.requestFullscreen?.();
+    }
+  });
+
+  document.getElementById('debug-import').addEventListener('change', (evenement) => {
+    const fichier = evenement.target.files[0];
+    const sortie = document.getElementById('debug-output');
+
+    if (!fichier) {
+      return;
+    }
+
+    const lecteur = new FileReader();
+
+    lecteur.onload = () => {
+      let donnees;
+
+      try {
+        donnees = JSON.parse(lecteur.result);
+      } catch (erreur) {
+        sortie.textContent = `Fichier non JSON : ${erreur.message}`;
+        return;
+      }
+
+      const resultat = validerRepet(donnees);
+
+      if (!resultat.valide) {
+        sortie.textContent = `Refusé : ${resultat.erreur}`;
+        return;
+      }
+
+      sortie.textContent = `Pièce valide : ${resultat.piece.piece} — démarrage de la projection…`;
+      demarrerProjection(resultat.piece);
+    };
+
+    lecteur.readAsText(fichier, 'utf-8');
+  });
+})();
 </script>
 </body>
 </html>
