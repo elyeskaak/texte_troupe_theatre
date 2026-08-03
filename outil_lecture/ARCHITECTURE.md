@@ -357,12 +357,21 @@ pire des solutions pour un outil pensé « aucune souris nécessaire ».
 `paginerElements(elements, motsParPage)` s'insère entre l'aplatissement (§5)
 et le calcul du sommaire : toute réplique de plus de `CONFIG.MOTS_PAR_PAGE`
 mots est coupée en plusieurs éléments `kind: 'replique'` indépendants, chacun
-devenant sa propre diapo navigable (page 1/4, 2/4, …), affichée en
-complément du nom du personnage. La coupe préfère un saut de ligne (un vers)
-une fois 60 % du quota atteint — pour ne jamais trancher un vers en deux —
-et se force à 140 % du quota sinon, pour qu'une tirade en prose sans retour
-à la ligne ne parte pas en une seule page démesurée (`paginerSegments`,
-fonction pure, testée).
+devenant sa propre diapo navigable (page 1/4, 2/4, …). La coupe préfère un
+saut de ligne (un vers) une fois 60 % du quota atteint — pour ne jamais
+trancher un vers en deux — et se force à 140 % du quota sinon, pour qu'une
+tirade en prose sans retour à la ligne ne parte pas en une seule page
+démesurée (`paginerSegments`, fonction pure, testée).
+
+**Révision à l'usage, à nouveau :** la première version répétait l'en-tête
+complet (pastille de slot + nom du personnage) sur chaque page. Résultat :
+exactement le défaut déjà corrigé pour le dégradé (§8.1) — deux pages de la
+même réplique se lisaient comme deux répliques distinctes du même
+personnage. Seule la première page porte désormais l'en-tête complet
+(`.qui` + `.personnage`, avec « page 1/N ») ; les pages suivantes n'ont
+qu'un indicateur discret sans pastille dupliquée — `.suite-page`, coloré en
+texte (pas en fond) pour rester identifiable sans se faire passer pour une
+nouvelle prise de parole : *« — suite, page 2/N — »*.
 
 **Point d'ordre critique :** la pagination doit s'exécuter *avant*
 `calculerSommaire` et le montage, jamais après — sans quoi les positions du

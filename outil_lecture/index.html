@@ -182,6 +182,20 @@
 
   .diapo.actif.kind-replique .personnage { font-size: clamp(0.8rem, 1.3vw, 1.3rem); margin-bottom: 0.8em; }
 
+  /*
+   * Suite d'une réplique paginée (§8.5) : volontairement discret, sans
+   * pastille pleine (contrairement à `.qui`) — sinon chaque page ressemble
+   * à une nouvelle réplique du même personnage (retour d'usage).
+   */
+  .diapo.kind-replique .suite-page {
+    font-size: clamp(0.7rem, 1vw, 1.1rem);
+    font-style: italic;
+    margin-bottom: 0.6em;
+    opacity: 0.85;
+  }
+
+  .diapo.actif.kind-replique .suite-page { font-size: clamp(0.9rem, 1.4vw, 1.4rem); }
+
   .diapo.kind-replique .texte {
     font-size: clamp(0.9rem, 1.8vw, 1.6rem);
     line-height: 1.35;
@@ -917,21 +931,33 @@ function _construireDiapoReplique(el, cast, prenoms) {
   diapo.style.setProperty('--couleur', couleur);
   diapo.style.setProperty('--taille-active', `${tailleActiveReplique(nombreDeMots)}vw`);
 
-  const qui = document.createElement('div');
-  qui.className = 'qui';
-  qui.textContent = etiquetteSlot(slot, prenoms);
-  qui.style.background = couleur;
-  qui.style.color = couleurTexteContrastee(couleur);
-  diapo.appendChild(qui);
+  // Retour d'usage : répéter le badge complet (pastille + personnage) sur
+  // chaque page d'une réplique paginée (§8.5) donne l'impression de deux
+  // répliques distinctes, exactement le défaut déjà corrigé pour le
+  // dégradé (§8.1). La suite d'une même réplique n'a donc qu'un indicateur
+  // discret, sans pastille dupliquée ; seule la première page porte
+  // l'en-tête complet.
+  const premierePagesOuNonPaginee = !el.page || el.page.numero === 1;
 
-  const perso = document.createElement('div');
-  perso.className = 'personnage';
-  // Indicateur de page (§8.5) : une réplique coupée en plusieurs écrans
-  // l'affiche, pour que le lecteur sache qu'il y a une suite.
-  perso.textContent = el.page
-    ? `${el.personnage} — page ${el.page.numero}/${el.page.total}`
-    : el.personnage;
-  diapo.appendChild(perso);
+  if (premierePagesOuNonPaginee) {
+    const qui = document.createElement('div');
+    qui.className = 'qui';
+    qui.textContent = etiquetteSlot(slot, prenoms);
+    qui.style.background = couleur;
+    qui.style.color = couleurTexteContrastee(couleur);
+    diapo.appendChild(qui);
+
+    const perso = document.createElement('div');
+    perso.className = 'personnage';
+    perso.textContent = el.page ? `${el.personnage} — page 1/${el.page.total}` : el.personnage;
+    diapo.appendChild(perso);
+  } else {
+    const suite = document.createElement('div');
+    suite.className = 'suite-page';
+    suite.style.color = couleur;
+    suite.textContent = `— suite, page ${el.page.numero}/${el.page.total} —`;
+    diapo.appendChild(suite);
+  }
 
   const texte = document.createElement('div');
   texte.className = el.vers ? 'texte vers' : 'texte';
