@@ -819,7 +819,7 @@ Un commit par étape. Reprend le §13 du cahier, en le précisant.
 | 6 | ✅ *fait* — coque : `index.html`, `stockage.js`, `app.js`, manifeste, icône | 285 tests Node ; pièce vérifiée survivante au rechargement |
 | 7 | ✅ *fait* — `rendu.js` : les 7 modes en CSS, le top, le repli de scènes | éprouvé sur *La toile d'araignée*, 1196 répliques |
 | 8 | ✅ *fait* — progression, bilan, spot check, export / import | statuts vérifiés survivants au rechargement |
-| 9 | ✅ *fait* — sommaire, recherche, marque-pages, annotations, défilement, Wake Lock | éprouvé sur 1206 répliques |
+| 9 | ✅ *fait* — sommaire, recherche, marque-pages, annotations, taille du texte | défilement automatique et Wake Lock **retirés à l'usage** (§9.1) |
 | 10 | ✅ *fait* — `voix.js`, récitation contrôlée | **reste à éprouver sur iPhone**, micro compris |
 | 11 | `manifest` ✅, `sw.js` ✅ — **activation de GitHub Pages à faire à la main** | ouverture hors ligne depuis l'écran d'accueil |
 | 12 | `README.md` du sous-projet | — |

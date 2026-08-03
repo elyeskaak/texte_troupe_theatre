@@ -415,10 +415,13 @@ Les statuts sont indexés par l'`id` de contenu de §3.2, ce qui les rend robust
 
 ## 9. Navigation et confort
 
-Repris tel quel du prompt initial : sommaire cliquable par acte et scène,
-recherche dans le texte, marque-pages, défilement automatique à vitesse réglable,
-taille de police, mode sombre, annotations libres par réplique sans jamais
-toucher au texte de l'auteur.
+Repris du prompt initial : sommaire cliquable par acte et scène, recherche dans
+le texte, marque-pages, taille de police, mode sombre, annotations libres par
+réplique sans jamais toucher au texte de l'auteur.
+
+**Le défilement automatique est retiré** (2026-08-03, après essai). On répète en
+s'arrêtant, en revenant, en butant : un texte qui avance seul convient à un
+prompteur, pas à un travail de mémoire.
 
 Deux ajouts dictés par l'usage sur iPhone :
 

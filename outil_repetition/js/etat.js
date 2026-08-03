@@ -74,7 +74,6 @@ export function etatInitial({ pieceId = null, mesRoles = [] } = {}) {
     repliqueCourante: null,
     reglages: Object.freeze({
       taillePolice: 1,
-      vitesseDefilement: CONFIG.VITESSE_DEFILEMENT[0],
       sombre: true,
       topReduit: false,
     }),

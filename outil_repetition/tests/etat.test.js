@@ -49,7 +49,7 @@ describe('état initial', () => {
     const etat = etatInitial(DEPART);
 
     assert.equal(etat.difficulte, CONFIG.DIFFICULTE_DEFAUT);
-    assert.equal(etat.reglages.vitesseDefilement, CONFIG.VITESSE_DEFILEMENT[0]);
+    assert.equal(etat.reglages.taillePolice, 1);
   });
 
   test('le mode sombre est le défaut', () => {

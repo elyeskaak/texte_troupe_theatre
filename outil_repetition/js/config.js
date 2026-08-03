@@ -70,9 +70,6 @@ export const CONFIG = Object.freeze({
    */
   MOTS_MAX_ALIGNEMENT: 400,
 
-  // --- Confort -----------------------------------------------------
-  VITESSE_DEFILEMENT: Object.freeze([1, 2, 3, 4]),
-
   // --- Données -----------------------------------------------------
   /** Version de schéma acceptée. Toute autre est refusée, jamais devinée. */
   SCHEMA_ACCEPTE: 'repetition/1',

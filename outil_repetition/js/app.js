@@ -577,46 +577,11 @@ function appliquer() {
   rendu.appliquerRevelations($('app'), etat);
 }
 
-/**
- * Ce que chaque mode fait, en une phrase.
- *
- * Le prototype en avait, et je les avais laissées tomber. Sept pastilles sans
- * légende n'expliquent rien : « test du top » ne dit pas ce qu'est un top, et
- * « aveugle » ne dit pas en quoi il diffère du rideau. La question a été posée.
- */
-const DESCRIPTIONS_MODES = Object.freeze({
-  lecture: 'Tout le texte est visible. Pour une première lecture, ou pour retrouver le rythme.',
-  masquage:
-    'Vos répliques sont cachées, la scène reste autour. Leur place est tenue : ' +
-    'vous voyez leur longueur. Survolez ou touchez pour révéler.',
-  amorce:
-    `Seuls les ${CONFIG.MOTS_AMORCE} premiers mots de vos répliques restent. ` +
-    'Une réplique trop courte est cachée entièrement.',
-  trous:
-    'Une partie des mots est masquée. Touchez un trou pour ce seul mot, ' +
-    'ailleurs pour toute la réplique.',
-  acronyme:
-    'Chaque mot est réduit à son initiale, ponctuation conservée. ' +
-    'Le squelette du phrasé reste : pour réviser ce qui est presque su.',
-  aveugle:
-    'Seul le nom de votre personnage reste à l’écran — pas même la scène autour. ' +
-    'Aucun appui : vous récitez de mémoire.',
-  top:
-    'Seule la réplique qui vous donne le signal reste visible, marquée ' +
-    '« votre signal ». C’est l’exercice du plateau : reconnaître son top et ' +
-    'enchaîner sans rien avoir sous les yeux.',
-  voix:
-    'Vos répliques sont cachées. Touchez « Réciter », dites votre texte, et ' +
-    'l’outil le compare au vrai : mots justes en vert, oubliés barrés, ' +
-    'substitués soulignés, avec le score.',
-});
-
 function synchroniserCommandes() {
   for (const pastille of $('choix-mode').children) {
     pastille.setAttribute('aria-pressed', String(pastille.dataset.mode === etat.mode));
   }
 
-  $('description-mode').textContent = DESCRIPTIONS_MODES[etat.mode] ?? '';
 
   $('bloc-difficulte').hidden = etat.mode !== etatSession.MODE.TROUS;
   $('curseur-difficulte').value = String(etat.difficulte);
@@ -1167,103 +1132,14 @@ function rechercher(fragment) {
   }
 }
 
-/** Défilement automatique, à vitesse réglable. */
-let defilement = null;
-
-function arreterDefilement() {
-  if (defilement !== null) {
-    cancelAnimationFrame(defilement);
-    defilement = null;
-  }
-
-  $('btn-defilement').textContent = '▶ Défiler';
-}
-
-function basculerDefilement() {
-  if (defilement !== null) {
-    arreterDefilement();
-    return;
-  }
-
-  $('btn-defilement').textContent = '■ Arrêter';
-
-  let precedent = performance.now();
-
-  const avancer = (maintenant) => {
-    const ecoule = maintenant - precedent;
-    precedent = maintenant;
-
-    // Vitesse en pixels **par seconde**, et non par cadre : sans cela le
-    // défilement irait deux fois plus vite sur un écran à 120 Hz — ce qui est
-    // exactement le cas de l'iPhone 15.
-    window.scrollBy({
-      top: (etat.reglages.vitesseDefilement * 22 * ecoule) / 1000,
-      behavior: 'instant',
-    });
-
-    const fin =
-      window.scrollY + window.innerHeight >=
-      document.documentElement.scrollHeight - 2;
-
-    if (fin) {
-      arreterDefilement();
-      return;
-    }
-
-    defilement = requestAnimationFrame(avancer);
-  };
-
-  defilement = requestAnimationFrame(avancer);
-}
-
-// ============================================================
-// ÉCRAN ALLUMÉ — Screen Wake Lock
-// ============================================================
-
-let verrouEcran = null;
-
-async function basculerVeille() {
-  if (verrouEcran !== null) {
-    await verrouEcran.release().catch(() => {});
-    verrouEcran = null;
-    $('btn-veille').setAttribute('aria-pressed', 'false');
-    return;
-  }
-
-  try {
-    verrouEcran = await navigator.wakeLock.request('screen');
-    $('btn-veille').setAttribute('aria-pressed', 'true');
-
-    // Le verrou est perdu quand l'onglet passe en arrière-plan : le bouton doit
-    // le refléter, sinon il prétendrait tenir un verrou qui n'existe plus.
-    verrouEcran.addEventListener('release', () => {
-      verrouEcran = null;
-      $('btn-veille').setAttribute('aria-pressed', 'false');
-    });
-  } catch (erreur) {
-    verrouEcran = null;
-    afficherMessage(
-      'bandeau-stockage',
-      `L’écran n’a pas pu être maintenu allumé (${erreur.message}).`,
-      'avertissement',
-    );
-  }
-}
-
 // ============================================================
 // ÉCOUTEURS DES ÉTAPES 8 ET 9
 // ============================================================
-
-// Le bouton de veille n'apparaît que si l'API existe : un bouton inerte est pire
-// que pas de bouton (P3). Safari le prend en charge depuis 16.4.
-$('btn-veille').hidden = !('wakeLock' in navigator);
 
 $('btn-sommaire').addEventListener('click', ouvrirBilan);
 $('btn-bilan').addEventListener('click', ouvrirBilan);
 $('btn-spot-check').addEventListener('click', spotCheck);
 $('btn-retour-texte').addEventListener('click', () => montrer('ecran-repetition'));
-$('btn-defilement').addEventListener('click', basculerDefilement);
-$('btn-veille').addEventListener('click', basculerVeille);
 
 $('recherche').addEventListener('input', (evenement) => {
   rechercher(evenement.target.value);
@@ -1279,15 +1155,6 @@ $('curseur-police').addEventListener('input', (evenement) => {
 });
 
 $('curseur-police').addEventListener('change', enregistrerReglages);
-
-$('curseur-vitesse').addEventListener('change', (evenement) => {
-  etat = etatSession.changerReglage(
-    etat,
-    'vitesseDefilement',
-    Number(evenement.target.value),
-  );
-  enregistrerReglages();
-});
 
 $('btn-exporter-2').addEventListener('click', exporterProgression);
 $('fichier-sauvegarde-2').addEventListener('change', (evenement) =>

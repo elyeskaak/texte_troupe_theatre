@@ -220,6 +220,16 @@
   }
   #barre-contenu{ margin-top:12px; }
   .barre[data-ouverte="0"] #barre-contenu{ display:none; }
+  /* En-tête de groupe dans la barre. Reprend le style de `label.champ` mais avec
+     une marge resserrée : dans un bandeau, 22 px au-dessus de chaque groupe
+     coûteraient plus de place que les libellés n'en font gagner. */
+  .entete-groupe{
+    display:block; margin:14px 0 7px; font-size:0.68rem;
+    letter-spacing:0.1em; text-transform:uppercase;
+    color:var(--estompe); font-weight:700;
+  }
+  #barre-contenu > .entete-groupe:first-child{ margin-top:0; }
+
   #btn-barre{
     flex:0 0 auto; min-height:38px; padding:7px 14px;
     font-size:0.8rem; letter-spacing:0.04em;
@@ -450,7 +460,7 @@
     color:var(--estompe); font:inherit; font-size:0.72rem; cursor:pointer;
   }
 
-  #recherche, #curseur-police, #curseur-vitesse{
+  #recherche, #curseur-police{
     width:100%; min-height:44px; accent-color:var(--projecteur);
   }
   #recherche{
@@ -601,7 +611,8 @@
       </div>
 
       <div id="barre-contenu">
-      <div class="rangee" id="choix-mode" role="group" aria-label="Mode de masquage">
+      <span class="entete-groupe">Modes de répétition</span>
+      <div class="rangee" id="choix-mode" role="group" aria-label="Mode de répétition">
         <button type="button" class="pastille pastille-mode" data-mode="lecture">Lecture</button>
         <button type="button" class="pastille pastille-mode" data-mode="masquage">Rideau</button>
         <button type="button" class="pastille pastille-mode" data-mode="amorce">Amorce</button>
@@ -612,12 +623,9 @@
         <button type="button" class="pastille pastille-mode" data-mode="voix">Récitation contrôlée</button>
       </div>
 
-      <!-- Sept pastilles sans légende n'expliquent rien : « test du top » ne dit
-           pas ce qu'est un top. Le texte vient de DESCRIPTIONS_MODES. -->
-      <p class="aide" id="description-mode"></p>
 
       <div id="bloc-difficulte" hidden>
-        <label class="champ" for="curseur-difficulte">
+        <label class="entete-groupe" for="curseur-difficulte">
           Mots masqués — <span id="valeur-difficulte">45</span>&nbsp;%
         </label>
         <input id="curseur-difficulte" type="range" min="5" max="100" step="5" value="45">
@@ -626,7 +634,8 @@
         </div>
       </div>
 
-      <div class="rangee" style="margin-top:10px">
+      <span class="entete-groupe">Affichage</span>
+      <div class="rangee">
         <button id="btn-mes-scenes" class="pastille pastille-mode" aria-pressed="false">
           Mes scènes
         </button>
@@ -637,23 +646,19 @@
         <button id="btn-retour-roles" class="btn btn-fantome btn-mini">Rôles</button>
       </div>
 
-      <div class="rangee" style="margin-top:10px">
+      <span class="entete-groupe">Progression</span>
+      <div class="rangee">
         <button id="btn-sommaire" class="btn btn-fantome btn-mini">Sommaire</button>
         <button id="btn-bilan" class="btn btn-fantome btn-mini">Bilan</button>
-        <button id="btn-defilement" class="btn btn-fantome btn-mini">▶ Défiler</button>
-        <button id="btn-veille" class="pastille pastille-mode" aria-pressed="false"
-                hidden>Écran allumé</button>
       </div>
 
-      <label class="champ" for="recherche">Chercher dans la pièce</label>
+      <label class="entete-groupe" for="recherche">Chercher dans la pièce</label>
       <input id="recherche" type="search" placeholder="un mot, un fragment…"
              autocomplete="off">
       <div id="resultats-recherche" class="pile" style="margin-top:10px"></div>
 
-      <label class="champ" for="curseur-police">Taille du texte</label>
+      <label class="entete-groupe" for="curseur-police">Taille du texte</label>
       <input id="curseur-police" type="range" min="85" max="160" step="5" value="100">
-      <label class="champ" for="curseur-vitesse">Vitesse de défilement</label>
-      <input id="curseur-vitesse" type="range" min="1" max="4" step="1" value="1">
 
       <p class="aide" id="message-micro" hidden></p>
       </div>
