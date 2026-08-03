@@ -38,16 +38,6 @@ RACINE = Path(__file__).resolve().parent.parent
 if str(RACINE) not in sys.path:
     sys.path.insert(0, str(RACINE))
 
-# La console Windows par défaut est en cp1252, qui ne sait pas écrire les
-# guillemets typographiques d'un texte de théâtre français. Sans cette ligne,
-# l'utilitaire s'interrompt sur un `UnicodeEncodeError` **après** avoir écrit son
-# fichier : le travail est fait, mais l'utilisateur voit une trace d'erreur et
-# croit à un échec. Le reste du projet tourne dans Colab, en UTF-8, et n'a jamais
-# rencontré ce cas.
-for flux in (sys.stdout, sys.stderr):
-    if hasattr(flux, "reconfigure"):
-        flux.reconfigure(encoding="utf-8", errors="replace")
-
 from theatre_editor import config  # noqa: E402
 from theatre_editor.utils import blocks, io  # noqa: E402
 
@@ -416,6 +406,28 @@ def convertir_fichier(chemin_docx: Path, dossier: Path | None = None) -> Path:
     return chemins.edit
 
 
+def _preparer_console() -> None:
+    """
+    Rend la console capable d'écrire du français.
+
+    La console Windows par défaut est en cp1252, qui ne sait pas écrire les
+    guillemets typographiques d'un texte de théâtre. Sans cela, l'utilitaire
+    s'interrompt sur un `UnicodeEncodeError` **après** avoir écrit son fichier :
+    le travail est fait, mais l'utilisateur voit une trace d'erreur et croit à un
+    échec. Le reste du projet tourne dans Colab, en UTF-8, et n'a jamais rencontré
+    ce cas.
+
+    Appelée depuis `main()` et **jamais à l'import**. Reconfigurer `sys.stdout`
+    au chargement du module en ferait un effet de bord global, subi par tout
+    test qui importe ce fichier — y compris ceux qui capturent la sortie
+    console pour vérifier un message. Un import ne doit rien changer au
+    programme qui l'effectue.
+    """
+    for flux in (sys.stdout, sys.stderr):
+        if hasattr(flux, "reconfigure"):
+            flux.reconfigure(encoding="utf-8", errors="replace")
+
+
 def main(arguments: list[str] | None = None) -> int:
     analyseur = argparse.ArgumentParser(
         description=(
@@ -430,6 +442,8 @@ def main(arguments: list[str] | None = None) -> int:
         default=None,
         help="dossier de travail (celui du DOCX par défaut)",
     )
+
+    _preparer_console()
 
     options = analyseur.parse_args(arguments)
 
