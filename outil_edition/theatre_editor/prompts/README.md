@@ -55,6 +55,32 @@ C'est un défaut observé sur une exécution réelle du pipeline, non une
 supposition. La section ajoutée impose de placer la ressoudure entièrement d'un
 seul côté.
 
+## Second ajout de fond, dans `prompt_edition.md` : prose ou vers
+
+Le prompt d'origine interdisait sans nuance de « transformer plusieurs lignes
+dramaturgiques en un paragraphe continu ». Or `prompt_ocr.md` fait qu'« une
+ligne imprimée devient une ligne de transcription » : sur une réplique en
+prose, le retour à la ligne n'est que l'habillage de la page ou de la colonne
+d'origine, sans aucune valeur dramaturgique. L'ancien prompt le préservait
+quand même, et la convention « une ligne devient un paragraphe » (§ DOCX)
+fragmentait alors une réplique continue en une dizaine de paragraphes Word.
+
+C'est un défaut observé sur une exécution réelle (« Le Cercle de craie
+caucasien », plus de la moitié des jonctions ligne à ligne d'un bloc de
+prose sans ponctuation finale), non une supposition — et il touche
+vraisemblablement aussi les répliques en prose des livres déjà édités depuis
+un vrai scan PDF.
+
+La section « Répliques » distingue donc désormais un retour à la ligne
+**mécanique** (la phrase se poursuit grammaticalement : à rétablir en un
+texte continu) d'un retour à la ligne **voulu** (vers, chant, énumération,
+silence : à conserver tel quel). Le vers pose un piège particulier :
+l'enjambement poétique (une phrase qui se poursuit d'un vers à l'autre) a
+exactement la même signature qu'une coupure mécanique — absence de
+ponctuation forte en fin de ligne. Seul le registre du passage (vers ou
+prose) permet de trancher, d'où la consigne de repli : dans le doute,
+conserver les lignes séparées.
+
 ## Répartition des rôles entre l'OCR et l'édition
 
 C'est la décision la plus importante que ces prompts traduisent, et elle mérite

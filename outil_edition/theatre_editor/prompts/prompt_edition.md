@@ -22,6 +22,9 @@ Tu peux uniquement corriger :
 - les espaces incorrects ;
 - les mots manifestement tronqués ou fusionnés ;
 - les mots artificiellement coupés en fin de ligne ou de page ;
+- les retours à la ligne purement mécaniques d'une réplique ou d'une
+  didascalie en prose, dus à la largeur de la page ou de la colonne
+  d'origine (voir « Répliques » ci-dessous) ;
 - la ponctuation manifestement détruite par l'OCR ;
 - les phrases interrompues uniquement par un changement de page.
 
@@ -127,10 +130,49 @@ Conserve les séparateurs de scène sous la forme :
 
 ### 6. Répliques
 
-Ne transforme jamais plusieurs lignes dramaturgiques en un paragraphe
-continu.
+Distingue deux origines possibles à un retour à la ligne.
 
-Conserve les blancs et ruptures voulus.
+**Retour à la ligne mécanique** : la phrase se poursuit grammaticalement
+sur la ligne suivante (pas de point, de point d'interrogation, de point
+d'exclamation ni de deux-points en fin de ligne ; la ligne suivante ne
+commence pas par une majuscule de début de phrase). C'est un simple
+habillage dû à la largeur de la page ou de la colonne d'origine, sans
+aucune valeur dramaturgique. Rétablis alors la réplique ou la didascalie
+en un texte continu, sur une seule ligne, en ne conservant qu'une espace
+à l'endroit de la coupure.
+
+**Retour à la ligne voulu** : tout le reste, en particulier un passage en
+VERS ou chanté (rythme, vers courts, rejets poétiques, indication de
+chant ou de mélopée, réplique du CHANTEUR ou d'un narrateur), une
+énumération, un silence ou une réplique interrompue. Ne transforme
+jamais ces lignes en un paragraphe continu, même quand la phrase s'y
+poursuit d'un vers à l'autre : conserve alors chaque vers sur sa propre
+ligne.
+
+**Cas particulier du vers classique (alexandrins, décasyllabes, etc.),
+sans aucune indication de chant.** Une tragédie ou une comédie
+entièrement écrite en vers rimés ou mesurés (Racine, Corneille, Molière
+en vers, Hugo…) ne comporte jamais de retour à la ligne mécanique : un
+vers tient toujours sur une seule ligne dans une édition imprimée, aussi
+souvent qu'il se termine sans ponctuation forte à cause d'un rejet
+(la phrase continue sur le vers suivant, procédé fréquent et volontaire).
+Reconnais ce cas à des indices propres au vers, indépendants de la
+ponctuation de fin de ligne :
+
+- chaque ligne commence par une majuscule, y compris quand elle ne
+  commence pas une phrase (convention d'imprimerie du vers) ;
+- les lignes d'un même passage ont une longueur régulière (nombre de
+  syllabes constant, donc de caractères comparable), très différente
+  d'une prose recomposée en continu ;
+- une rime ou un rythme perceptible d'un vers à l'autre.
+
+Face à ces indices, conserve un vers par ligne même sans point final,
+même sans indication de chant. Ne recolle jamais deux vers au seul motif
+qu'ils forment une phrase continue.
+
+En cas de doute sur la nature d'un passage, conserve les lignes séparées :
+mieux vaut une rupture superflue qu'une fusion qui romprait un rythme
+voulu.
 
 ## DOUTE OU ILLISIBILITÉ
 
