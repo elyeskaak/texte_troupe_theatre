@@ -201,6 +201,26 @@ export function revelerReplique(etat, id) {
   return _avec(etat, { revelees: [...etat.revelees, id] });
 }
 
+/** Remasque une réplique révélée. */
+export function masquerReplique(etat, id) {
+  if (!etat.revelees.includes(id)) {
+    return etat;
+  }
+
+  return _avec(etat, { revelees: etat.revelees.filter((autre) => autre !== id) });
+}
+
+/**
+ * Révèle ou remasque, selon l'état courant.
+ *
+ * Un dévoilement irréversible obligeait à changer de mode pour retrouver le
+ * masquage — donc à perdre toutes les autres révélations au passage. Basculer est
+ * le geste attendu : on touche pour voir, on retouche pour se retester.
+ */
+export function basculerRevelation(etat, id) {
+  return estRevelee(etat, id) ? masquerReplique(etat, id) : revelerReplique(etat, id);
+}
+
 /** Remasque tout, sans changer de mode. */
 export function toutRemasquer(etat) {
   return etat.revelees.length === 0 ? etat : _avec(etat, { revelees: [] });

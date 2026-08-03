@@ -16,6 +16,8 @@ import assert from 'node:assert/strict';
 
 import {
   allerA,
+  basculerRevelation,
+  masquerReplique,
   basculerMesScenesSeules,
   changerDifficulte,
   changerMesRoles,
@@ -457,5 +459,48 @@ describe('restauration', () => {
     for (const actif of restaure.roleActif) {
       assert.ok(restaure.mesRoles.includes(actif), actif);
     }
+  });
+});
+
+describe('révélation basculante', () => {
+  test('un second appel remasque', () => {
+    // Un dévoilement irréversible obligeait à changer de mode pour retrouver le
+    // masquage — donc à perdre toutes les autres révélations au passage.
+    let etat = basculerRevelation(etatInitial(DEPART), 'r_1');
+
+    assert.ok(estRevelee(etat, 'r_1'));
+
+    etat = basculerRevelation(etat, 'r_1');
+
+    assert.ok(!estRevelee(etat, 'r_1'));
+  });
+
+  test('remasquer n’atteint pas les autres répliques', () => {
+    let etat = basculerRevelation(etatInitial(DEPART), 'r_1');
+    etat = basculerRevelation(etat, 'r_2');
+    etat = basculerRevelation(etat, 'r_1');
+
+    assert.ok(!estRevelee(etat, 'r_1'));
+    assert.ok(estRevelee(etat, 'r_2'));
+  });
+
+  test('masquerReplique sur une réplique non révélée ne change rien', () => {
+    const avant = etatInitial(DEPART);
+
+    assert.equal(masquerReplique(avant, 'r_1'), avant);
+  });
+
+  test('l’original n’est pas modifié', () => {
+    const avant = basculerRevelation(etatInitial(DEPART), 'r_1');
+    basculerRevelation(avant, 'r_1');
+
+    assert.ok(estRevelee(avant, 'r_1'));
+  });
+
+  test('un changement de mode remasque tout, comme avant', () => {
+    let etat = basculerRevelation(etatInitial(DEPART), 'r_1');
+    etat = changerMode(etat, MODE.AMORCE);
+
+    assert.deepEqual(etat.revelees, []);
   });
 });

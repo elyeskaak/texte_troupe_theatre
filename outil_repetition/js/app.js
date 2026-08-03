@@ -151,11 +151,9 @@ function carteDePiece(entree) {
   titre.className = 'titre';
   titre.textContent = entree.titre;
 
-  const meta = document.createElement('div');
-  meta.className = 'meta';
-  meta.textContent = (entree.personnages ?? []).join(' · ') || 'aucun rôle parlant';
-
-  gauche.append(titre, meta);
+  // Le titre du REPET.json porte déjà « Auteur - Nom de la pièce » : la liste
+  // des personnages en dessous n'ajoutait rien et occupait deux lignes par pièce.
+  gauche.append(titre);
 
   const ouvrir = document.createElement('button');
   ouvrir.className = 'btn btn-fantome btn-mini';
@@ -523,13 +521,18 @@ function cablerInteractions(bloc) {
       const mot = evenement.target.closest('.mot[data-trou]');
 
       if (mot) {
-        mot.classList.add('devoile');
+        // Basculer, et non seulement dévoiler : on retouche le mot pour se
+        // retester sans quitter la réplique.
+        mot.classList.toggle('devoile');
         return;
       }
     }
 
-    etat = etatSession.revelerReplique(etat, replique.dataset.id);
-    replique.classList.add('revelee');
+    etat = etatSession.basculerRevelation(etat, replique.dataset.id);
+    replique.classList.toggle(
+      'revelee',
+      etatSession.estRevelee(etat, replique.dataset.id),
+    );
   });
 
   // Au clavier, pour la même action : la réplique porte `role="button"`.
@@ -542,8 +545,11 @@ function cablerInteractions(bloc) {
 
     if (replique) {
       evenement.preventDefault();
-      etat = etatSession.revelerReplique(etat, replique.dataset.id);
-      replique.classList.add('revelee');
+      etat = etatSession.basculerRevelation(etat, replique.dataset.id);
+      replique.classList.toggle(
+        'revelee',
+        etatSession.estRevelee(etat, replique.dataset.id),
+      );
     }
   });
 }
