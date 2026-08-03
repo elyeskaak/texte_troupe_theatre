@@ -376,11 +376,19 @@ en avant (pastille) et le personnage en petit sous-titre dessous. Retour
 d'usage : ce qu'on lit en premier devrait être *qui parle dans la pièce*,
 le lecteur qui prête sa voix n'étant qu'un détail entre parenthèses.
 `etiquetteReplique(personnage, slot, prenoms)` remplace `etiquetteSlot`
-pour cet usage : *« Clarissa (Caroline — H1) »*, ou *« Clarissa (H1) »*
-sans prénom. Le sous-titre `.personnage` séparé disparaît, fusionné dans
+pour cet usage. Le sous-titre `.personnage` séparé disparaît, fusionné dans
 la même pastille — un seul élément, plus de doublon visuel.
 `formaterPersonnage` convertit au passage la casse d'imprimerie du
 `REPET.json` (« CLARISSA ») en casse de lecture (« Clarissa »).
+
+**Troisième révision, sur le contenu de la parenthèse :** *« Clarissa
+(Caroline — H1) »* devient *« Clarissa (Caroline) »* — le code de slot
+retiré de l'affichage projeté, sur demande directe. Il ne sert plus
+qu'en interne (couleur, `data-slot`, et la fenêtre de contrôle, §7.3, où
+il reste nécessaire pour savoir quel champ correspond à quel lecteur).
+Sans prénom saisi, l'en-tête retombe sur le seul nom du personnage, sans
+parenthèses vides : *« Clarissa »* — l'état normal avant que quiconque
+n'ait rempli la fenêtre de contrôle, pas un cas d'erreur à signaler.
 
 Conséquence sur la mise à jour en direct (§7.2) : `mettreAJourPrenoms` ne
 peut plus se contenter de relire le slot, il lui faut aussi le personnage
@@ -630,6 +638,14 @@ rouvrir la fenêtre de projection reprenne à la bonne réplique (§13, point 3)
 | `BroadcastChannel` absent (navigateur très ancien) | message explicite « la fenêtre de contrôle ne se synchronisera pas », l'outil continue de fonctionner en projection seule |
 | `localStorage` plein ou indisponible | bandeau « la pièce et l'attribution ne seront pas conservées », l'outil continue sans persistance (P4, même logique que `outil_repetition`) |
 | élément `texte_sans_personnage` rencontré | affiché en style neutre distinct, jamais masqué ni fondu dans la réplique précédente |
+
+**Bug corrigé à l'usage :** `#section-bandeau-stockage` (où s'affiche le
+message ci-dessus) ne portait pas `hidden` dans le HTML de départ — vide en
+l'absence d'erreur de stockage, elle s'affichait quand même comme une carte
+vide (§6, cartes de section) une fois le style de section appliqué à toutes
+les `<section>` sans distinction. Corrigé en la cachant par défaut ; le
+JavaScript qui la peuple la rend déjà visible au bon moment
+(`cible.hidden = false`), ce mécanisme existait déjà et n'a pas changé.
 
 ---
 

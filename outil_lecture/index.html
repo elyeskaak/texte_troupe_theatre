@@ -357,7 +357,7 @@
     <button id="bouton-reprendre" type="button">Reprendre la lecture</button>
   </section>
 
-  <section id="section-bandeau-stockage"></section>
+  <section id="section-bandeau-stockage" hidden></section>
 
   <section id="section-import">
     <h2>1. Charger la pièce</h2>
@@ -888,12 +888,15 @@ function formaterPersonnage(nom) {
 
 /**
  * En-tête d'une réplique projetée : le personnage en premier (ce qu'on lit),
- * le lecteur entre parenthèses (qui le joue) — retour d'usage, qui inverse
- * l'emphase de la version précédente (slot d'abord, personnage en petit
- * sous-titre). « Clarissa (Caroline — H1) », ou « Clarissa (H1) » sans
- * prénom saisi, ou juste « Clarissa » si le personnage n'a aucun slot
- * attribué (ne devrait pas arriver une fois la lecture démarrée, §6, mais
- * cette fonction ne suppose jamais qu'un appelant a bien fait son travail).
+ * le prénom du lecteur entre parenthèses s'il est connu — « Clarissa
+ * (Caroline) ». Deuxième révision à l'usage sur ce point précis : le slot
+ * (H1, F3…) apparaissait aussi entre parenthèses (« Clarissa (Caroline —
+ * H1) ») ; retiré de l'affichage projeté, sur demande — le code du slot ne
+ * sert plus qu'en interne (couleur, `data-slot`, fenêtre de contrôle, §7.3,
+ * où il reste nécessaire pour associer un champ à un lecteur). Sans prénom
+ * saisi, l'en-tête retombe sur le seul nom du personnage, sans parenthèses
+ * vides — c'est l'état normal avant que la fenêtre de contrôle soit
+ * renseignée, pas un cas d'erreur.
  *
  * @param {string} personnage
  * @param {string|null} slot
@@ -901,13 +904,9 @@ function formaterPersonnage(nom) {
  */
 function etiquetteReplique(personnage, slot, prenoms) {
   const nomAffiche = formaterPersonnage(personnage);
+  const prenom = slot && prenoms && prenoms[slot];
 
-  if (!slot) {
-    return nomAffiche;
-  }
-
-  const prenom = prenoms && prenoms[slot];
-  return prenom ? `${nomAffiche} (${prenom} — ${slot})` : `${nomAffiche} (${slot})`;
+  return prenom ? `${nomAffiche} (${prenom})` : nomAffiche;
 }
 
 /**
