@@ -32,6 +32,31 @@
   #bouton-demarrer:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* ------------------------------------------------------------
+     Fenêtre de contrôle (§7 de ARCHITECTURE.md) : deuxième écran,
+     dix champs prénom toujours visibles, rappel discret.
+     ------------------------------------------------------------ */
+  #ecran-controle { padding: 1.5rem; max-width: 28rem; font-family: system-ui, sans-serif; }
+  .controle-rappel {
+    color: #555; font-size: 0.95rem; margin-bottom: 1rem;
+    padding-bottom: 0.6rem; border-bottom: 1px solid #ddd;
+  }
+  .ligne-slot { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
+  .ligne-slot label { width: 2.4rem; font-weight: bold; }
+  .ligne-slot input { flex: 1; padding: 0.3rem 0.5rem; font-size: 1rem; }
+
+  /* Basculement d'affichage selon `?fenetre=controle` (§7.1) : la même page
+     sert les deux rendus, un seul est monté visuellement à la fois. */
+  body.mode-controle #ecran-preparation,
+  body.mode-controle #ecran-projection { display: none; }
+  body:not(.mode-controle) #ecran-controle { display: none; }
+
+  #bouton-reouvrir-controle {
+    background: none; border: 1px solid #333; color: var(--attenue);
+    border-radius: 0.3vw; cursor: pointer; font-size: 0.9vw; line-height: 1;
+    padding: 0.2em 0.5em;
+  }
+
+  /* ------------------------------------------------------------
      Rendu projeté (§8 de ARCHITECTURE.md). Une diapo par élément de
      la liste plate, montées une fois, une seule visible à la fois
      via .actif (§8.1) — jamais de re-rendu au changement de position.
@@ -182,6 +207,16 @@
     <p id="erreur-attribution" class="message-erreur" hidden></p>
     <button id="bouton-demarrer" type="button" disabled>Démarrer la lecture</button>
   </section>
+
+  <section id="section-controle-fenetre">
+    <h2>3. Fenêtre de contrôle (deuxième écran)</h2>
+    <p>
+      Ouvre une seconde fenêtre à déplacer sur l'écran qui n'est pas projeté :
+      elle sert à saisir le prénom de chaque lecteur, en direct.
+    </p>
+    <button id="bouton-ouvrir-controle" type="button">Ouvrir la fenêtre de contrôle</button>
+    <p id="erreur-ouverture-controle" class="message-erreur" hidden></p>
+  </section>
 </div>
 
 <div id="ecran-projection">
@@ -189,7 +224,15 @@
   <div id="barre-progression">
     <span id="progression-scene"></span>
     <span id="progression-position"></span>
+    <button id="bouton-reouvrir-controle" type="button" title="Ouvrir/rouvrir la fenêtre de contrôle">⛭</button>
   </div>
+</div>
+
+<div id="ecran-controle" hidden>
+  <h1>Fenêtre de contrôle</h1>
+  <p id="controle-rappel" class="controle-rappel">—</p>
+  <div id="controle-champs"></div>
+  <p id="controle-erreur" class="message-erreur" hidden></p>
 </div>
 
 <script>
@@ -516,11 +559,31 @@ function lireStockage(cle) {
 }
 
 // ============================================================
-// 6. SYNCHRO — BroadcastChannel entre projection et contrôle.
-//    Arrive à l'étape 5 (§7 de ARCHITECTURE.md). Rien ici pour l'instant :
-//    la projection fonctionne seule (§9 « ce que la fenêtre de contrôle
-//    affiche » ne s'applique pas encore).
+// 6. SYNCHRO — BroadcastChannel entre projection et contrôle (§7)
 // ============================================================
+
+/**
+ * Ouvre le canal de synchronisation, ou `null` si l'API est absente
+ * (§11 : la projection continue de fonctionner seule, message explicite
+ * côté contrôle).
+ */
+function creerCanalSynchro() {
+  if (typeof BroadcastChannel === 'undefined') {
+    return null;
+  }
+
+  return new BroadcastChannel(CONFIG.CANAL_SYNCHRO);
+}
+
+/** Libellé de rappel affiché dans la fenêtre de contrôle (§7.3). */
+function texteRappelControle(scene, slotQuiParle, prenoms) {
+  if (!slotQuiParle) {
+    return scene || '—';
+  }
+
+  const libelleSlot = (prenoms && prenoms[slotQuiParle]) || slotQuiParle;
+  return `${scene || '—'}  ·  ${libelleSlot} (${slotQuiParle})`;
+}
 
 // ============================================================
 // 7. RENDU PROJECTION — montage une fois, décoration par classe (§8)
@@ -728,8 +791,43 @@ function texteProgressionScene(sommaire, position) {
 }
 
 // ============================================================
-// 8. RENDU CONTRÔLE — arrive à l'étape 5 (§7 de ARCHITECTURE.md).
+// 8. RENDU CONTRÔLE — dix champs prénom, un par slot (§7.3)
 // ============================================================
+
+function construireChampSlot(slot, valeurInitiale) {
+  const ligne = document.createElement('div');
+  ligne.className = 'ligne-slot';
+
+  const swatch = document.createElement('span');
+  swatch.className = 'swatch';
+  swatch.style.background = CONFIG.COULEURS_SLOT[slot];
+  ligne.appendChild(swatch);
+
+  const label = document.createElement('label');
+  label.textContent = slot;
+  label.setAttribute('for', `prenom-${slot}`);
+  ligne.appendChild(label);
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.id = `prenom-${slot}`;
+  input.dataset.slot = slot;
+  input.value = valeurInitiale || '';
+  input.placeholder = slot;
+  input.autocomplete = 'off';
+  ligne.appendChild(input);
+
+  return ligne;
+}
+
+/** Construit les dix champs, pré-remplis depuis `prenoms` (§7.3). */
+function construireChampsControle(container, prenoms) {
+  container.innerHTML = '';
+
+  for (const slot of CONFIG.SLOTS) {
+    container.appendChild(construireChampSlot(slot, prenoms[slot]));
+  }
+}
 
 // ============================================================
 // 9. RENDU PRÉPARATION — import et attribution personnage → slot (§6)
@@ -809,10 +907,136 @@ function lireCastDepuisTable(corps) {
 }
 
 // ============================================================
-// 10. CABLAGE — import, attribution, démarrage, navigation, reprise (§9-10)
+// 10. CABLAGE — bascule projection/contrôle, import, attribution,
+//     démarrage, navigation, reprise, synchro (§7, §9, §10)
 // ============================================================
 
-(() => {
+/**
+ * `index.html?fenetre=controle` ouvre la même page en rendu contrôle (§7.1).
+ * Sans le paramètre, c'est la fenêtre de projection qu'on double-clique.
+ */
+const MODE_FENETRE =
+  new URLSearchParams(location.search).get('fenetre') === 'controle'
+    ? 'controle'
+    : 'projection';
+
+if (MODE_FENETRE === 'controle') {
+  document.body.classList.add('mode-controle');
+}
+
+// --- stockage, jamais d'échec silencieux (§11), partagé par les deux modes -
+
+let _bandeauStockageAffiche = false;
+
+function _signalerEchecStockage(erreur) {
+  if (_bandeauStockageAffiche) {
+    return;
+  }
+
+  _bandeauStockageAffiche = true;
+
+  const cible =
+    document.getElementById('section-bandeau-stockage') ||
+    document.getElementById('controle-erreur');
+
+  if (!cible) {
+    return;
+  }
+
+  const p = document.createElement('p');
+  p.className = 'message-bandeau';
+  p.textContent =
+    `Le stockage local est indisponible (${erreur}) : rien ne sera ` +
+    'conservé d’une session à l’autre.';
+  cible.hidden = false;
+  (cible.tagName === 'P' ? cible.parentNode : cible).appendChild(p);
+}
+
+function ecrire(cle, valeur) {
+  const resultat = ecrireStockage(cle, valeur);
+
+  if (!resultat.ok) {
+    _signalerEchecStockage(resultat.erreur);
+  }
+
+  return resultat.ok;
+}
+
+function lire(cle) {
+  const resultat = lireStockage(cle);
+
+  if (!resultat.ok) {
+    _signalerEchecStockage(resultat.erreur);
+    return null;
+  }
+
+  return resultat.valeur;
+}
+
+// ============================================================
+// 10a. FENÊTRE DE CONTRÔLE
+// ============================================================
+
+function demarrerFenetreControle() {
+  const champs = document.getElementById('controle-champs');
+  const rappel = document.getElementById('controle-rappel');
+  const erreurControle = document.getElementById('controle-erreur');
+
+  let prenoms = lire(cleStockage('prenoms')) || {};
+  construireChampsControle(champs, prenoms);
+
+  const canal = creerCanalSynchro();
+
+  if (!canal) {
+    erreurControle.hidden = false;
+    erreurControle.textContent =
+      'BroadcastChannel n’est pas disponible sur ce navigateur : cette ' +
+      'fenêtre ne se synchronisera pas avec la projection.';
+  } else {
+    canal.postMessage({ type: 'bonjour' });
+    canal.addEventListener('message', (evenement) => {
+      const message = evenement.data;
+
+      if (message && message.type === 'position') {
+        rappel.textContent = texteRappelControle(message.scene, message.slotQuiParle, prenoms);
+      }
+    });
+  }
+
+  let ecritureEnAttente = null;
+
+  champs.addEventListener('input', (evenement) => {
+    const slot = evenement.target.dataset.slot;
+
+    if (!slot) {
+      return;
+    }
+
+    prenoms = { ...prenoms, [slot]: evenement.target.value };
+
+    if (canal) {
+      canal.postMessage({ type: 'prenoms', prenoms });
+    }
+
+    if (ecritureEnAttente) {
+      clearTimeout(ecritureEnAttente);
+    }
+
+    ecritureEnAttente = setTimeout(() => {
+      ecrire(cleStockage('prenoms'), prenoms);
+    }, CONFIG.DELAI_ECRITURE_MS);
+  });
+}
+
+if (MODE_FENETRE === 'controle') {
+  demarrerFenetreControle();
+}
+
+// ============================================================
+// 10b. FENÊTRE DE PROJECTION (et son écran de préparation)
+// ============================================================
+
+if (MODE_FENETRE === 'projection') (() => {
   let piece = null;
   let slug = null;
   let personnagesCourants = [];
@@ -821,6 +1045,7 @@ function lireCastDepuisTable(corps) {
   let position = 0;
   let prenoms = {};
   let ecritureSessionEnAttente = null;
+  let fenetreControle = null;
 
   const ecranPreparation = document.getElementById('ecran-preparation');
   const ecranProjection = document.getElementById('ecran-projection');
@@ -837,48 +1062,64 @@ function lireCastDepuisTable(corps) {
   const sectionReprise = document.getElementById('section-reprise');
   const messageReprise = document.getElementById('message-reprise');
   const boutonReprendre = document.getElementById('bouton-reprendre');
-  const sectionBandeauStockage = document.getElementById('section-bandeau-stockage');
+  const boutonOuvrirControle = document.getElementById('bouton-ouvrir-controle');
+  const erreurOuvertureControle = document.getElementById('erreur-ouverture-controle');
+  const boutonReouvrirControle = document.getElementById('bouton-reouvrir-controle');
 
-  // --- stockage, jamais d'échec silencieux (§11) --------------------------
+  prenoms = lire(cleStockage('prenoms')) || {};
 
-  let bandeauStockageAffiche = false;
+  // --- synchro avec la fenêtre de contrôle (§7.2) --------------------------
 
-  function signalerEchecStockage(erreur) {
-    if (bandeauStockageAffiche) {
+  const canal = creerCanalSynchro();
+
+  function diffuserPosition() {
+    if (!canal) {
       return;
     }
 
-    bandeauStockageAffiche = true;
-    const p = document.createElement('p');
-    p.className = 'message-bandeau';
-    p.textContent =
-      `Le stockage local est indisponible (${erreur}) : la pièce et ` +
-      'l’attribution ne seront pas conservées d’une session à l’autre.';
-    sectionBandeauStockage.appendChild(p);
+    const diapo = diapos[position];
+    const entree = scenePourPosition(sommaire, position);
+
+    canal.postMessage({
+      type: 'position',
+      scene: entree ? libelleScene(entree.acte, entree.scene) : null,
+      slotQuiParle: diapo && diapo.dataset.slot ? diapo.dataset.slot : null,
+    });
   }
 
-  function ecrire(cle, valeur) {
-    const resultat = ecrireStockage(cle, valeur);
+  if (canal) {
+    canal.addEventListener('message', (evenement) => {
+      const message = evenement.data;
 
-    if (!resultat.ok) {
-      signalerEchecStockage(resultat.erreur);
+      if (!message) {
+        return;
+      }
+
+      if (message.type === 'prenoms') {
+        prenoms = message.prenoms || {};
+        mettreAJourPrenoms(contenu, prenoms);
+      } else if (message.type === 'bonjour') {
+        diffuserPosition();
+      }
+    });
+  }
+
+  function ouvrirFenetreControle() {
+    const url = `${location.pathname}?fenetre=controle`;
+    fenetreControle = window.open(url, 'lecture-controle', 'width=420,height=680');
+
+    if (!fenetreControle) {
+      erreurOuvertureControle.hidden = false;
+      erreurOuvertureControle.textContent =
+        'La fenêtre de contrôle n’a pas pu s’ouvrir (bloqueur de popup ?). ' +
+        'Autorisez les popups pour cette page, puis réessayez.';
+    } else {
+      erreurOuvertureControle.hidden = true;
     }
-
-    return resultat.ok;
   }
 
-  function lire(cle) {
-    const resultat = lireStockage(cle);
-
-    if (!resultat.ok) {
-      signalerEchecStockage(resultat.erreur);
-      return null;
-    }
-
-    return resultat.valeur;
-  }
-
-  prenoms = lire(cleStockage('prenoms')) || {};
+  boutonOuvrirControle.addEventListener('click', ouvrirFenetreControle);
+  boutonReouvrirControle.addEventListener('click', ouvrirFenetreControle);
 
   // --- projection ----------------------------------------------------------
 
@@ -903,6 +1144,7 @@ function lireCastDepuisTable(corps) {
     afficherPosition(diapos, position);
     rafraichirProgression();
     planifierEcritureSession();
+    diffuserPosition();
   }
 
   function demarrerProjection(piecePreparee, cast, positionDepart) {
@@ -921,6 +1163,7 @@ function lireCastDepuisTable(corps) {
 
     afficherPosition(diapos, position);
     rafraichirProgression();
+    diffuserPosition();
   }
 
   document.addEventListener('keydown', (evenement) => {
