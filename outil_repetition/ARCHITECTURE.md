@@ -936,6 +936,84 @@ mauvais endroit, sans qu'aucun test de module ne s'en aperçoive.
 La pièce d'essai est écrite pour ce test, donc libre de droits — contrairement
 aux pièces réelles, que `.gitignore` écarte.
 
+### 13.1 bis Le câblage : `tests/cablage.test.js`
+
+Deux défauts réels ont traversé toute la suite sans être vus, et ils avaient la
+même forme : **deux endroits se référaient l'un à l'autre, l'un a changé, l'autre
+non.** Aucun n'était faux isolément.
+
+- « Sommaire » et « Bilan » appelaient tous deux `ouvrirBilan` — deux commandes
+  pour une action.
+- L'ordre des modes vit à la fois dans le HTML et dans `ORDRE_EXIGENCE` :
+  échanger deux crans d'un seul côté ferait mentir les crans « franchis ».
+
+Ce fichier lit `index.html`, `app.js` et `sw.js` **comme du texte** et vérifie que
+les références se répondent : tout `$('id')` existe, tout bouton a un écouteur,
+tout mode a son cran / sa description / sa place dans l'échelle, tout module est
+préchargé par le service worker, tout écran figure dans `ECRANS`.
+
+Ce n'est pas du test de comportement — il ne clique sur rien. Mais il attrape la
+*dérive entre fichiers* sans navigateur ni dépendance, donc dans `npm test`.
+
+Il a immédiatement signalé trois boutons partageant `exporterProgression`. Ma
+première règle interdisait tout partage : elle était trop stricte, ces trois
+boutons étant légitimes — un par écran, pour sauvegarder d'où l'on est. La règle
+juste est **« pas deux fois sur le même écran »**, car là l'une des deux est
+forcément de trop. Le test avait toutefois raison sur un point voisin : la même
+action s'appelait « Exporter » ici et « Sauvegarder » là, et ses identifiants
+`btn-exporter-2` / `-3` ne disaient pas où ils étaient. Les deux sont corrigés, et
+une seconde règle exige désormais qu'une action réutilisée porte partout le même
+libellé.
+
+### 13.1 ter Les parcours : `tests.html`
+
+Restait l'angle mort où s'est logé le défaut le plus coûteux : **l'enchaînement
+des gestes.** « Changer de rôle » appelait `montrer('ecran-roles')` sans
+`preparerEcranRoles()`. Correct ligne à ligne, inerte à l'usage — et invisible
+pour le test de câblage, puisque le bouton avait bien un écouteur.
+
+Ce défaut est né d'une amélioration : depuis que les rôles sont mémorisés, l'écran
+est court-circuité à l'ouverture, donc **jamais peuplé**. Auparavant il l'était
+toujours et l'oubli ne se voyait pas. Une fonctionnalité en a cassé une autre en
+silence.
+
+`tests.html` pilote la vraie page dans une `<iframe>` : vrais écouteurs, vrai
+rendu, vrai stockage. Onze parcours, ~40 ms chacun. Il exige un navigateur, donc
+il se lance depuis le serveur local — jamais par double-clic, `file://` refusant
+les modules ES.
+
+```bash
+python -m http.server 8000        # depuis la racine du dépôt
+# puis ouvrir /outil_repetition/tests.html
+```
+
+Trois choix méritent d'être notés.
+
+**La pièce d'essai est celle des tests unitaires**, chargée par `fetch` depuis
+`tests/exemple-repet.json`. J'en avais d'abord écrit une à la main : le schéma l'a
+refusée, et c'était heureux. Une pièce inventée dérive silencieusement du format
+dès qu'il évolue, et les parcours se mettraient à éprouver une forme que
+`repet_export.py` ne produit plus.
+
+**Le stockage est sauvegardé puis rendu.** L'iframe et la page de test partagent
+l'origine, donc le `localStorage` : sans cette précaution, lancer les tests
+effacerait une progression de travail.
+
+**Les caches sont purgés avant d'exécuter, et c'est une correction, pas une
+précaution.** Les onze parcours passaient — y compris après avoir *réintroduit
+exprès* le défaut de « Changer de rôle ». Le service worker servait l'ancien
+`app.js` : les tests éprouvaient un fichier que je venais de modifier sur le
+disque. Un harnais qui peut tourner sur du code périmé rend un vert qui ne veut
+rien dire, ce qui est plus nuisible qu'aucun test. `purgerLesCaches()` désenregistre
+les service workers, vide les `caches`, et revalide chaque module — car
+`?tests=…` renouvelle `index.html` mais pas les modules qu'il importe, dont l'URL
+est fixe.
+
+**Un test qui n'a jamais échoué ne prouve rien.** Chaque parcours de ce fichier a
+été vérifié en remettant le défaut qu'il vise : rouge avec, vert sans. C'est la
+seule façon de savoir qu'il n'est pas vide de sens — leçon retenue de la règle des
+doublons phonétiques, dont le test passait pour la mauvaise raison.
+
 ### 13.2 Priorités de couverture
 
 Cas de test à couvrir en priorité, parce que ce sont les endroits où un bug est

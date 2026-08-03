@@ -839,7 +839,7 @@ $('fichier-sauvegarde').addEventListener('change', (evenement) =>
   lireFichier(evenement.target, importerProgression),
 );
 
-$('btn-exporter').addEventListener('click', exporterProgression);
+$('btn-exporter-accueil').addEventListener('click', exporterProgression);
 $('btn-commencer').addEventListener('click', commencer);
 $('btn-retour-accueil').addEventListener('click', () => {
   rafraichirListePieces();
@@ -1351,8 +1351,8 @@ $('curseur-police').addEventListener('input', (evenement) => {
 
 $('curseur-police').addEventListener('change', enregistrerReglages);
 
-$('btn-exporter-2').addEventListener('click', exporterProgression);
-$('btn-exporter-3').addEventListener('click', exporterProgression);
+$('btn-exporter-bilan').addEventListener('click', exporterProgression);
+$('btn-exporter-texte').addEventListener('click', exporterProgression);
 $('fichier-sauvegarde-2').addEventListener('change', (evenement) =>
   lireFichier(evenement.target, importerProgression),
 );

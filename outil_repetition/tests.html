@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Parcours — outil de répétition</title>
+
+<!--
+  Tests de parcours.
+
+  `npm test` éprouve les modules purs, et `tests/cablage.test.js` vérifie que les
+  fichiers se répondent. Restait un angle mort, celui où se sont logés nos deux
+  vrais défauts : l'enchaînement des gestes. Un bouton peut être correctement
+  câblé, appeler une fonction juste, et ne rien faire d'utile parce qu'il
+  n'appelle pas *aussi* celle qui prépare l'écran qu'il ouvre.
+
+  C'était exactement le cas de « Changer de rôle » : `montrer('ecran-roles')`
+  sans `preparerEcranRoles()`. Correct ligne à ligne, inerte à l'usage. Aucun
+  test unitaire ne pouvait le voir, et le test de câblage non plus, puisque le
+  bouton avait bien un écouteur.
+
+  Ces tests-ci pilotent la vraie page dans une iframe : vrais écouteurs, vrai
+  rendu, vrai stockage. Le navigateur est indispensable, donc ils ne tournent pas
+  sous Node — ouvrez ce fichier depuis le serveur local, jamais par double-clic
+  (les modules ES sont refusés depuis `file://`).
+
+  Le stockage est sauvegardé au démarrage et rendu à la fin : lancer les tests ne
+  doit pas effacer une progression de travail.
+-->
+
+<style>
+  :root{ color-scheme:dark }
+  body{
+    margin:0; padding:20px; font:15px/1.55 ui-sans-serif,system-ui,sans-serif;
+    background:#131415; color:#e8e6e3;
+  }
+  h1{ font-size:19px; margin:0 0 4px }
+  .aide{ color:#8a8783; font-size:13px; margin:0 0 18px }
+  #bilan{ margin:0 0 18px; font-size:15px }
+  #bilan b{ font-weight:600 }
+  ol{ list-style:none; margin:0; padding:0 }
+  li{ padding:9px 0; border-top:1px solid #2a2b2c }
+  .nom{ display:flex; gap:9px; align-items:baseline }
+  .marque{ width:15px; flex:none; text-align:center }
+  .ok .marque{ color:#8fbf8f } .ko .marque{ color:#c8695f }
+  .duree{ margin-left:auto; color:#6a6763; font-size:12px; font-variant-numeric:tabular-nums }
+  .pourquoi{
+    margin:7px 0 0 24px; padding:9px 11px; background:#1b1c1d; border-radius:5px;
+    border-left:2px solid #c8695f; color:#d8b4af;
+    font:12.5px/1.5 ui-monospace,monospace; white-space:pre-wrap;
+  }
+  iframe{
+    width:390px; height:600px; border:1px solid #2a2b2c; border-radius:6px;
+    background:#131415; margin-top:20px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Parcours</h1>
+<p class="aide">
+  La vraie page, pilotée dans le cadre ci-dessous. Le stockage est restitué à la fin.
+</p>
+
+<p id="bilan">Exécution…</p>
+<p class="aide" id="purge"></p>
+<ol id="resultats"></ol>
+
+<iframe id="scene" title="Page sous test"></iframe>
+
+<script type="module">
+import { CLE } from './js/stockage.js';
+
+// ============================================================
+//  Harnais
+// ============================================================
+
+const cas = [];
+
+/** Déclare un parcours. `page` est le `window` de l'iframe. */
+const parcours = (nom, corps) => cas.push({ nom, corps });
+
+function affirmer(condition, message) {
+  if (!condition) {
+    throw new Error(message);
+  }
+}
+
+function egal(obtenu, attendu, message) {
+  const [a, b] = [JSON.stringify(obtenu), JSON.stringify(attendu)];
+
+  if (a !== b) {
+    throw new Error(`${message}\n  attendu : ${b}\n  obtenu  : ${a}`);
+  }
+}
+
+/**
+ * Attend qu'une condition devienne vraie.
+ *
+ * Le rendu, le stockage et les écouteurs sont asynchrones à des degrés divers.
+ * Sans cette attente, les tests seraient intermittents — le pire des états, car
+ * on finit par les relancer jusqu'à ce qu'ils passent, ce qui les rend inutiles.
+ */
+async function jusqua(condition, quoi, limite = 3000) {
+  const echeance = performance.now() + limite;
+
+  while (performance.now() < echeance) {
+    if (condition()) {
+      return;
+    }
+
+    await new Promise((r) => requestAnimationFrame(r));
+  }
+
+  throw new Error(`délai dépassé en attendant : ${quoi}`);
+}
+
+/**
+ * Purge tout ce qui pourrait servir une version périmée des fichiers.
+ *
+ * **Ceci n'est pas une précaution, c'est une correction.** La première version de
+ * ce fichier n'avait pas cette fonction, et les onze parcours passaient — y
+ * compris après avoir *réintroduit exprès* le défaut de « Changer de rôle ». Le
+ * service worker servait l'ancien `app.js` depuis son cache : les tests
+ * éprouvaient un fichier que je venais de modifier sur le disque, sans le savoir.
+ *
+ * Un harnais qui peut tourner sur du code périmé ne vaut rien : il rend un vert
+ * qui ne veut rien dire, et c'est plus nuisible qu'aucun test. La purge doit donc
+ * venir *avant* toute exécution, jamais après avoir douté.
+ */
+async function purgerLesCaches() {
+  const purges = { serviceWorkers: 0, caches: [] };
+
+  for (const enregistrement of await navigator.serviceWorker.getRegistrations()) {
+    await enregistrement.unregister();
+    purges.serviceWorkers += 1;
+  }
+
+  for (const nom of await caches.keys()) {
+    await caches.delete(nom);
+    purges.caches.push(nom);
+  }
+
+  // Le cache HTTP est l'autre moitié du piège : `?tests=…` renouvelle bien
+  // `index.html`, mais les modules qu'il importe gardent leur URL fixe. On les
+  // fait donc revalider un par un, ce qui rafraîchit le cache du navigateur
+  // avant que l'iframe ne les demande.
+  const modules = [
+    'app', 'comparaison', 'config', 'etat', 'modele',
+    'rendu', 'schema', 'stockage', 'texte', 'tirage', 'voix',
+  ];
+
+  await Promise.all(
+    ['./index.html', ...modules.map((m) => `./js/${m}.js`)].map((chemin) =>
+      fetch(chemin, { cache: 'reload' }),
+    ),
+  );
+
+  return purges;
+}
+
+/** Charge `index.html` à neuf et rend son `window`, prêt à l'emploi. */
+function chargerPage() {
+  const cadre = document.getElementById('scene');
+
+  return new Promise((resoudre, rejeter) => {
+    cadre.onload = () => {
+      const page = cadre.contentWindow;
+
+      // Une erreur non rattrapée dans la page doit faire échouer le parcours,
+      // pas passer inaperçue dans la console.
+      page.addEventListener('error', (e) => rejeter(new Error(`page : ${e.message}`)));
+
+      jusqua(() => page.document.getElementById('liste-pieces'), 'page prête')
+        .then(() => resoudre(page), rejeter);
+    };
+
+    // L'horodatage empêche le cache HTTP de servir une version périmée — piège
+    // qui nous a déjà fait douter d'un code juste à plusieurs reprises.
+    cadre.src = `./index.html?tests=${Date.now()}`;
+  });
+}
+
+const $ = (page, id) => page.document.getElementById(id);
+
+/** Clique un élément par identifiant, et vérifie au passage qu'il existe. */
+function clic(page, id) {
+  const cible = $(page, id);
+
+  affirmer(cible, `#${id} est absent de la page`);
+  affirmer(!cible.disabled, `#${id} est grisé : impossible de cliquer`);
+  cible.click();
+}
+
+/** L'écran actuellement affiché. */
+function ecran(page) {
+  return [...page.document.querySelectorAll('#app > section.active')]
+    .map((s) => s.id)
+    .join('+');
+}
+
+// ============================================================
+//  La pièce d'essai
+// ============================================================
+
+/**
+ * La pièce d'essai est **celle des tests unitaires**, chargée depuis
+ * `tests/exemple-repet.json`.
+ *
+ * J'avais d'abord écrit ici une pièce inventée. Elle a été refusée par le
+ * schéma — et c'était heureux, car une pièce inventée à la main dérive
+ * silencieusement du format dès qu'il évolue, et les parcours se mettraient
+ * alors à éprouver une forme que l'outil d'édition ne produit plus. Un seul
+ * exemplaire de référence pour toute la suite : s'il devient faux, tout casse
+ * d'un coup, ce qui est exactement ce qu'on veut.
+ *
+ * Elle contient CLARISSA (3 répliques) et SIR ROWLAND (2), sur trois unités
+ * dont une implicite — assez pour éprouver les enchaînements, assez peu pour
+ * que les nombres attendus se vérifient à l'œil.
+ */
+const PIECE = await fetch('./tests/exemple-repet.json').then((r) => {
+  if (!r.ok) {
+    throw new Error(`exemple-repet.json introuvable (${r.status})`);
+  }
+
+  return r.text();
+});
+
+/** Charge la pièce d'essai par le vrai chemin d'import : coller, puis charger. */
+async function importerLaPiece(page) {
+  // Deux dépliages successifs : « + Ajouter une pièce », puis « ou coller le
+  // texte ». Le collage est le second recours, derrière le choix de fichier —
+  // qu'on ne peut pas simuler, un `<input type="file">` n'étant pas remplissable
+  // par script.
+  clic(page, 'btn-ouvrir-ajout');
+  await jusqua(() => !$(page, 'bloc-ajout').hidden, 'le bloc d’ajout s’ouvre');
+
+  clic(page, 'btn-basculer-collage');
+  await jusqua(() => !$(page, 'bloc-collage').hidden, 'la zone de collage s’ouvre');
+
+  $(page, 'saisie-piece').value = PIECE;
+  clic(page, 'btn-charger');
+  await jusqua(() => ecran(page) === 'ecran-roles', 'l’écran des rôles s’ouvre');
+}
+
+/** Coche un rôle par son nom, dans la zone donnée. */
+async function choisirRole(page, zone, nom) {
+  const pastille = [...$(page, zone).children].find((p) => p.dataset.nom === nom);
+
+  affirmer(pastille, `aucune pastille « ${nom} » dans #${zone}`);
+  pastille.click();
+}
+
+/**
+ * Ouvre la pièce enregistrée depuis l'accueil.
+ *
+ * Les cartes n'ont pas d'identifiant : on cherche le bouton par son libellé,
+ * comme le ferait un lecteur d'écran — donc comme le ferait l'utilisateur.
+ */
+async function ouvrirPieceEnregistree(page) {
+  await jusqua(
+    () => $(page, 'liste-pieces').querySelector('.carte'),
+    'la pièce enregistrée paraît sur l’accueil',
+  );
+
+  const ouvrir = [...$(page, 'liste-pieces').querySelectorAll('button')].find(
+    (b) => b.textContent.trim() === 'Ouvrir',
+  );
+
+  affirmer(ouvrir, 'aucun bouton « Ouvrir » sur la carte de la pièce');
+  ouvrir.click();
+}
+
+/** Va jusqu'au texte : import, un rôle, « Commencer ». */
+async function jusquAuTexte(page, ...roles) {
+  await importerLaPiece(page);
+
+  for (const nom of roles) {
+    await choisirRole(page, 'choix-mes-roles', nom);
+  }
+
+  await jusqua(() => !$(page, 'btn-commencer').disabled, '« Commencer » s’active');
+  clic(page, 'btn-commencer');
+  await jusqua(() => ecran(page) === 'ecran-repetition', 'le texte s’affiche');
+}
+
+// ============================================================
+//  Les parcours
+// ============================================================
+
+parcours('un écran, et un seul, est affiché à tout instant', async (page) => {
+  // Un écran absent de `ECRANS` ne serait jamais masqué, et deux écrans
+  // s'empileraient — défaut très visible à l'œil, jamais vu par un test.
+  egal(ecran(page), 'ecran-accueil', 'au chargement, l’accueil');
+
+  await importerLaPiece(page);
+  egal(ecran(page), 'ecran-roles', 'après import, les rôles');
+});
+
+parcours('l’import mène aux rôles, avec une pastille par personnage', async (page) => {
+  await importerLaPiece(page);
+
+  const noms = [...$(page, 'choix-mes-roles').children].map((p) => p.dataset.nom);
+
+  egal(noms, ['CLARISSA', 'SIR ROWLAND'], 'les deux rôles sont proposés');
+  affirmer($(page, 'btn-commencer').disabled, 'sans rôle choisi, « Commencer » est grisé');
+});
+
+parcours('choisir un rôle libère « Commencer »', async (page) => {
+  await jusquAuTexte(page, 'CLARISSA');
+
+  // Le texte doit être là, et les répliques d'ALICE marquées comme siennes.
+  egal(
+    page.document.querySelectorAll('#app .replique').length,
+    5,
+    'les cinq répliques sont montées',
+  );
+  egal(
+    page.document.querySelectorAll('#app .replique.mienne').length,
+    3,
+    'les trois répliques de CLARISSA sont les miennes',
+  );
+});
+
+parcours('les rôles sont retenus d’une ouverture à l’autre', async (page) => {
+  await jusquAuTexte(page, 'CLARISSA');
+
+  // Rechargement complet : c'est la mémorisation qui doit court-circuiter les
+  // rôles, sans quoi il faudrait tout resélectionner à chaque ouverture.
+  const rechargee = await chargerPage();
+
+  await ouvrirPieceEnregistree(rechargee);
+  await jusqua(
+    () => ecran(rechargee) === 'ecran-repetition',
+    'l’ouverture va droit au texte, sans repasser par les rôles',
+  );
+});
+
+parcours('« Changer de rôle » rouvre un écran utilisable', async (page) => {
+  // LE défaut. Depuis que les rôles sont retenus, l'écran est court-circuité à
+  // l'ouverture et n'était donc jamais peuplé : « Changer de rôle » montrait une
+  // page sans pastille, « Commencer » grisé, cul-de-sac.
+  //
+  // Il faut passer par un rechargement pour le reproduire : dans la même
+  // session, l'écran a déjà été peuplé par l'import, et le défaut se cache.
+  await jusquAuTexte(page, 'CLARISSA');
+
+  const rechargee = await chargerPage();
+
+  await ouvrirPieceEnregistree(rechargee);
+  await jusqua(() => ecran(rechargee) === 'ecran-repetition', 'droit au texte');
+
+  clic(rechargee, 'btn-retour-roles');
+  await jusqua(() => ecran(rechargee) === 'ecran-roles', 'les rôles s’ouvrent');
+
+  egal(
+    [...$(rechargee, 'choix-mes-roles').children].length,
+    2,
+    'l’écran est peuplé, et non vide comme il l’était',
+  );
+  affirmer(
+    !$(rechargee, 'btn-commencer').disabled,
+    '« Commencer » est actif : le rôle retenu est bien présélectionné',
+  );
+
+  const presses = [...$(rechargee, 'choix-mes-roles').children]
+    .filter((p) => p.getAttribute('aria-pressed') === 'true')
+    .map((p) => p.dataset.nom);
+
+  egal(presses, ['CLARISSA'], 'le rôle retenu apparaît coché');
+
+  clic(rechargee, 'btn-commencer');
+  await jusqua(() => ecran(rechargee) === 'ecran-repetition', 'et l’on repart au texte');
+});
+
+parcours('un rôle ajouté est actif aussitôt', async (page) => {
+  // Un rôle ajouté mais inactif ne serait pas masqué : on croirait le répéter
+  // sans jamais être interrogé dessus.
+  await importerLaPiece(page);
+  await choisirRole(page, 'choix-mes-roles', 'CLARISSA');
+  await choisirRole(page, 'choix-mes-roles', 'SIR ROWLAND');
+
+  await jusqua(() => !$(page, 'bloc-role-actif').hidden, 'le choix du rôle actif paraît');
+
+  const actifs = [...$(page, 'choix-role-actif').children]
+    .filter((p) => p.getAttribute('aria-pressed') === 'true')
+    .map((p) => p.dataset.nom);
+
+  egal(actifs.sort(), ['CLARISSA', 'SIR ROWLAND'], 'les deux rôles sont actifs');
+
+  clic(page, 'btn-commencer');
+  await jusqua(() => ecran(page) === 'ecran-repetition', 'le texte s’affiche');
+  egal(
+    page.document.querySelectorAll('#app .replique.mienne').length,
+    5,
+    'CLARISSA (3) et SIR ROWLAND (2) sont masquées',
+  );
+});
+
+parcours('chaque cran de l’échelle change le mode', async (page) => {
+  // L'échelle vit dans le HTML et l'ordre dans `app.js` : ce parcours vérifie
+  // que cliquer un cran a bien l'effet annoncé, cran par cran.
+  await jusquAuTexte(page, 'CLARISSA');
+
+  const crans = [...page.document.querySelectorAll('.cran')];
+
+  affirmer(crans.length >= 6, `l’échelle a ${crans.length} crans, c’est trop peu`);
+
+  for (const cran of crans) {
+    const attendu = cran.dataset.mode;
+
+    cran.click();
+    await jusqua(
+      () => $(page, 'app').dataset.mode === attendu,
+      `le mode passe à « ${attendu} »`,
+    );
+    affirmer(
+      cran.getAttribute('aria-pressed') === 'true',
+      `le cran « ${attendu} » ne se marque pas comme choisi`,
+    );
+  }
+});
+
+parcours('cliquer dévoile, recliquer remasque', async (page) => {
+  // Demandé explicitement : « Quand je reclique sur une réplique démasquée, il
+  // faut la remasquer. » Le premier clic seul serait déjà passé pour correct.
+  await jusquAuTexte(page, 'CLARISSA');
+
+  const replique = page.document.querySelector('#app .replique.actif');
+
+  affirmer(replique, 'aucune réplique active à dévoiler');
+
+  replique.click();
+  await jusqua(() => replique.classList.contains('revelee'), 'le clic dévoile');
+
+  replique.click();
+  await jusqua(() => !replique.classList.contains('revelee'), 'le second clic remasque');
+});
+
+parcours('« Tout remasquer » referme tout ce qui traîne', async (page) => {
+  await jusquAuTexte(page, 'CLARISSA');
+
+  for (const replique of page.document.querySelectorAll('#app .replique.actif')) {
+    replique.click();
+  }
+
+  await jusqua(
+    () => page.document.querySelectorAll('#app .replique.revelee').length === 3,
+    'les trois répliques sont dévoilées',
+  );
+
+  clic(page, 'btn-tout-remasquer');
+  await jusqua(
+    () => page.document.querySelectorAll('#app .replique.revelee').length === 0,
+    'plus rien n’est dévoilé',
+  );
+});
+
+parcours('en mode trous, les mots se dévoilent un à un', async (page) => {
+  // Demandé explicitement : « il faut afficher les mots un par un et pas tous à
+  // la fois ». Dévoiler un mot ne doit pas dévoiler ses voisins.
+  await jusquAuTexte(page, 'CLARISSA');
+
+  const cran = page.document.querySelector('.cran[data-mode="trous"]');
+
+  affirmer(cran, 'aucun cran « trous » dans l’échelle');
+  cran.click();
+  await jusqua(() => $(page, 'app').dataset.mode === 'trous', 'le mode trous s’installe');
+
+  const trous = [...page.document.querySelectorAll('#app .replique.actif .mot[data-trou="1"]')];
+
+  affirmer(trous.length >= 2, `il faut au moins deux trous, il y en a ${trous.length}`);
+
+  trous[0].click();
+  await jusqua(() => trous[0].classList.contains('devoile'), 'le premier trou se dévoile');
+  affirmer(
+    !trous[1].classList.contains('devoile'),
+    'le second trou s’est dévoilé aussi : ils ne sont pas indépendants',
+  );
+
+  // Et il se remasque, comme les répliques.
+  trous[0].click();
+  await jusqua(() => !trous[0].classList.contains('devoile'), 'le trou se remasque');
+});
+
+parcours('le sommaire liste mes scènes et y ramène', async (page) => {
+  await jusquAuTexte(page, 'CLARISSA');
+
+  clic(page, 'btn-sommaire');
+  await jusqua(() => ecran(page) === 'ecran-bilan', 'le sommaire s’ouvre');
+
+  const lignes = [...page.document.querySelectorAll('#bilan-scenes li')];
+
+  egal(lignes.length, 3, 'mes trois unités sont listées');
+
+  lignes.at(-1).click();
+  await jusqua(() => ecran(page) === 'ecran-repetition', 'on revient au texte');
+});
+
+// ============================================================
+//  Exécution
+// ============================================================
+
+/**
+ * Le stockage est partagé entre cette page et l'iframe : elles ont la même
+ * origine. On le met donc de côté et on le rend à la fin, pour qu'un lancement
+ * de tests n'efface pas une progression réelle.
+ */
+function sauvegarderStockage() {
+  const copie = Object.entries({ ...localStorage });
+
+  localStorage.clear();
+
+  return () => {
+    localStorage.clear();
+
+    for (const [cle, valeur] of copie) {
+      localStorage.setItem(cle, valeur);
+    }
+  };
+}
+
+const liste = document.getElementById('resultats');
+
+function inscrire({ nom, erreur, duree }) {
+  const li = document.createElement('li');
+
+  li.className = erreur ? 'ko' : 'ok';
+  li.innerHTML =
+    `<div class="nom"><span class="marque">${erreur ? '✗' : '✓'}</span>` +
+    `<span></span><span class="duree">${Math.round(duree)} ms</span></div>`;
+  li.querySelector('.nom span:nth-child(2)').textContent = nom;
+
+  if (erreur) {
+    const bloc = document.createElement('div');
+
+    bloc.className = 'pourquoi';
+    bloc.textContent = erreur.message;
+    li.appendChild(bloc);
+  }
+
+  liste.appendChild(li);
+}
+
+const purges = await purgerLesCaches();
+
+document.getElementById('purge').textContent =
+  `Purgé avant exécution : ${purges.serviceWorkers} service worker, ` +
+  `cache${purges.caches.length > 1 ? 's' : ''} ${purges.caches.join(', ') || '(aucun)'}. ` +
+  'Le service worker se réenregistrera au premier chargement de la page.';
+
+const rendreStockage = sauvegarderStockage();
+const resultats = [];
+
+for (const { nom, corps } of cas) {
+  const depart = performance.now();
+  let erreur = null;
+
+  try {
+    localStorage.clear();
+    await corps(await chargerPage());
+  } catch (e) {
+    erreur = e;
+  }
+
+  const resultat = { nom, erreur, duree: performance.now() - depart };
+
+  resultats.push(resultat);
+  inscrire(resultat);
+}
+
+rendreStockage();
+
+const echecs = resultats.filter((r) => r.erreur).length;
+const bilan = document.getElementById('bilan');
+
+bilan.innerHTML = echecs
+  ? `<b style="color:#c8695f">${echecs} échec${echecs > 1 ? 's' : ''}</b> ` +
+    `sur ${resultats.length} parcours.`
+  : `<b style="color:#8fbf8f">${resultats.length} parcours</b> — tout passe.`;
+
+// Pour être lu depuis l'extérieur (outil de pilotage, console).
+window.RESULTATS_PARCOURS = {
+  total: resultats.length,
+  echecs,
+  details: resultats.map(({ nom, erreur }) => ({ nom, erreur: erreur?.message ?? null })),
+};
+</script>
+</body>
+</html>
