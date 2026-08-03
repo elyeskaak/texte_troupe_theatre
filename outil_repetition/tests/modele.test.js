@@ -719,12 +719,54 @@ describe('répétition espacée — statut déduit des scores', () => {
     assert.equal(statutDepuisScores(beaucoup, T, REGLES), STATUT.A_REVISER);
   });
 
-  test('les échecs récents ne défont pas une maîtrise valide', () => {
-    // Choix assumé : le statut mesure ce qui a été réussi, pas la dernière
-    // tentative. Un raté sur un mot ne doit pas effacer trois réussites.
+  test('un échec récent défait une maîtrise valide', () => {
+    // C'est la dernière récitation qui dit où en est la mémoire, pas la moyenne
+    // d'un passé flatteur.
     const suivi = scores([0, 40], [1, 95], [2, 95], [3, 95]);
 
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.A_REVISER);
+  });
+
+  test('un échec rompt la série : une seule réussite ne suffit pas à revenir', () => {
+    // Sans cela, un raté suivi d'une réussite restaurerait la maîtrise
+    // instantanément — la série compte, pas le total.
+    const suivi = scores([0, 95], [1, 40], [2, 95], [3, 95], [4, 95]);
+
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.A_REVISER);
+  });
+
+  test('trois réussites après l’échec rétablissent la maîtrise', () => {
+    const suivi = scores([0, 95], [1, 95], [2, 95], [3, 40], [4, 95], [5, 95]);
+
     assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.MAITRISEE);
+  });
+
+  test('un échec sur une réplique jamais sue la laisse en cours', () => {
+    // « À réviser » suppose une maîtrise passée : sans elle, il n'y a rien à
+    // réviser, il y a à apprendre.
+    const suivi = scores([0, 40], [1, 60]);
+
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.EN_COURS);
+  });
+
+  test('une validation manuelle répare la série', () => {
+    // C'est l'usage même du bouton « c'était juste » : la transcription a
+    // faussement rompu une série.
+    const rompue = scores([0, 55], [1, 95], [2, 95], [3, 95]);
+    const reparee = {
+      scores: rompue.scores.map((e, i) => (i === 0 ? { ...e, corrige: true } : e)),
+    };
+
+    assert.equal(statutDepuisScores(rompue, T, REGLES), STATUT.A_REVISER);
+    assert.equal(statutDepuisScores(reparee, T, REGLES), STATUT.MAITRISEE);
+  });
+
+  test('l’échéance suit la série, non le total des réussites', () => {
+    // Six réussites dont la série n'en compte que trois : sept jours, pas
+    // trente-cinq.
+    const suivi = scores([8, 95], [9, 95], [10, 95], [11, 40], [12, 95], [13, 95], [14, 95]);
+
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.A_REVISER);
   });
 
   test('une entrée mal formée est ignorée', () => {
@@ -741,6 +783,19 @@ describe('prochaineRevision', () => {
 
   test('null tant que la réplique n’est pas sue', () => {
     assert.equal(prochaineRevision({ scores: [{ le: T, score: 95 }] }, REGLES), null);
+  });
+
+  test('null quand la série est rompue, même après une maîtrise passée', () => {
+    const suivi = {
+      scores: [
+        { le: T, score: 40 },
+        { le: T - JOUR, score: 95 },
+        { le: T - 2 * JOUR, score: 95 },
+        { le: T - 3 * JOUR, score: 95 },
+      ],
+    };
+
+    assert.equal(prochaineRevision(suivi, REGLES), null);
   });
 
   test('sept jours après la dernière réussite, à trois réussites', () => {

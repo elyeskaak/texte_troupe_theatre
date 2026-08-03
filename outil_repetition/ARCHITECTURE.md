@@ -757,9 +757,32 @@ mesurerait la qualité de la transcription plutôt que celle de la mémoire.
 
 Le bouton ne s'affiche pas au-dessus du seuil : il n'y aurait rien à corriger.
 
-**Un échec récent ne défait pas une maîtrise valide.** Le statut mesure ce qui a
-été réussi, pas la dernière tentative : un raté sur un mot ne doit pas effacer
-trois réussites.
+**Un échec récent défait une maîtrise valide**, et c'est la série qui compte —
+non le total.
+
+> **Révision du 2026-08-03**, contre la première version de cette règle. J'avais
+> écrit l'inverse : « le statut mesure ce qui a été réussi, pas la dernière
+> tentative ». C'était faux. C'est la dernière récitation qui dit où en est la
+> mémoire, pas la moyenne d'un passé flatteur.
+
+Le compte porte donc sur les réussites **consécutives**, en remontant depuis la
+plus récente. Un échec ramène la série à zéro, et il faut refaire les trois
+réussites. Sans cela, un raté suivi d'une seule réussite restaurerait
+instantanément une maîtrise, puisque le *total* des réussites, lui, aurait
+augmenté.
+
+L'échéance suit elle aussi la série : six réussites dont la série n'en compte que
+trois donnent sept jours, pas trente-cinq.
+
+Le statut après un échec distingue deux situations, et cette distinction est la
+raison d'être du quatrième statut :
+
+| Historique | Statut |
+|---|---|
+| série rompue, mais trois réussites atteintes un jour | `A_REVISER` |
+| série rompue, jamais trois réussites | `EN_COURS` |
+
+L'un se rafraîchit, l'autre s'apprend.
 
 Conséquence assumée, et elle est réelle : **sans micro, aucune progression.** La
 reconnaissance vocale exigeant le réseau (§8.2), on ne peut plus faire avancer une

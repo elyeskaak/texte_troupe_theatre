@@ -337,14 +337,18 @@ const JOUR = 86400000;
  * mesurait la confiance, pas la mémoire — et la confiance est précisément ce qui
  * trompe. Ici, seul le micro fait avancer une réplique.
  *
- * La règle, en trois temps :
+ * La règle, en quatre temps :
  *
- * 1. **Une réussite** est une récitation à `SEUIL_REUSSITE` % ou plus.
- * 2. **Sue** à partir de `REUSSITES_POUR_MAITRISE` réussites, à condition que la
- *    dernière soit assez récente.
- * 3. **Répétition espacée** : chaque réussite au-delà du seuil repousse
- *    l'échéance, selon `INTERVALLES_REVISION_JOURS`. Passé ce délai, la réplique
- *    devient `A_REVISER` — sue autrefois, à revoir maintenant.
+ * 1. **Une réussite** est une récitation à `SEUIL_REUSSITE` % ou plus, ou une
+ *    récitation que j'ai validée à la main.
+ * 2. **Sue** à partir de `REUSSITES_POUR_MAITRISE` réussites **consécutives**, à
+ *    condition que la dernière soit assez récente.
+ * 3. **Un échec rompt la série.** Une réplique sue trois fois puis ratée n'est
+ *    plus sue : c'est la dernière récitation qui dit où en est la mémoire, pas la
+ *    moyenne d'un passé flatteur. Il faut refaire les trois réussites.
+ * 4. **Répétition espacée** : l'échéance croît avec la longueur de la série,
+ *    selon `INTERVALLES_REVISION_JOURS`. Passé ce délai, la réplique devient
+ *    `A_REVISER` — sue autrefois, à revoir maintenant.
  *
  * `A_REVISER` est un statut distinct d'`EN_COURS`, et c'est le point qui compte :
  * une réplique sue trois fois puis oubliée ne demande pas le même travail qu'une
@@ -357,32 +361,69 @@ const JOUR = 86400000;
  */
 export function statutDepuisScores(suivi, maintenant, reglages) {
   const { seuil, reussitesPourMaitrise, intervallesJours } = reglages;
-  const scores = Array.isArray(suivi?.scores) ? suivi.scores : [];
-  const estReussite = (entree) => _estReussite(entree, seuil);
+  const scores = _parDateDecroissante(suivi);
 
   if (scores.length === 0) {
     return STATUT.A_APPRENDRE;
   }
 
-  const reussites = scores
-    .filter(estReussite)
-    .map((entree) => entree.le)
-    .sort((a, b) => b - a);
+  const serie = _serieDeReussites(scores, seuil);
+  const dejaSue =
+    scores.filter((entree) => _estReussite(entree, seuil)).length >=
+    reussitesPourMaitrise;
 
-  if (reussites.length < reussitesPourMaitrise) {
-    // Des tentatives, mais pas assez de réussites : l'apprentissage est commencé.
-    return STATUT.EN_COURS;
+  if (serie >= reussitesPourMaitrise) {
+    const echeance = scores[0].le + _intervalle(serie, reglages) * JOUR;
+
+    return maintenant <= echeance ? STATUT.MAITRISEE : STATUT.A_REVISER;
   }
 
-  // L'intervalle croît avec les réussites accumulées, puis plafonne : une pièce
-  // se joue dans l'année, pas dans dix ans.
-  const rang = Math.min(
-    reussites.length - reussitesPourMaitrise,
-    intervallesJours.length - 1,
-  );
-  const echeance = reussites[0] + intervallesJours[rang] * JOUR;
+  // La série est rompue. Distinguer ce qui a déjà été su de ce qui ne l'a jamais
+  // été est le point utile : l'un se rafraîchit, l'autre s'apprend.
+  return dejaSue ? STATUT.A_REVISER : STATUT.EN_COURS;
+}
 
-  return maintenant <= echeance ? STATUT.MAITRISEE : STATUT.A_REVISER;
+/** Entrées d'historique, la plus récente d'abord. */
+function _parDateDecroissante(suivi) {
+  return (Array.isArray(suivi?.scores) ? suivi.scores : [])
+    .filter((entree) => entree !== null && typeof entree === 'object')
+    .slice()
+    .sort((a, b) => b.le - a.le);
+}
+
+/**
+ * Réussites consécutives, en remontant depuis la plus récente.
+ *
+ * **C'est la série qui compte, non le total**, et cette distinction porte toute
+ * la règle. Un échec rompt la série : une réplique sue trois fois puis ratée
+ * n'est plus sue, quel que soit son passé. C'est aussi ce qui empêche une seule
+ * réussite après un échec de restaurer instantanément une maîtrise — il faut
+ * refaire le chemin.
+ */
+function _serieDeReussites(scoresTriesDesc, seuil) {
+  let serie = 0;
+
+  for (const entree of scoresTriesDesc) {
+    if (!_estReussite(entree, seuil)) {
+      return serie;
+    }
+
+    serie += 1;
+  }
+
+  return serie;
+}
+
+/**
+ * Jours de validité d'une maîtrise, selon la longueur de la série.
+ *
+ * L'intervalle croît avec les réussites consécutives, puis plafonne : une pièce
+ * se joue dans l'année, pas dans dix ans.
+ */
+function _intervalle(serie, { reussitesPourMaitrise, intervallesJours }) {
+  const rang = Math.min(serie - reussitesPourMaitrise, intervallesJours.length - 1);
+
+  return intervallesJours[Math.max(0, rang)];
 }
 
 /**
@@ -437,22 +478,15 @@ export function corrigerDerniereRecitation(suivi) {
  * mieux que de la voir basculer sans prévenir.
  */
 export function prochaineRevision(suivi, reglages) {
-  const { seuil, reussitesPourMaitrise, intervallesJours } = reglages;
-  const reussites = (suivi?.scores ?? [])
-    .filter((entree) => _estReussite(entree, seuil))
-    .map((entree) => entree.le)
-    .sort((a, b) => b - a);
+  const { seuil, reussitesPourMaitrise } = reglages;
+  const scores = _parDateDecroissante(suivi);
+  const serie = _serieDeReussites(scores, seuil);
 
-  if (reussites.length < reussitesPourMaitrise) {
+  if (serie < reussitesPourMaitrise) {
     return null;
   }
 
-  const rang = Math.min(
-    reussites.length - reussitesPourMaitrise,
-    intervallesJours.length - 1,
-  );
-
-  return reussites[0] + intervallesJours[rang] * JOUR;
+  return scores[0].le + _intervalle(serie, reglages) * JOUR;
 }
 
 /**
