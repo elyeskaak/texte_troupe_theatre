@@ -171,8 +171,13 @@ const REDUCTIONS = [
   [/(ai|ei|es)(?=[a-z])/g, 'e'], // aider → eder
   [/h/g, ''],            // hôtel → otel
   [/(.)\1+/g, '$1'],     // verre → vere
-  [/[stdxzpg]+$/g, ''],  // vert, vers, verd → ver
-  [/e$/g, ''],           // vere → ver
+  // Les deux dernières réductions sont bornées par un regard arrière, et
+  // c'est indispensable. Sans borne, « est » se réduisait à « e » puis à rien ;
+  // le repli rendait alors le mot d’origine, si bien que « est » et « ait »
+  // — le même son — restaient distincts. La borne garantit qu’une clé ne peut
+  // pas être vidée par ses propres règles.
+  [/(?<=.)[stdxzpg]+$/g, ''],  // vert, vers, verd → ver
+  [/(?<=..)e$/g, ''],          // vere → ver, mais « e » reste « e »
 ];
 
 /**

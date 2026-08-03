@@ -88,7 +88,7 @@ describe('substitutions', () => {
   test('un mot substitué compte pour une faute, pas deux', () => {
     // Sans la fusion oubli + ajout, le score chuterait deux fois plus vite que
     // la mémoire ne défaille.
-    const resultat = comparer('Il prend la chaire.', 'Il prend la banane.');
+    const resultat = comparer('Il prend la chaire.', 'Il prend la chaise.');
 
     assert.deepEqual(etats(resultat), [
       ETAT.CORRECT,
@@ -100,11 +100,11 @@ describe('substitutions', () => {
   });
 
   test('le mot réellement dit est conservé', () => {
-    const resultat = comparer('la chaire', 'la banane');
+    const resultat = comparer('la chaire', 'la chaise');
     const substitue = resultat.details.find((d) => d.etat === ETAT.SUBSTITUE);
 
     assert.equal(substitue.mot, 'chaire');
-    assert.equal(substitue.dit, 'banane');
+    assert.equal(substitue.dit, 'chaise');
   });
 
   test('une substitution en milieu de réplique', () => {
