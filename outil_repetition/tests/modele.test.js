@@ -11,6 +11,7 @@ import assert from 'node:assert/strict';
 
 import {
   ajouterScore,
+  corrigerDerniereRecitation,
   bilan,
   candidatsSpotCheck,
   chercher,
@@ -776,5 +777,77 @@ describe('ajouterScore', () => {
 
   test('la date de vérification est posée', () => {
     assert.equal(ajouterScore({}, 95, T, 10).verifiee_le, T);
+  });
+});
+
+
+describe('validation manuelle d’une récitation', () => {
+  const JOUR = 86400000;
+  const T = 1_800_000_000_000;
+  const REGLES = { seuil: 90, reussitesPourMaitrise: 3, intervallesJours: [7, 16, 35] };
+
+  test('une entrée corrigée compte comme réussie malgré son score', () => {
+    // La transcription vocale n'est pas fiable : un score bas ne prouve pas un
+    // oubli, et sans ce recours l'outil mesurerait la transcription.
+    const suivi = { scores: [{ le: T, score: 62, corrige: true }] };
+    const brut = { scores: [{ le: T, score: 62 }] };
+
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.EN_COURS);
+    assert.equal(statutDepuisScores(brut, T, REGLES), STATUT.EN_COURS);
+
+    // Une seule ne suffit pas ; trois corrigées, oui.
+    const trois = {
+      scores: [0, 1, 2].map((n) => ({ le: T - n * JOUR, score: 55, corrige: true })),
+    };
+
+    assert.equal(statutDepuisScores(trois, T, REGLES), STATUT.MAITRISEE);
+  });
+
+  test('le score mesuré est conservé', () => {
+    // Écrire 100 % effacerait la trace de ce que l'outil a réellement entendu.
+    const apres = corrigerDerniereRecitation({ scores: [{ le: T, score: 62 }] });
+
+    assert.equal(apres.scores[0].score, 62);
+    assert.equal(apres.scores[0].corrige, true);
+  });
+
+  test('seule la plus récente est corrigée', () => {
+    const apres = corrigerDerniereRecitation({
+      scores: [
+        { le: T - JOUR, score: 40 },
+        { le: T, score: 62 },
+      ],
+    });
+    const parDate = Object.fromEntries(apres.scores.map((e) => [e.le, e.corrige]));
+
+    assert.equal(parDate[T], true);
+    assert.equal(parDate[T - JOUR], undefined);
+  });
+
+  test('idempotente', () => {
+    const une = corrigerDerniereRecitation({ scores: [{ le: T, score: 62 }] });
+    const deux = corrigerDerniereRecitation(une);
+
+    assert.deepEqual(deux.scores, une.scores);
+  });
+
+  test('sans historique, ne casse pas', () => {
+    assert.deepEqual(corrigerDerniereRecitation({}).scores, undefined);
+    assert.doesNotThrow(() => corrigerDerniereRecitation(undefined));
+  });
+
+  test('l’original n’est pas modifié', () => {
+    const avant = { scores: [{ le: T, score: 62 }] };
+    corrigerDerniereRecitation(avant);
+
+    assert.equal(avant.scores[0].corrige, undefined);
+  });
+
+  test('une correction compte aussi pour la prochaine révision', () => {
+    const suivi = {
+      scores: [0, 1, 2].map((n) => ({ le: T - n * JOUR, score: 55, corrige: true })),
+    };
+
+    assert.equal(prochaineRevision(suivi, REGLES), T + 7 * JOUR);
   });
 });

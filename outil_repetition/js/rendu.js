@@ -353,8 +353,9 @@ function _zoneControle() {
  *
  * @param {HTMLElement} replique
  * @param {object} resultat - sortie de `comparaison.comparer`
+ * @param {number} seuilReussite - en dessous, un bouton de validation apparaît
  */
-export function afficherComparaison(replique, resultat) {
+export function afficherComparaison(replique, resultat, seuilReussite = 90) {
   const zone = replique.querySelector('.controle-resultat');
 
   if (!zone) {
@@ -369,6 +370,18 @@ export function afficherComparaison(replique, resultat) {
     resultat.score >= 90 ? 'haut' : resultat.score >= 60 ? 'moyen' : 'bas';
   score.textContent = `${resultat.score} % — ${resultat.corrects} mot(s) sur ${resultat.attendus}`;
   zone.appendChild(score);
+
+  // Validation manuelle : la transcription n'est pas fiable, et un score bas ne
+  // prouve pas un oubli. Le bouton n'apparaît que si le score est **en dessous**
+  // du seuil — au-dessus, il n'y aurait rien à corriger.
+  if (resultat.score < seuilReussite) {
+    const valider = document.createElement('button');
+    valider.type = 'button';
+    valider.className = 'valider-recitation';
+    valider.textContent = '✓ c’était juste';
+    valider.title = 'Compter cette récitation comme réussie malgré la transcription';
+    zone.appendChild(valider);
+  }
 
   const diff = document.createElement('p');
   diff.className = 'diff';
@@ -388,6 +401,31 @@ export function afficherComparaison(replique, resultat) {
   }
 
   zone.appendChild(diff);
+}
+
+/**
+ * Marque une récitation comme validée à la main.
+ *
+ * Le score mesuré **reste affiché** : masquer la mesure au profit du verdict
+ * ferait perdre l'information la plus utile — que la transcription est mauvaise
+ * sur ce passage.
+ */
+export function marquerRecitationValidee(replique) {
+  const zone = replique?.querySelector('.controle-resultat');
+
+  if (!zone) {
+    return;
+  }
+
+  zone.querySelector('.valider-recitation')?.remove();
+
+  const badge = zone.querySelector('.score');
+
+  if (badge && !badge.dataset.valide) {
+    badge.dataset.valide = '1';
+    badge.dataset.niveau = 'haut';
+    badge.textContent = `${badge.textContent} · validé`;
+  }
 }
 
 /** Message d'état du micro sous une réplique. */

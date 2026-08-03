@@ -498,6 +498,12 @@ function cablerInteractions(bloc) {
     // Les outils sont captés d'abord : sans cela le clic remonterait et
     // révélerait la réplique qu'on s'apprête justement à réciter de mémoire, ou
     // dont on voulait seulement cocher le statut.
+    if (evenement.target.closest('.valider-recitation')) {
+      evenement.stopPropagation();
+      validerRecitation(replique.dataset.id);
+      return;
+    }
+
     if (evenement.target.closest('.reciter')) {
       evenement.stopPropagation();
       basculerRecitation(replique);
@@ -818,7 +824,7 @@ const reconnaissance = voix.creerReconnaissance(
       const attendu = index.repliques.get(id)?.texte ?? '';
       const resultat = comparer(attendu, texte);
 
-      rendu.afficherComparaison(repliqueEcoutee, resultat);
+      rendu.afficherComparaison(repliqueEcoutee, resultat, CONFIG.SEUIL_REUSSITE);
       rendu.afficherEtatControle(repliqueEcoutee, '');
 
       // Le score entre dans l'historique, et c'est lui — et lui seul — qui fait
@@ -1006,6 +1012,31 @@ function enregistrerScore(id, score, maintenant = Date.now()) {
       `sue — à revoir dans ${jours} jour(s)`,
     );
   }
+}
+
+/**
+ * Compte la dernière récitation comme réussie, malgré son score.
+ *
+ * La transcription vocale n'est pas fiable : une élision avalée ou un nom propre
+ * écorché par le moteur de Safari suffit à noter 70 % une récitation parfaite.
+ * Sans ce recours, l'outil mesurerait la qualité de la transcription plutôt que
+ * celle de la mémoire.
+ *
+ * Le score mesuré est **conservé** dans l'historique, avec un drapeau. Écrire
+ * 100 % à la place aurait été plus simple et aurait effacé la trace de ce que
+ * l'outil avait réellement entendu.
+ */
+function validerRecitation(id, maintenant = Date.now()) {
+  if (progres[id]?.scores?.length === undefined) {
+    return;
+  }
+
+  progres[id] = modele.corrigerDerniereRecitation(progres[id]);
+
+  recalculerStatuts(maintenant);
+  rendu.marquerRecitationValidee(document.querySelector(`.replique[data-id="${id}"]`));
+  rendu.appliquerProgression($('app'), index, progres, annotations);
+  enregistrerProgression();
 }
 
 function annoter(id) {

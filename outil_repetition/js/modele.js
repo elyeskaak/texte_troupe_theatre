@@ -358,13 +358,14 @@ const JOUR = 86400000;
 export function statutDepuisScores(suivi, maintenant, reglages) {
   const { seuil, reussitesPourMaitrise, intervallesJours } = reglages;
   const scores = Array.isArray(suivi?.scores) ? suivi.scores : [];
+  const estReussite = (entree) => _estReussite(entree, seuil);
 
   if (scores.length === 0) {
     return STATUT.A_APPRENDRE;
   }
 
   const reussites = scores
-    .filter((entree) => typeof entree?.score === 'number' && entree.score >= seuil)
+    .filter(estReussite)
     .map((entree) => entree.le)
     .sort((a, b) => b - a);
 
@@ -385,6 +386,51 @@ export function statutDepuisScores(suivi, maintenant, reglages) {
 }
 
 /**
+ * Cette récitation compte-t-elle comme réussie ?
+ *
+ * Deux façons de l'être, et la seconde existe parce que la transcription vocale
+ * n'est pas fiable. Une élision avalée, un nom propre écorché par le moteur de
+ * Safari, et une récitation parfaite est notée 70 %. Refuser d'en tenir compte
+ * ferait mesurer la qualité de la transcription, non celle de la mémoire.
+ *
+ * `corrige: true` marque une entrée que j'ai validée à la main **sans effacer le
+ * score mesuré**. L'historique conserve donc les deux informations : ce que
+ * l'outil a entendu, et ce que j'ai jugé. Écrire 100 % à la place aurait été
+ * plus simple et aurait détruit la trace.
+ */
+function _estReussite(entree, seuil) {
+  if (entree === null || typeof entree !== 'object') {
+    return false;
+  }
+
+  if (entree.corrige === true) {
+    return true;
+  }
+
+  return typeof entree.score === 'number' && entree.score >= seuil;
+}
+
+/**
+ * Valide à la main la récitation la plus récente.
+ *
+ * Ne touche ni au score mesuré ni aux entrées antérieures : elle ajoute un
+ * drapeau sur la dernière, et sur elle seule. Idempotente.
+ *
+ * @returns {object} le suivi mis à jour, sans modifier l'original
+ */
+export function corrigerDerniereRecitation(suivi) {
+  const scores = [...(suivi?.scores ?? [])].sort((a, b) => b.le - a.le);
+
+  if (scores.length === 0) {
+    return { ...suivi };
+  }
+
+  scores[0] = { ...scores[0], corrige: true };
+
+  return { ...suivi, scores };
+}
+
+/**
  * Date de la prochaine révision, ou `null` si la réplique n'est pas encore sue.
  *
  * Sert à l'affichage : savoir *quand* une réplique redemandera du travail vaut
@@ -393,8 +439,8 @@ export function statutDepuisScores(suivi, maintenant, reglages) {
 export function prochaineRevision(suivi, reglages) {
   const { seuil, reussitesPourMaitrise, intervallesJours } = reglages;
   const reussites = (suivi?.scores ?? [])
-    .filter((e) => typeof e?.score === 'number' && e.score >= seuil)
-    .map((e) => e.le)
+    .filter((entree) => _estReussite(entree, seuil))
+    .map((entree) => entree.le)
     .sort((a, b) => b - a);
 
   if (reussites.length < reussitesPourMaitrise) {

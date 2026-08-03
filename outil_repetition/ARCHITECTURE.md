@@ -744,6 +744,19 @@ confondre ferait réapprendre ce qu'il suffit de rafraîchir.
 fait expirer une maîtrise sans minuterie ni tâche de fond : simplement parce que
 le temps a passé entre deux sessions.
 
+**La transcription peut être démentie à la main.** Un bouton « c'était juste »
+apparaît sous une comparaison dont le score est en dessous du seuil. Il marque
+l'entrée d'un drapeau `corrige`, qui la fait compter comme réussie — **sans
+effacer le score mesuré**. L'historique conserve donc les deux informations : ce
+que l'outil a entendu, et ce que j'ai jugé.
+
+Écrire 100 % à la place aurait été plus simple et aurait détruit la trace la plus
+utile : qu'une élision avalée ou un nom propre écorché par le moteur de Safari
+fait chuter un score sans qu'aucun mot ait manqué. Sans ce recours, l'outil
+mesurerait la qualité de la transcription plutôt que celle de la mémoire.
+
+Le bouton ne s'affiche pas au-dessus du seuil : il n'y aurait rien à corriger.
+
 **Un échec récent ne défait pas une maîtrise valide.** Le statut mesure ce qui a
 été réussi, pas la dernière tentative : un raté sur un mot ne doit pas effacer
 trois réussites.
