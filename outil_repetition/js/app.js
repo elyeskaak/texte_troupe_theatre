@@ -721,3 +721,9 @@ window.addEventListener('unhandledrejection', (evenement) => {
 
 rafraichirBandeaux();
 rafraichirListePieces();
+
+// Le bandeau d'inertie est visible dans le HTML : l'atteindre prouve que les
+// modules se sont chargés et que les écouteurs sont posés. C'est donc la
+// dernière ligne du démarrage, et non la première — une erreur survenue
+// entre-temps doit le laisser affiché.
+$('bandeau-inerte').hidden = true;

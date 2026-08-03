@@ -316,6 +316,36 @@
 <body>
 <div id="app">
 
+  <!--
+    Bandeau d'inertie — visible PAR DÉFAUT, masqué par app.js au démarrage.
+
+    Sans lui, une page dont les modules n'ont pas pu se charger paraît
+    parfaitement normale et ne répond à aucun bouton : le cas se produit dès qu'on
+    ouvre ce fichier par un double-clic, les modules ES étant refusés depuis
+    `file://`. C'est exactement l'erreur silencieuse que le principe P3 interdit,
+    et elle passait par une page d'apparence intacte.
+
+    L'inversion est délibérée : le bandeau ne s'affiche pas quand quelque chose
+    échoue, il se retire quand tout va bien. Une panne de chargement ne peut donc
+    pas le laisser muet.
+  -->
+  <div id="bandeau-inerte" class="message erreur">
+    <strong>Cette page ne peut pas fonctionner ainsi.</strong><br>
+    Elle doit être servie par un serveur, et non ouverte directement : les
+    navigateurs refusent de charger ses modules depuis un fichier local.
+    <br><br>
+    Ouvrez-la depuis son adresse en <code>https://</code>, ou lancez en local :
+    <br><code>cd outil_repetition &amp;&amp; python -m http.server 8000</code>
+    <br>puis <code>http://localhost:8000/</code>
+  </div>
+
+  <noscript>
+    <div class="message erreur">
+      Cet outil a besoin de JavaScript : tout le texte et la progression vivent
+      dans votre navigateur, sans serveur.
+    </div>
+  </noscript>
+
   <!-- Bandeaux d'état, visibles sur tous les écrans. -->
   <div id="bandeau-stockage" class="message avertissement" hidden></div>
   <div id="bandeau-export" class="message avertissement" hidden></div>
