@@ -6,27 +6,57 @@
 <title>Lecture projetée — Troupe 122</title>
 <style>
   /* ------------------------------------------------------------
+     Charte graphique commune aux trois écrans (préparation, contrôle,
+     projection) : même fond, même texte, même famille de police. Retour
+     d'usage : l'écran de préparation restait sur un thème clair par défaut
+     du navigateur, en rupture avec le reste de l'outil.
+     ------------------------------------------------------------ */
+  :root {
+    --fond-projection: #0b0b0e;
+    --texte-clair: #f5f5f5;
+    --attenue: #9a9a9a;
+    --fond-releve: #1a1a1e;
+    --bordure: #333;
+  }
+
+  html, body { height: 100%; margin: 0; }
+  body {
+    font-family: system-ui, sans-serif;
+    background: var(--fond-projection);
+    color: var(--texte-clair);
+  }
+
+  button, select, input[type="text"], input[type="file"] {
+    font-family: inherit;
+    color: var(--texte-clair);
+    background: var(--fond-releve);
+    border: 1px solid var(--bordure);
+    border-radius: 0.3rem;
+  }
+  button { cursor: pointer; padding: 0.5rem 1rem; }
+  select, input[type="text"] { padding: 0.4rem 0.6rem; }
+  ::placeholder { color: var(--attenue); }
+
+  /* ------------------------------------------------------------
      Écran de préparation (§6 de ARCHITECTURE.md) : import, attribution
      personnage → slot, reprise de session.
      ------------------------------------------------------------ */
-  html, body { height: 100%; margin: 0; }
-  body { font-family: system-ui, sans-serif; background: #f4f4f4; color: #111; }
   #ecran-preparation { padding: 2rem; max-width: 60rem; }
   #ecran-preparation section { margin-bottom: 1.6rem; }
   #ecran-preparation table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
   #ecran-preparation th, #ecran-preparation td {
-    border: 1px solid #ccc; padding: 0.4rem 0.6rem; text-align: left;
+    border: 1px solid var(--bordure); padding: 0.4rem 0.6rem; text-align: left;
   }
   #ecran-preparation .swatch {
     display: inline-block; width: 0.9em; height: 0.9em; border-radius: 50%;
     margin-right: 0.4em; vertical-align: middle;
   }
   .message-erreur {
-    color: #7a0010; background: #fdeaea; border: 1px solid #7a0010;
+    color: #ff9b9b; background: #3a1414; border: 1px solid #7a2020;
     padding: 0.6rem 0.9rem; border-radius: 0.3rem; font-weight: bold;
   }
   .message-bandeau {
-    color: #6b4b00; background: #fff6dd; border: 1px solid #d1a300;
+    color: #e8c468; background: #3a2f14; border: 1px solid #7a5f10;
     padding: 0.6rem 0.9rem; border-radius: 0.3rem;
   }
   #bouton-demarrer:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -37,12 +67,12 @@
      ------------------------------------------------------------ */
   #ecran-controle { padding: 1.5rem; max-width: 28rem; font-family: system-ui, sans-serif; }
   .controle-rappel {
-    color: #555; font-size: 0.95rem; margin-bottom: 1rem;
-    padding-bottom: 0.6rem; border-bottom: 1px solid #ddd;
+    color: var(--attenue); font-size: 0.95rem; margin-bottom: 1rem;
+    padding-bottom: 0.6rem; border-bottom: 1px solid var(--bordure);
   }
   .ligne-slot { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
   .ligne-slot label { width: 2.4rem; font-weight: bold; }
-  .ligne-slot input { flex: 1; padding: 0.3rem 0.5rem; font-size: 1rem; }
+  .ligne-slot input { flex: 1; font-size: 1rem; }
 
   /* Basculement d'affichage selon `?fenetre=controle` (§7.1) : la même page
      sert les deux rendus, un seul est monté visuellement à la fois. */
@@ -51,7 +81,7 @@
   body:not(.mode-controle) #ecran-controle { display: none; }
 
   #bouton-reouvrir-controle {
-    background: none; border: 1px solid #333; color: var(--attenue);
+    background: none; border: 1px solid var(--bordure); color: var(--attenue);
     border-radius: 0.3vw; cursor: pointer; font-size: 0.9vw; line-height: 1;
     padding: 0.2em 0.5em;
   }
@@ -65,12 +95,6 @@
      Changer de position reste une écriture de classe (.actif / .suivant),
      complétée d'un défilement vers l'élément courant : jamais de re-rendu.
      ------------------------------------------------------------ */
-  :root {
-    --fond-projection: #0b0b0e;
-    --texte-clair: #f5f5f5;
-    --attenue: #9a9a9a;
-  }
-
   #ecran-projection {
     position: fixed;
     inset: 0;
@@ -379,17 +403,27 @@ const CONFIG = Object.freeze({
   /**
    * Part de la hauteur de fenêtre qu'une réplique seule vise à ne pas
    * dépasser avant d'être paginée (§8.5 de ARCHITECTURE.md, révisé une
-   * cinquième fois). Remplace un nombre de mots fixe : le rendu réel
-   * (taille de police relative en `vw`, résolution, ratio d'écran) diffère
+   * sixième fois). Remplace un nombre de mots fixe : le rendu réel (taille
+   * de police relative en `vw`, résolution, ratio d'écran) diffère
    * forcément entre un petit écran et un vidéoprojecteur, donc un seuil en
    * mots ne peut être juste que pour un seul gabarit d'écran à la fois.
    * `mesurerMotsParPage` (§8.5) mesure la hauteur réellement rendue de
    * chaque réplique dans le navigateur courant et en déduit, réplique par
    * réplique, combien de mots par page tiennent dans cette part d'écran.
-   * 0.6 laisse de la place pour apercevoir une réplique voisine, cohérent
-   * avec le retour d'usage « voir la réplique et celle d'en dessous ».
+   *
+   * Retour d'usage : 0.6 (laisser de la place pour apercevoir la réplique
+   * suivante) coupait encore des répliques qui tenaient très bien seules à
+   * l'écran. Or depuis la fusion des pages en un seul bloc continu (§8.5),
+   * couper ou non ne change **rien** à l'affichage tant que tout tient à
+   * l'écran — les deux pages sont montrées de toute façon, fusionnées,
+   * sans coupure visible. Une pagination inutile ne coûte donc plus une
+   * coupure visuelle, mais une pression de flèche en trop pour rien.
+   * Le critère devient : ne paginer que si la réplique **déborde
+   * réellement** de l'écran, pas si elle ne laisse pas de place pour la
+   * suivante. D'où 0.95 (marge de 5 % pour la barre de progression, qui
+   * grignote un peu de la hauteur de fenêtre sans être comptée ici).
    */
-  PART_ECRAN_CIBLE: 0.6,
+  PART_ECRAN_CIBLE: 0.95,
 
   /**
    * Nombre de diapos avant/après la position courante affectées par le
@@ -634,6 +668,36 @@ function suivant(etat, longueur) {
 
 function precedent(etat, longueur) {
   return irA(etat, etat.position - 1, longueur);
+}
+
+/**
+ * Écarte une position tombée sur une transition de scène (§9, retour
+ * d'usage) : une scène reste visible dans le flux comme repère, mais ne
+ * doit jamais devenir la diapo active — on continue dans le sens du
+ * mouvement jusqu'à un élément réel (réplique, didascalie, lieu…). Un clic
+ * sur le sommaire (§8.6), qui cible délibérément l'index d'une scène, se
+ * retrouve donc amené directement sur sa première réplique — exactement le
+ * but recherché.
+ *
+ * @param {object[]} elements résultat de `aplatirEnElements` (ou paginé)
+ * @param {number} position
+ * @param {1|-1} direction sens dans lequel continuer si `position` est une scène
+ * @param {number} longueur
+ */
+function eviterScene(elements, position, direction, longueur) {
+  let cible = position;
+
+  while (elements[cible] && elements[cible].kind === 'scene') {
+    const suivante = cible + direction;
+
+    if (suivante < 0 || suivante >= longueur) {
+      break;
+    }
+
+    cible = suivante;
+  }
+
+  return cible;
 }
 
 // ============================================================
@@ -1535,6 +1599,7 @@ if (MODE_FENETRE === 'projection') (() => {
   let piece = null;
   let slug = null;
   let personnagesCourants = [];
+  let elements = [];
   let diapos = [];
   let sommaire = [];
   let position = 0;
@@ -1662,8 +1727,19 @@ if (MODE_FENETRE === 'projection') (() => {
     }, CONFIG.DELAI_ECRITURE_MS);
   }
 
+  /**
+   * Change de position. Écarte systématiquement les transitions de scène
+   * (§9, `eviterScene`) : le sens à poursuivre s'infère de la direction du
+   * mouvement demandé — vers l'avant si `nouvellePosition` est plus loin
+   * que la position courante, vers l'arrière sinon. Couvre aussi bien les
+   * flèches clavier (toujours ±1) que les sauts arbitraires (clic sur une
+   * diapo, sommaire) sans avoir besoin d'un paramètre de direction séparé.
+   */
   function allerA(nouvellePosition) {
-    position = irA({ position }, nouvellePosition, diapos.length).position;
+    const direction = nouvellePosition >= position ? 1 : -1;
+    const bornee = irA({ position }, nouvellePosition, diapos.length).position;
+
+    position = eviterScene(elements, bornee, direction, diapos.length);
     afficherPosition(diapos, position);
     rafraichirProgression();
     planifierEcritureSession();
@@ -1682,13 +1758,17 @@ if (MODE_FENETRE === 'projection') (() => {
     // aura — c'est elle qui répond à la question, pas un nombre de mots fixe.
     const elementsBruts = aplatirEnElements(piece);
     const motsParPageParReplique = mesurerMotsParPage(elementsBruts, cast);
-    const elements = paginerElements(elementsBruts, motsParPageParReplique);
+    elements = paginerElements(elementsBruts, motsParPageParReplique);
     sommaire = calculerSommaire(elements);
     diapos = monterProjection(contenu, elements, cast, prenoms);
     construirePanneauSommaire(panneauSommaire, sommaire);
 
+    // Jamais démarrer sur une transition de scène (§9, eviterScene) : on
+    // avance directement à la première réplique réelle de la pièce (ou de
+    // la scène reprise, si une position sauvegardée y correspond).
     const bornee = typeof positionDepart === 'number' ? positionDepart : 0;
-    position = irA({ position: 0 }, bornee, diapos.length).position;
+    const positionInitiale = irA({ position: 0 }, bornee, diapos.length).position;
+    position = eviterScene(elements, positionInitiale, 1, diapos.length);
 
     ecranPreparation.style.display = 'none';
     ecranProjection.classList.add('visible');

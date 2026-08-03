@@ -231,6 +231,14 @@ menu déroulant au lieu d'écrire `PERSO = H1` dans un fichier texte — exactem
 le repli que le prompt prévoyait déjà pour un `#CAST` absent ou incomplet
 (§ « Format d'entrée » du prompt), généralisé ici au cas normal.
 
+**Révision à l'usage :** l'écran de préparation restait sur le thème clair
+par défaut du navigateur (fond blanc, texte noir), en rupture avec le fond
+sombre de la projection et de la fenêtre de contrôle. Les trois écrans
+partagent désormais la même charte — fond `--fond-projection`, texte
+`--texte-clair`, accents `--attenue` — déclarée une seule fois en `:root`
+et reprise par les boutons, champs et menus déroulants (règle générique sur
+`button, select, input`), pas seulement par la projection.
+
 ---
 
 ## 7. La fenêtre de contrôle et sa synchronisation
@@ -475,6 +483,20 @@ cours de lecture (rotation d'écran, changement de sortie vidéo) ne
 redéclenche pas la mesure — cohérent avec le reste de l'outil, qui ne gère
 pas non plus le redimensionnement à chaud ailleurs.
 
+**Sixième révision, sur le seuil lui-même : 0.6 → 0.95.** Retour d'usage :
+une réplique qui tenait très bien, seule, sur l'écran était quand même
+coupée. La raison tient à la fusion des pages (ci-dessus) : une fois
+fusionnées en un seul bloc continu, couper ou non ne change **rien** à
+l'affichage tant que le bloc entier tient à l'écran — les deux pages sont
+montrées de toute façon, sans coupure visible. Viser 60 % de la fenêtre
+(pour garder de la place pour la réplique suivante) coupait donc des
+répliques qui n'avaient besoin d'aucune aide au défilement : la pagination
+ne coûte plus une coupure visuelle depuis la fusion, seulement une pression
+de flèche inutile pour la traverser. Le critère devient : ne paginer que si
+la réplique **déborde réellement** de l'écran — 0.95, marge de 5 % pour la
+barre de progression (non comptée dans la mesure, qui ne porte que sur la
+réplique elle-même).
+
 ### 8.6 Sommaire cliquable
 
 **Révision à l'usage :** avancer réplique par réplique jusqu'à un point
@@ -511,9 +533,24 @@ souris pour les sauts longs (§8.6, révision à l'usage) :
 | clic sur une diapo | saute directement à cette diapo (§8.6) |
 | clic sur une entrée du sommaire | saute à cette scène, referme le panneau |
 
-Les éléments `kind: 'scene'` sont traversés comme les autres (ils s'affichent
-brièvement en en-tête, §5) : la navigation reste un simple décalage d'index,
-sans cas particulier.
+**Révision à l'usage :** les éléments `kind: 'scene'` étaient au départ
+traversés comme les autres — un simple décalage d'index, sans cas
+particulier — ce qui les rendait `.actif` (§8.1) au même titre qu'une
+réplique : zoomés, mis en avant, une pression de flèche à part entière pour
+les dépasser. Or une transition de scène n'est pas du contenu à lire, c'est
+un repère ; s'y arrêter interrompt le rythme de lecture pour rien.
+
+`eviterScene(elements, position, direction, longueur)` (fonction pure,
+testée) corrige ceci : après tout calcul de position (`irA`), si le résultat
+tombe sur une scène, on continue dans le sens du mouvement jusqu'au premier
+élément réel. `allerA` infère la direction de la comparaison entre la
+position visée et la position courante — pas besoin de la faire porter par
+chaque appelant (flèches, clic sur une diapo, clic sur le sommaire
+partagent donc tous le même comportement sans code dupliqué). Une scène
+reste visible dans le flux comme repère (§8.1, dégradé compris), mais ne
+devient jamais la diapo active. Une seule exception assumée, à la toute
+première position de la pièce : si elle commence par une scène et qu'on
+recule au-delà, il n'y a rien d'autre avant elle vers quoi continuer.
 
 ---
 
@@ -567,7 +604,7 @@ const CONFIG = Object.freeze({
   PREFIXE_STOCKAGE: 'lecture:v1',
   DELAI_ECRITURE_MS: 500,
   CANAL_SYNCHRO: 'lecture:v1',
-  PART_ECRAN_CIBLE: 0.6, // §8.5, remplace un ancien MOTS_PAR_PAGE fixe (45 puis 100)
+  PART_ECRAN_CIBLE: 0.95, // §8.5, remplace un ancien MOTS_PAR_PAGE fixe (45 puis 100)
   PORTEE_GRADIENT: 6, // §8.1, portée du dégradé continu autour de la position
 });
 ```
