@@ -411,13 +411,19 @@ qu'une réplique précédente aurait été coupée en plusieurs pages. Le pipeli
 est donc figé dans cet ordre : `aplatirEnElements` → `paginerElements` →
 `calculerSommaire` → `monterProjection`.
 
-Avec la pagination en place, `tailleActiveReplique` n'a plus besoin de
-couvrir des tirades de plusieurs centaines de mots : son écart a été resserré
-(2vw → 1.3vw selon le nombre de mots **de la page**, plafonné à 1.9rem en
-CSS) pour que la réplique en cours reste nettement lisible sans dominer
-l'écran — deuxième resserrement après un premier (4vw → 3vw en §8.1). Le
-dégradé continu de §8.1 (`appliquerGradient`) est la suite de cette même
-recherche d'un écart plus doux entre répliques.
+**Troisième révision, sur la taille cette fois :** `tailleActiveReplique`
+réduisait la police selon le nombre de mots — d'abord de la tirade entière,
+puis, après la première fusion des pages (ci-dessus), de la somme des mots
+de **toutes** les pages fusionnées. Effet pervers découvert à l'usage : une
+tirade longue affichait un texte plus *petit* qu'une réplique courte
+voisine simplement parce qu'elle n'était pas encore active — l'inverse de
+l'effet recherché. La cause : cette réduction datait d'avant la fusion des
+pages, quand il fallait faire tenir toute une tirade sur un seul écran.
+Une fois les pages fusionnées et navigables par défilement d'ancres
+(ci-dessus), ce problème n'existe plus — la longueur du texte n'a donc plus
+aucune raison d'influencer sa taille. `tailleActiveReplique` est supprimée ;
+la taille de la réplique active est désormais **fixe** (`clamp(1.2rem,
+2.4vw, 2.2rem)`), qu'elle fasse 3 mots ou 300.
 
 ### 8.6 Sommaire cliquable
 
