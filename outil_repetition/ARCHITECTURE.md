@@ -719,7 +719,41 @@ laisser vivre : l'un change le corps du texte dans une mise en page qui se
 recompose, l'autre agrandit tout sans recomposer. Les deux servent des besoins
 différents, et l'existant supprimait le second.
 
-### 10.7 Le spot check ne doit pas être uniforme
+### 10.7 Le statut se mérite, il ne se déclare pas
+
+> **Révision du 2026-08-03.** La première version offrait un bouton qui faisait
+> cycler « à apprendre / en cours / su ». Cocher soi-même mesurait la
+> **confiance** — or c'est précisément la confiance qui trompe en répétition.
+
+Le statut est désormais **déduit de l'historique des scores** de récitation, par
+`modele.statutDepuisScores` :
+
+- une **réussite** est une récitation à `SEUIL_REUSSITE` % ou plus ;
+- **sue** à partir de `REUSSITES_POUR_MAITRISE` réussites, si la dernière est
+  assez récente ;
+- l'échéance suit `INTERVALLES_REVISION_JOURS` — 7, 16 puis 35 jours — croissant
+  avec les réussites accumulées, puis plafonnant : une pièce se joue dans l'année,
+  pas dans dix ans.
+
+Un **quatrième statut** apparaît : `A_REVISER`, sue autrefois et expirée. Il se
+distingue d'`EN_COURS`, et c'est le point qui compte — une réplique sue trois fois
+puis oubliée ne demande pas le même travail qu'une réplique jamais réussie. Les
+confondre ferait réapprendre ce qu'il suffit de rafraîchir.
+
+**Le statut n'est pas stocké**, il est recalculé à chaque ouverture. C'est ce qui
+fait expirer une maîtrise sans minuterie ni tâche de fond : simplement parce que
+le temps a passé entre deux sessions.
+
+**Un échec récent ne défait pas une maîtrise valide.** Le statut mesure ce qui a
+été réussi, pas la dernière tentative : un raté sur un mot ne doit pas effacer
+trois réussites.
+
+Conséquence assumée, et elle est réelle : **sans micro, aucune progression.** La
+reconnaissance vocale exigeant le réseau (§8.2), on ne peut plus faire avancer une
+réplique en mode avion. C'est le prix d'un statut qui mesure quelque chose plutôt
+que de recueillir une opinion.
+
+### 10.8 Le spot check ne doit pas être uniforme
 
 Piocher uniformément parmi les répliques « maîtrisées » redemanderait souvent
 celles qu'on vient de vérifier. Le tirage est donc **pondéré par l'ancienneté**
