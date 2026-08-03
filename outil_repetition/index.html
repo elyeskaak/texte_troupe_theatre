@@ -240,6 +240,12 @@
   #bloc-difficulte[hidden]{ display:none; }
 
   /* --- unité jouable --- */
+  /* La barre est collante et haute de 62 px : sans cette marge, `scrollIntoView`
+     amène le titre de scène pile sous elle, donc invisible, et le texte paraît
+     commencer « un peu après ». `scroll-margin-top` est fait pour cela — il
+     décale la cible du défilement sans décaler l'élément à l'écran. */
+  .unite, .replique{ scroll-margin-top:78px; }
+
   .unite{ margin:0 0 26px; }
   .entete-unite{
     display:flex; justify-content:space-between; align-items:baseline; gap:10px;
@@ -380,7 +386,10 @@
     [data-mode="acronyme"] .replique.actif:hover .plein{ display:inline; }
     [data-mode="acronyme"] .replique.actif:hover .acronyme{ display:none; }
 
-    [data-mode="trous"] .replique.actif:hover .mot[data-trou="1"]{
+    /* Le survol ne dévoile **que le mot survolé**. La règle visait la réplique
+       entière, si bien que passer dessus révélait tous les trous d'un coup —
+       l'inverse de « un par un ». */
+    [data-mode="trous"] .replique.actif .mot[data-trou="1"]:hover{
       color:var(--papier); background:rgba(109,179,242,0.08);
     }
   }
@@ -430,12 +439,15 @@
    * boutons chacune feraient 216 cibles à l'écran pour une information qui tient
    * dans un symbole.
    */
+  /* Passif : ni curseur de main, ni hauteur de cible. Le statut se mérite au
+     micro, il ne se clique pas. */
   .statut{
-    margin-top:7px; min-height:36px; padding:5px 12px; border-radius:999px;
+    display:inline-block; padding:3px 11px; border-radius:999px;
     border:1px solid var(--trait); background:transparent;
-    color:var(--estompe); font:inherit; font-size:0.76rem; cursor:pointer;
+    color:var(--estompe); font-size:0.74rem;
   }
   .statut[data-statut="en_cours"]{ color:var(--projecteur); border-color:var(--projecteur); }
+  .statut[data-statut="a_reviser"]{ color:#f0c05a; border-color:rgba(240,192,90,0.55); }
   .statut[data-statut="maitrisee"]{
     color:#a8dca8; border-color:rgba(120,180,120,0.55);
     background:rgba(120,180,120,0.10);
@@ -443,6 +455,7 @@
 
   /* Bandeau de couleur en tête d'unité, selon le statut le plus faible. */
   .unite[data-statut="en_cours"] .entete-unite{ border-bottom-color:var(--projecteur); }
+  .unite[data-statut="a_reviser"] .entete-unite{ border-bottom-color:rgba(240,192,90,0.6); }
   .unite[data-statut="maitrisee"] .entete-unite{ border-bottom-color:rgba(120,180,120,0.6); }
 
   .annotation{
@@ -450,8 +463,6 @@
     color:var(--projecteur); font-size:0.82rem; font-style:italic;
   }
   .annotation:empty{ display:none; }
-  .marque{ color:var(--projecteur); }
-  .replique.marquee{ background:rgba(109,179,242,0.06); border-radius:8px; }
 
   .outils-replique{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
   .outils-replique button{
@@ -478,6 +489,7 @@
     margin-right:7px; background:var(--estompe);
   }
   .puce-statut[data-statut="en_cours"]{ background:var(--projecteur); }
+  .puce-statut[data-statut="a_reviser"]{ background:#f0c05a; }
   .puce-statut[data-statut="maitrisee"]{ background:#a8dca8; }
 
   /* Mes scènes uniquement : les autres se replient, dépliables au doigt. */
@@ -650,6 +662,7 @@
       <div class="rangee">
         <button id="btn-sommaire" class="btn btn-fantome btn-mini">Sommaire</button>
         <button id="btn-bilan" class="btn btn-fantome btn-mini">Bilan</button>
+        <button id="btn-exporter-3" class="btn btn-fantome btn-mini">Exporter</button>
       </div>
 
       <label class="entete-groupe" for="recherche">Chercher dans la pièce</label>

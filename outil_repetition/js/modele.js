@@ -308,10 +308,122 @@ export function chercher(index, fragment) {
 export const STATUT = Object.freeze({
   A_APPRENDRE: 'a_apprendre',
   EN_COURS: 'en_cours',
+  /** Sue, mais la maîtrise a expiré : à revoir avant de la considérer acquise. */
+  A_REVISER: 'a_reviser',
   MAITRISEE: 'maitrisee',
 });
 
-const ORDRE_STATUTS = [STATUT.A_APPRENDRE, STATUT.EN_COURS, STATUT.MAITRISEE];
+/**
+ * Ordre de mérite, du moins au mieux su.
+ *
+ * `A_REVISER` se place **au-dessus** d'`EN_COURS` : une réplique sue trois fois
+ * puis oubliée n'est pas au même point qu'une réplique jamais réussie. La
+ * distinction compte pour le bilan, où l'une demande une révision et l'autre un
+ * apprentissage.
+ */
+const ORDRE_STATUTS = [
+  STATUT.A_APPRENDRE,
+  STATUT.EN_COURS,
+  STATUT.A_REVISER,
+  STATUT.MAITRISEE,
+];
+
+const JOUR = 86400000;
+
+/**
+ * Déduit le statut d'une réplique de son historique de récitations.
+ *
+ * **Le statut n'est plus déclaré, il est mérité.** Cocher « su » à la main
+ * mesurait la confiance, pas la mémoire — et la confiance est précisément ce qui
+ * trompe. Ici, seul le micro fait avancer une réplique.
+ *
+ * La règle, en trois temps :
+ *
+ * 1. **Une réussite** est une récitation à `SEUIL_REUSSITE` % ou plus.
+ * 2. **Sue** à partir de `REUSSITES_POUR_MAITRISE` réussites, à condition que la
+ *    dernière soit assez récente.
+ * 3. **Répétition espacée** : chaque réussite au-delà du seuil repousse
+ *    l'échéance, selon `INTERVALLES_REVISION_JOURS`. Passé ce délai, la réplique
+ *    devient `A_REVISER` — sue autrefois, à revoir maintenant.
+ *
+ * `A_REVISER` est un statut distinct d'`EN_COURS`, et c'est le point qui compte :
+ * une réplique sue trois fois puis oubliée ne demande pas le même travail qu'une
+ * réplique jamais réussie. Les confondre ferait réapprendre ce qu'il suffit de
+ * rafraîchir.
+ *
+ * @param {{scores?: Array<{le: number, score: number}>}} suivi
+ * @param {number} maintenant - horodatage, passé en argument pour rester pur
+ * @param {object} reglages - `seuil`, `reussitesPourMaitrise`, `intervallesJours`
+ */
+export function statutDepuisScores(suivi, maintenant, reglages) {
+  const { seuil, reussitesPourMaitrise, intervallesJours } = reglages;
+  const scores = Array.isArray(suivi?.scores) ? suivi.scores : [];
+
+  if (scores.length === 0) {
+    return STATUT.A_APPRENDRE;
+  }
+
+  const reussites = scores
+    .filter((entree) => typeof entree?.score === 'number' && entree.score >= seuil)
+    .map((entree) => entree.le)
+    .sort((a, b) => b - a);
+
+  if (reussites.length < reussitesPourMaitrise) {
+    // Des tentatives, mais pas assez de réussites : l'apprentissage est commencé.
+    return STATUT.EN_COURS;
+  }
+
+  // L'intervalle croît avec les réussites accumulées, puis plafonne : une pièce
+  // se joue dans l'année, pas dans dix ans.
+  const rang = Math.min(
+    reussites.length - reussitesPourMaitrise,
+    intervallesJours.length - 1,
+  );
+  const echeance = reussites[0] + intervallesJours[rang] * JOUR;
+
+  return maintenant <= echeance ? STATUT.MAITRISEE : STATUT.A_REVISER;
+}
+
+/**
+ * Date de la prochaine révision, ou `null` si la réplique n'est pas encore sue.
+ *
+ * Sert à l'affichage : savoir *quand* une réplique redemandera du travail vaut
+ * mieux que de la voir basculer sans prévenir.
+ */
+export function prochaineRevision(suivi, reglages) {
+  const { seuil, reussitesPourMaitrise, intervallesJours } = reglages;
+  const reussites = (suivi?.scores ?? [])
+    .filter((e) => typeof e?.score === 'number' && e.score >= seuil)
+    .map((e) => e.le)
+    .sort((a, b) => b - a);
+
+  if (reussites.length < reussitesPourMaitrise) {
+    return null;
+  }
+
+  const rang = Math.min(
+    reussites.length - reussitesPourMaitrise,
+    intervallesJours.length - 1,
+  );
+
+  return reussites[0] + intervallesJours[rang] * JOUR;
+}
+
+/**
+ * Ajoute un score à l'historique d'une réplique.
+ *
+ * Les plus anciens sont sacrifiés au plafond, jamais le dernier obtenu : c'est
+ * l'historique récent qui décide du statut.
+ *
+ * @returns {object} le suivi mis à jour, sans modifier l'original
+ */
+export function ajouterScore(suivi, score, maintenant, plafond) {
+  const scores = [...(suivi?.scores ?? []), { le: maintenant, score }]
+    .sort((a, b) => b.le - a.le)
+    .slice(0, plafond);
+
+  return { ...suivi, scores, verifiee_le: maintenant };
+}
 
 /**
  * Statut d'une unité, déduit de celui de mes répliques.
@@ -481,6 +593,7 @@ export function bilan(index, progres) {
   const compte = {
     [STATUT.A_APPRENDRE]: 0,
     [STATUT.EN_COURS]: 0,
+    [STATUT.A_REVISER]: 0,
     [STATUT.MAITRISEE]: 0,
   };
 

@@ -418,6 +418,7 @@ function commencer() {
   montrer('ecran-repetition');
 
   chargerProgression();
+  recalculerStatuts();
   monterToutLeTexte();
   rendu.declarerRoleActif(etat.roleActif);
   rendu.appliquerProgression($('app'), index, progres, annotations);
@@ -500,18 +501,6 @@ function cablerInteractions(bloc) {
     if (evenement.target.closest('.reciter')) {
       evenement.stopPropagation();
       basculerRecitation(replique);
-      return;
-    }
-
-    if (evenement.target.closest('.statut')) {
-      evenement.stopPropagation();
-      cyclerStatut(replique.dataset.id);
-      return;
-    }
-
-    if (evenement.target.closest('.marque-page')) {
-      evenement.stopPropagation();
-      basculerMarque(replique.dataset.id);
       return;
     }
 
@@ -825,10 +814,16 @@ const reconnaissance = voix.creerReconnaissance(
         return;
       }
 
-      const attendu = index.repliques.get(repliqueEcoutee.dataset.id)?.texte ?? '';
+      const id = repliqueEcoutee.dataset.id;
+      const attendu = index.repliques.get(id)?.texte ?? '';
+      const resultat = comparer(attendu, texte);
 
-      rendu.afficherComparaison(repliqueEcoutee, comparer(attendu, texte));
+      rendu.afficherComparaison(repliqueEcoutee, resultat);
       rendu.afficherEtatControle(repliqueEcoutee, '');
+
+      // Le score entre dans l'historique, et c'est lui — et lui seul — qui fait
+      // avancer le statut. Voir `modele.statutDepuisScores`.
+      enregistrerScore(id, resultat.score);
     },
     surEchec: (motif) => {
       // Un échec est un non-événement : aucun score, aucune modale. Le message
@@ -894,6 +889,36 @@ $('bandeau-inerte').hidden = true;
  * composée : c'est ce couple-là que je travaille, et le mélanger avec les
  * sessions à un seul rôle brouillerait les deux.
  */
+/** Réglages de la règle de répétition espacée, tirés de `config.js`. */
+const REGLES = Object.freeze({
+  seuil: CONFIG.SEUIL_REUSSITE,
+  reussitesPourMaitrise: CONFIG.REUSSITES_POUR_MAITRISE,
+  intervallesJours: CONFIG.INTERVALLES_REVISION_JOURS,
+});
+
+/**
+ * Recalcule le statut de toutes mes répliques.
+ *
+ * Le statut n'est pas stocké : il est **dérivé** de l'historique des scores à
+ * chaque affichage. C'est ce qui fait fonctionner la répétition espacée sans
+ * minuterie — une maîtrise expire toute seule, simplement parce que le temps a
+ * passé entre deux ouvertures de l'outil.
+ */
+function recalculerStatuts(maintenant = Date.now()) {
+  for (const id of index.mesRepliques) {
+    const suivi = progres[id];
+
+    if (suivi === undefined) {
+      continue;
+    }
+
+    progres[id] = {
+      ...suivi,
+      statut: modele.statutDepuisScores(suivi, maintenant, REGLES),
+    };
+  }
+}
+
 function clePersonnage() {
   return [...etat.roleActif].sort().join('+');
 }
@@ -950,35 +975,37 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-const SUIVANT_STATUT = {
-  a_apprendre: 'en_cours',
-  en_cours: 'maitrisee',
-  maitrisee: 'a_apprendre',
-};
+/**
+ * Enregistre un score et en déduit le nouveau statut.
+ *
+ * @param {string} id
+ * @param {number} score
+ */
+function enregistrerScore(id, score, maintenant = Date.now()) {
+  progres[id] = modele.ajouterScore(
+    progres[id],
+    score,
+    maintenant,
+    CONFIG.SCORES_PAR_REPLIQUE,
+  );
 
-function cyclerStatut(id, maintenant = Date.now()) {
-  const actuel = progres[id]?.statut ?? 'a_apprendre';
-  const suivant = SUIVANT_STATUT[actuel];
+  recalculerStatuts(maintenant);
+  rendu.appliquerProgression($('app'), index, progres, annotations);
+  enregistrerProgression();
 
-  progres[id] = { ...progres[id], statut: suivant };
+  const suivi = progres[id];
+  const echeance = modele.prochaineRevision(suivi, REGLES);
 
-  // La date de vérification n'est posée qu'en passant à « su » : c'est elle qui
-  // pondère le spot check, et la rafraîchir à chaque clic ferait remonter en tête
-  // ce qu'on vient de cocher sans l'avoir revérifié.
-  if (suivant === 'maitrisee') {
-    progres[id].verifiee_le = maintenant;
+  // Annoncer la prochaine révision plutôt que de laisser une maîtrise expirer
+  // sans prévenir : c'est l'information qui rend la règle compréhensible.
+  if (suivi.statut === modele.STATUT.MAITRISEE && echeance !== null) {
+    const jours = Math.max(1, Math.round((echeance - maintenant) / 86400000));
+
+    rendu.afficherEtatControle(
+      document.querySelector(`.replique[data-id="${id}"]`),
+      `sue — à revoir dans ${jours} jour(s)`,
+    );
   }
-
-  rendu.appliquerProgression($('app'), index, progres, annotations);
-  enregistrerProgression();
-}
-
-function basculerMarque(id) {
-  const note = annotations[id] ?? {};
-
-  annotations[id] = { ...note, marque: !note.marque };
-  rendu.appliquerProgression($('app'), index, progres, annotations);
-  enregistrerProgression();
 }
 
 function annoter(id) {
@@ -1006,9 +1033,9 @@ function ouvrirBilan() {
 
   $('bilan-titre').textContent = piece.piece;
   $('bilan-resume').textContent =
-    `${compte.maitrisee} sue(s), ${compte.en_cours} en cours, ` +
-    `${compte.a_apprendre} à apprendre — sur ${compte.total}, ` +
-    `pour ${etat.roleActif.join(' & ')}.`;
+    `${compte.maitrisee} sue(s), ${compte.a_reviser} à réviser, ` +
+    `${compte.en_cours} en cours, ${compte.a_apprendre} à apprendre — ` +
+    `sur ${compte.total}, pour ${etat.roleActif.join(' & ')}.`;
 
   const liste = $('bilan-scenes');
   liste.innerHTML = '';
@@ -1157,6 +1184,7 @@ $('curseur-police').addEventListener('input', (evenement) => {
 $('curseur-police').addEventListener('change', enregistrerReglages);
 
 $('btn-exporter-2').addEventListener('click', exporterProgression);
+$('btn-exporter-3').addEventListener('click', exporterProgression);
 $('fichier-sauvegarde-2').addEventListener('change', (evenement) =>
   lireFichier(evenement.target, importerProgression),
 );

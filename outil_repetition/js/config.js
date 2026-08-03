@@ -70,6 +70,23 @@ export const CONFIG = Object.freeze({
    */
   MOTS_MAX_ALIGNEMENT: 400,
 
+  // --- Répétition espacée ------------------------------------------
+  /** Score à partir duquel une récitation compte comme réussie. */
+  SEUIL_REUSSITE: 90,
+
+  /** Réussites nécessaires avant qu'une réplique soit tenue pour sue. */
+  REUSSITES_POUR_MAITRISE: 3,
+
+  /**
+   * Jours de validité d'une maîtrise, selon le nombre de réussites accumulées.
+   *
+   * C'est le ressort de la répétition espacée : chaque réussite supplémentaire
+   * repousse la révision. Une réplique sue trois fois se revoit à sept jours ;
+   * sue six fois, à cinq semaines. Au-delà de la dernière valeur, l'intervalle
+   * ne croît plus — une pièce se joue dans l'année, pas dans dix ans.
+   */
+  INTERVALLES_REVISION_JOURS: Object.freeze([7, 16, 35]),
+
   // --- Données -----------------------------------------------------
   /** Version de schéma acceptée. Toute autre est refusée, jamais devinée. */
   SCHEMA_ACCEPTE: 'repetition/1',

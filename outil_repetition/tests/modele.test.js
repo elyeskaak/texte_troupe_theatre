@@ -10,6 +10,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  ajouterScore,
   bilan,
   candidatsSpotCheck,
   chercher,
@@ -17,6 +18,8 @@ import {
   indexer,
   MOTIF_SANS_TOP,
   repliqueVoisine,
+  prochaineRevision,
+  statutDepuisScores,
   statutDUnite,
   STATUT,
   texteDuTop,
@@ -621,6 +624,7 @@ describe('bilan', () => {
       total: 2,
       [STATUT.A_APPRENDRE]: 1,
       [STATUT.EN_COURS]: 0,
+      [STATUT.A_REVISER]: 0,
       [STATUT.MAITRISEE]: 1,
     });
   });
@@ -630,8 +634,147 @@ describe('bilan', () => {
     const somme =
       resultat[STATUT.A_APPRENDRE] +
       resultat[STATUT.EN_COURS] +
+      resultat[STATUT.A_REVISER] +
       resultat[STATUT.MAITRISEE];
 
     assert.equal(somme, resultat.total);
+  });
+});
+
+
+describe('répétition espacée — statut déduit des scores', () => {
+  const JOUR = 86400000;
+  const T = 1_800_000_000_000;
+  const REGLES = { seuil: 90, reussitesPourMaitrise: 3, intervallesJours: [7, 16, 35] };
+
+  const scores = (...entrees) => ({
+    scores: entrees.map(([jours, score]) => ({ le: T - jours * JOUR, score })),
+  });
+
+  test('sans historique, à apprendre', () => {
+    assert.equal(statutDepuisScores({}, T, REGLES), STATUT.A_APPRENDRE);
+    assert.equal(statutDepuisScores(undefined, T, REGLES), STATUT.A_APPRENDRE);
+  });
+
+  test('des tentatives sans réussite : en cours', () => {
+    const suivi = scores([1, 40], [2, 70], [3, 89]);
+
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.EN_COURS);
+  });
+
+  test('le seuil est inclusif', () => {
+    // 90 exactement est une réussite : un seuil qu'on n'atteint jamais tout à
+    // fait serait décourageant sans raison.
+    const suivi = scores([1, 90], [2, 90], [3, 90]);
+
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.MAITRISEE);
+  });
+
+  test('deux réussites ne suffisent pas', () => {
+    const suivi = scores([1, 95], [2, 92]);
+
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.EN_COURS);
+  });
+
+  test('trois réussites récentes : sue', () => {
+    const suivi = scores([0, 95], [1, 92], [2, 99]);
+
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.MAITRISEE);
+  });
+
+  test('passé l’échéance, la maîtrise expire en « à réviser »', () => {
+    // C'est le ressort de la règle : sue autrefois n'est pas sue aujourd'hui.
+    const suivi = scores([8, 95], [9, 92], [10, 99]);
+
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.A_REVISER);
+  });
+
+  test('« à réviser » se distingue d’« en cours »', () => {
+    // Une réplique sue trois fois puis oubliée ne demande pas le même travail
+    // qu'une réplique jamais réussie : les confondre ferait réapprendre ce qu'il
+    // suffit de rafraîchir.
+    const oubliee = scores([30, 95], [31, 95], [32, 95]);
+    const jamaisSue = scores([1, 50], [2, 60]);
+
+    assert.equal(statutDepuisScores(oubliee, T, REGLES), STATUT.A_REVISER);
+    assert.equal(statutDepuisScores(jamaisSue, T, REGLES), STATUT.EN_COURS);
+  });
+
+  test('chaque réussite supplémentaire repousse l’échéance', () => {
+    // Trois réussites : sept jours. Quatre : seize. C'est l'espacement.
+    const troisFois = scores([10, 95], [11, 95], [12, 95]);
+    const quatreFois = scores([10, 95], [11, 95], [12, 95], [13, 95]);
+
+    assert.equal(statutDepuisScores(troisFois, T, REGLES), STATUT.A_REVISER);
+    assert.equal(statutDepuisScores(quatreFois, T, REGLES), STATUT.MAITRISEE);
+  });
+
+  test('l’intervalle plafonne', () => {
+    // Dix réussites ne donnent pas dix ans : une pièce se joue dans l'année.
+    const beaucoup = { scores: Array.from({ length: 10 }, (_, i) => ({
+      le: T - (i + 40) * JOUR, score: 95,
+    })) };
+
+    assert.equal(statutDepuisScores(beaucoup, T, REGLES), STATUT.A_REVISER);
+  });
+
+  test('les échecs récents ne défont pas une maîtrise valide', () => {
+    // Choix assumé : le statut mesure ce qui a été réussi, pas la dernière
+    // tentative. Un raté sur un mot ne doit pas effacer trois réussites.
+    const suivi = scores([0, 40], [1, 95], [2, 95], [3, 95]);
+
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.MAITRISEE);
+  });
+
+  test('une entrée mal formée est ignorée', () => {
+    const suivi = { scores: [null, { le: T }, { score: 95 }, { le: T, score: 95 }] };
+
+    assert.equal(statutDepuisScores(suivi, T, REGLES), STATUT.EN_COURS);
+  });
+});
+
+describe('prochaineRevision', () => {
+  const JOUR = 86400000;
+  const T = 1_800_000_000_000;
+  const REGLES = { seuil: 90, reussitesPourMaitrise: 3, intervallesJours: [7, 16, 35] };
+
+  test('null tant que la réplique n’est pas sue', () => {
+    assert.equal(prochaineRevision({ scores: [{ le: T, score: 95 }] }, REGLES), null);
+  });
+
+  test('sept jours après la dernière réussite, à trois réussites', () => {
+    const suivi = { scores: [T, T - JOUR, T - 2 * JOUR].map((le) => ({ le, score: 95 })) };
+
+    assert.equal(prochaineRevision(suivi, REGLES), T + 7 * JOUR);
+  });
+});
+
+describe('ajouterScore', () => {
+  const T = 1_800_000_000_000;
+
+  test('ajoute sans modifier l’original', () => {
+    const avant = { scores: [{ le: T - 1000, score: 50 }] };
+    const apres = ajouterScore(avant, 95, T, 10);
+
+    assert.equal(avant.scores.length, 1);
+    assert.equal(apres.scores.length, 2);
+  });
+
+  test('le plus récent d’abord', () => {
+    const apres = ajouterScore({ scores: [{ le: T - 1000, score: 50 }] }, 95, T, 10);
+
+    assert.equal(apres.scores[0].score, 95);
+  });
+
+  test('le plafond sacrifie l’ancien, jamais le nouveau', () => {
+    const anciens = { scores: [3, 2, 1].map((n) => ({ le: T - n * 1000, score: n })) };
+    const apres = ajouterScore(anciens, 95, T, 2);
+
+    assert.equal(apres.scores.length, 2);
+    assert.equal(apres.scores[0].score, 95);
+  });
+
+  test('la date de vérification est posée', () => {
+    assert.equal(ajouterScore({}, 95, T, 10).verifiee_le, T);
   });
 });

@@ -222,7 +222,7 @@ function _monterReplique(replique, { index, etat }) {
 }
 
 /**
- * Statut d'apprentissage, marque-page et annotation.
+ * Statut d'apprentissage et annotation.
  *
  * Le statut est **un seul bouton qui cycle**, et non trois pastilles : sur 72
  * répliques, trois boutons chacune feraient 216 cibles à l'écran pour une
@@ -232,24 +232,20 @@ function _outilsReplique() {
   const zone = document.createElement('div');
   zone.className = 'outils-replique';
 
-  const statut = document.createElement('button');
-  statut.type = 'button';
+  // Le statut n'est **plus un bouton**. Il se mérite au micro (voir
+  // `modele.statutDepuisScores`) : le rendre cliquable inviterait à déclarer une
+  // maîtrise que rien ne mesure, et c'est précisément la confiance qui trompe.
+  const statut = document.createElement('span');
   statut.className = 'statut';
   statut.dataset.statut = 'a_apprendre';
   statut.textContent = '○ à apprendre';
-
-  const marque = document.createElement('button');
-  marque.type = 'button';
-  marque.className = 'marque-page';
-  marque.textContent = '☆';
-  marque.title = 'Marque-page';
 
   const note = document.createElement('button');
   note.type = 'button';
   note.className = 'noter';
   note.textContent = '✎ note';
 
-  zone.append(statut, marque, note);
+  zone.append(statut, note);
 
   const annotation = document.createElement('div');
   annotation.className = 'annotation';
@@ -258,10 +254,11 @@ function _outilsReplique() {
   return zone;
 }
 
-/** Libellés des trois statuts, du moins au mieux su. */
+/** Libellés des quatre statuts, du moins au mieux su. */
 export const LIBELLES_STATUT = Object.freeze({
   a_apprendre: '○ à apprendre',
   en_cours: '◐ en cours',
+  a_reviser: '◐ à réviser',
   maitrisee: '● su',
 });
 
@@ -288,17 +285,6 @@ export function appliquerProgression(racine, index, progres, annotations) {
     }
 
     const note = annotations[id];
-    const marquee = note?.marque === true;
-
-    replique.classList.toggle('marquee', marquee);
-
-    const boutonMarque = replique.querySelector('.marque-page');
-
-    if (boutonMarque) {
-      boutonMarque.textContent = marquee ? '★' : '☆';
-      boutonMarque.classList.toggle('marque', marquee);
-    }
-
     const zone = replique.querySelector('.annotation');
 
     if (zone) {
@@ -319,7 +305,7 @@ export function appliquerProgression(racine, index, progres, annotations) {
   }
 }
 
-const ORDRE = ['a_apprendre', 'en_cours', 'maitrisee'];
+const ORDRE = ['a_apprendre', 'en_cours', 'a_reviser', 'maitrisee'];
 
 function _statutDeLUnite(unite, index, progres) {
   const miennes = [...unite.querySelectorAll('.replique.mienne')];
