@@ -17,6 +17,7 @@ la suite doit rester exécutable sur une machine nue.
 
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -384,6 +385,94 @@ class TestDeterminisme(BaseDocx):
 
         self.assertEqual(
             len(document.paragraphs), len(self.document.paragraphs)
+        )
+
+
+# ============================================================
+# 5 bis. SECONDE SORTIE : REPET.json
+# ============================================================
+
+
+class TestSortieDeRepetition(BaseDocx):
+    """
+    L'étape écrit aussi `<Livre>_REPET.json`, pour `../outil_repetition/`.
+
+    Ce qui est vérifié ici, c'est le **câblage** : que la seconde sortie soit
+    bien produite, et surtout qu'elle ne puisse jamais coûter la première. Le
+    contenu du JSON, lui, est couvert par `test_repet_export.py`.
+    """
+
+    def test_le_json_est_ecrit_a_cote_du_docx(self):
+        self.assertTrue(self.chemins.repet.exists())
+        self.assertEqual(self.chemins.repet.parent, self.chemins.docx.parent)
+
+    def test_le_json_decrit_la_meme_piece_que_le_docx(self):
+        document = json.loads(self.chemins.repet.read_text(encoding="utf-8"))
+
+        self.assertEqual(document["piece"], "Le Malentendu")
+        self.assertEqual(document["schema"], config.SCHEMA_REPET)
+
+        noms = {p["nom"] for p in document["personnages"]}
+
+        self.assertEqual(noms, {"JAN", "MARIA", "LE MESSAGER"})
+
+    def test_les_totaux_remontent_au_resultat(self):
+        resultat = self.resultats[0]
+
+        self.assertGreater(resultat.unites, 0)
+        self.assertGreater(resultat.repliques, 0)
+
+    def test_un_echec_du_json_ne_coute_pas_le_docx(self):
+        """
+        Le document imprimé est la raison d'être de l'étape ; la sortie de
+        répétition en est un bénéfice annexe. L'échec de la seconde ne doit ni
+        supprimer la première, ni faire passer le livre en échec — mais il doit
+        être **signalé**, un JSON manquant en silence se découvrant sur le
+        téléphone un dimanche de filage.
+        """
+        from theatre_editor import repet_export
+
+        self.chemins.docx.unlink()
+        self.chemins.repet.unlink()
+
+        origine = repet_export.ecrire_repet
+
+        def echouer(*_args, **_kwargs):
+            raise RuntimeError("disque plein, pour le test")
+
+        repet_export.ecrire_repet = echouer
+        try:
+            resultats = docx_export.executer(self.base)
+        finally:
+            repet_export.ecrire_repet = origine
+
+        resultat = resultats[0]
+
+        self.assertEqual(resultat.statut, config.STATUT_TERMINE)
+        self.assertTrue(self.chemins.docx.exists())
+        self.assertFalse(self.chemins.repet.exists())
+        self.assertTrue(
+            any("répétition" in a for a in resultat.avertissements),
+            resultat.avertissements,
+        )
+
+    def test_une_anomalie_de_structure_remonte_au_rapport(self):
+        """
+        Un texte sans personnage annoncé est signalé par `repet_export`. Cet
+        avertissement doit atteindre le rapport de l'étape : confiné au JSON, il
+        ne serait jamais lu.
+        """
+        io.ecrire_texte_atomique(
+            self.chemins.edit,
+            "**ACTE PREMIER**\nUne phrase orpheline.\n\n**JAN.**\nBonjour.\n",
+        )
+
+        resultats = docx_export.executer(self.base)
+
+        self.assertEqual(resultats[0].statut, config.STATUT_TERMINE)
+        self.assertTrue(
+            any("sans personnage" in a for a in resultats[0].avertissements),
+            resultats[0].avertissements,
         )
 
 

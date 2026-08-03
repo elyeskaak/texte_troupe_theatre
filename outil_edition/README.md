@@ -12,8 +12,11 @@ Pièce.pdf ──▶ Pièce_OCR.txt ──▶ Pièce_EDIT.txt ──▶ Pièce_R
                                      │    (rôles des       │
                                      │     premières pages)│
                                      │         │           │
-                                     └──▶ Pièce.docx ◀─────┘
-                                          (sans IA)
+                                     ├──▶ Pièce.docx ◀─────┘
+                                     │    (sans IA)
+                                     │
+                                     └──▶ Pièce_REPET.json
+                                          (sans IA — pour outil_repetition)
 ```
 
 Chaque étape est **indépendante** et **reprenable**. Si Colab coupe au milieu
@@ -210,6 +213,25 @@ abrégée, un raccord mal ressoudé.
 **Aucune IA, aucune clé API, aucun coût.** Uniquement `python-docx` et la
 convention typographique. Deux exécutions produisent le même document :
 régénérez autant que vous voulez après avoir ajusté une marge.
+
+#### Une seconde sortie, pour répéter son texte
+
+La même étape écrit aussi `<Livre>_REPET.json`, lu par
+[`outil_repetition/`](../outil_repetition/CAHIER_DES_CHARGES.md) — la page web
+qui sert à apprendre son rôle sur téléphone.
+
+Ce fichier ne coûte rien : il expose l'index de structure **déjà construit** pour
+le DOCX, qui tranche entre acte, scène, personnage, lieu, didascalie et réplique.
+Cet index était jusqu'ici consommé puis jeté.
+
+L'intérêt n'est pas d'économiser un parsing, c'est que la classification vive
+**à un seul endroit**. Un `**LA VOIX**` mal classé se corrige par une ligne de
+`config.py`, et les deux sorties sont corrigées ensemble : le JSON ne peut pas
+présenter une structure que le document imprimé ne montre pas.
+
+Le fichier est visible dans le dossier principal, à côté du DOCX, parce qu'il est
+fait pour être transféré sur un téléphone. Il contient le texte intégral de la
+pièce : `.gitignore` l'écarte du dépôt, comme `exemples/`.
 
 ---
 

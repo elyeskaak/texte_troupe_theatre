@@ -840,6 +840,27 @@ ROLES_LIMINAIRES: frozenset[str] = frozenset({
 SUFFIXE_DOCX = ".docx"
 
 # ------------------------------------------------------------
+# Sortie destinée à l'outil de répétition (../outil_repetition/).
+# ------------------------------------------------------------
+#
+# Écrite par `repet_export.py` pendant l'étape 4, à partir de l'index de
+# structure déjà construit pour le DOCX. Aucune IA, aucun appel, aucun coût :
+# c'est le même parcours du document qui sert aux deux sorties.
+#
+# Le fichier est **visible dans le dossier principal**, à côté du DOCX, parce
+# qu'il est fait pour être transféré sur un téléphone. C'est la seule exception
+# à la règle « le dossier principal ne montre que le PDF et le DOCX », et elle
+# est délibérée : un livrable rangé dans temp/ serait introuvable.
+SUFFIXE_REPET = "_REPET.json"
+
+# Version du schéma du fichier de répétition.
+#
+# L'outil de répétition refuse un schéma qu'il ne connaît pas, au lieu de
+# l'interpréter au mieux. À incrémenter dès qu'un champ change de sens — jamais
+# quand un champ est seulement ajouté.
+SCHEMA_REPET = "repetition/1"
+
+# ------------------------------------------------------------
 # Suffixes de l'ancienne disposition, à plat dans le dossier principal.
 #
 # Conservés pour `io.migrer_livre()` : sans migration, les fichiers déjà

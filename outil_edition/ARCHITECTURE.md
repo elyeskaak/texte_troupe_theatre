@@ -191,6 +191,7 @@ Théâtre/
 │   ├── liminaires.py                ← étape 2c — un appel par livre
 │   ├── validation.py                ← étape 3
 │   ├── docx_export.py               ← étape 4
+│   ├── repet_export.py              ← étape 4, seconde sortie (§5.7)
 │   └── main.py                      ← orchestration CLI
 │
 ├── notebooks/                       ← générés par outils/, jamais à la main
@@ -287,6 +288,7 @@ dossier entier en boucle.
 | `liminaires.py` | Étape 2c : `EDIT.txt` → `LIMINAIRES.json` | tout `utils` | oui | oui |
 | `validation.py` | Étape 3 : → `REPORT.txt` | tout `utils` | oui | oui |
 | `docx_export.py` | Étape 4 : `EDIT.txt` → `.docx` | `config`, `io`, `blocks` | **non** | oui |
+| `repet_export.py` | Étape 4 : lignes classées → `REPET.json` | `config`, `io`, `blocks` | **non** | oui |
 | `main.py` | Orchestration, CLI, sélection d'étape | tous | — | — |
 
 Deux invariants de conception se lisent dans ce tableau :
@@ -529,7 +531,77 @@ classification **avant** de générer le DOCX, au moment où vous relisez déjà
 rapport. Un acte pris pour un personnage se verrait autrement à la première
 page blanche parasite.
 
-### 5.7 Journaux `journal_<etape>.json`
+### 5.7 `<Livre>_REPET.json`
+
+Seconde sortie de l'étape 4, destinée à `../outil_repetition/`. **Aucune IA,
+aucun coût** : le fichier expose l'`IndexStructure` déjà construit pour le DOCX,
+qui était jusqu'ici consommé puis jeté.
+
+```json
+{
+  "schema": "repetition/1",
+  "piece": "Le Malentendu",
+  "genere_le": "2026-08-03T14:32:10",
+  "outil": "outil_edition 1.0.0 — étape 4",
+  "avertissements": [],
+  "liminaires": [{ "type": "distribution", "texte": "PERSONNAGES" }],
+  "personnages": [{ "nom": "JAN", "repliques": 84, "mots": 3120 }],
+  "unites": [
+    {
+      "id": "u001",
+      "acte": "ACTE PREMIER",
+      "scene": "SCÈNE 2",
+      "implicite": false,
+      "personnages": ["JAN", "MARTHA"],
+      "elements": [
+        { "type": "lieu", "texte": "Une auberge. Le soir." },
+        { "type": "replique", "id": "r_8f3a1c02d4e1", "personnage": "JAN",
+          "texte": "Je t'attendais depuis une heure.", "vers": false,
+          "didascalies_internes": [{ "avant_mot": 2, "texte": "elle se lève" }] }
+      ]
+    }
+  ]
+}
+```
+
+Cinq propriétés portées par ce format.
+
+**L'unité de premier niveau est l'« unité jouable », pas l'acte.** Une liste
+plate couvre les trois cas réels sans arborescence conditionnelle : la pièce
+classique (`acte` et `scene` renseignés), la pièce contemporaine sans titre de
+scène — où les `***` marquent les changements, d'où `implicite: true` — et le
+texte d'un seul tenant. C'est aussi le grain dont l'outil de répétition a besoin
+pour replier une scène.
+
+**L'identifiant d'une réplique est une empreinte de son contenu**, jamais sa
+position. Un `EDIT.txt` relu et corrigé décale toutes les positions ; des
+identifiants positionnels feraient migrer silencieusement la progression d'une
+réplique vers sa voisine. Le rang d'occurrence n'entre dans l'empreinte que s'il
+est **non nul** : sinon, ajouter un second « Oui. » changerait l'identifiant du
+premier, qui existait pourtant déjà.
+
+**Le texte parlé est séparé des jeux de scène.** *elle se lève* ne se prononce
+pas : la laisser dans `texte` ferait chuter le score de fidélité de toutes les
+répliques portant une didascalie — c'est-à-dire les plus travaillées. La position
+est donnée en mots (`avant_mot`), qui résiste au reflux, et non en caractères.
+
+**`vers` se déduit du nombre de lignes.** L'étape 2 a déjà rejoint les retours à
+la ligne mécaniques et ne conserve séparées que les lignes voulues ([§8](#8-la-convention-typographique--le-contrat-entre-les-étapes)) :
+une réplique restée sur deux lignes l'est donc par décision, jamais par accident
+de largeur de page. L'outil de répétition s'en sert pour ne pas recomposer un
+vers comme de la prose.
+
+**Rien n'est écarté en silence.** Une ligne de texte sans personnage annoncé est
+conservée sous le type `texte_sans_personnage` *et* signalée dans
+`avertissements`, qui remonte au rapport de l'étape. Le prototype de l'outil de
+répétition, lui, concaténait ou jetait sans trace ce qu'il ne reconnaissait pas :
+une réplique perdue y était indétectable.
+
+`construire_repet()` ne porte **aucun champ de date** : deux appels sur le même
+texte produisent des dictionnaires strictement égaux, ce qui rend le déterminisme
+testable. `genere_le` est ajouté au moment de l'écriture.
+
+### 5.8 Journaux `journal_<etape>.json`
 
 Voir [§12](#12-journalisation).
 
@@ -656,7 +728,7 @@ une fenêtre de contexte, et un rapport sur un livre entier dépasserait
 | | |
 |---|---|
 | **Entrée** | `<Livre>_EDIT.txt` |
-| **Sortie** | `<Livre>.docx` |
+| **Sorties** | `<Livre>.docx` **et** `<Livre>_REPET.json` (§5.7) |
 | **IA** | **aucune** |
 | **Reprise** | sans objet (quelques secondes, entièrement local) |
 
@@ -672,9 +744,18 @@ une fenêtre de contexte, et un rapport sur un livre entier dépasserait
    saut de page inséré avant chaque acte uniquement.
 7. Écrire le `.docx` et `journal_docx.json`, en y consignant tout classement
    incertain.
+8. **Écrire `<Livre>_REPET.json`** à partir des mêmes lignes classées (§5.7).
 
 L'ordre 2 → 3 → 4 n'est pas négociable : le type d'un `**X.**` dépend du
 document entier, il ne peut donc pas être décidé en lisant les lignes une à une.
+
+L'ordre 7 → 8 ne l'est pas non plus, mais pour une autre raison. **Le DOCX est
+enregistré avant la sortie de répétition**, parce que le document imprimé est la
+raison d'être de l'étape et la seconde sortie un bénéfice annexe. Un défaut dans
+le JSON ne doit donc coûter ni le DOCX, ni le statut du livre : `repet_export`
+est appelé sous protection, et son échec devient un **avertissement**, pas une
+erreur d'étape. Il est signalé pour autant — un JSON manquant en silence se
+découvrirait sur le téléphone, un dimanche de filage.
 
 ---
 

@@ -59,6 +59,9 @@ class ResultatLivre:
     actes: int = 0
     scenes: int = 0
     personnages: int = 0
+    # Sortie de répétition. Restent à zéro si elle n'a pas pu être écrite.
+    unites: int = 0
+    repliques: int = 0
     classements_incertains: list[str] = field(default_factory=list)
     avertissements: list[str] = field(default_factory=list)
     duree_secondes: float = 0.0
@@ -71,6 +74,8 @@ class ResultatLivre:
             "actes": self.actes,
             "scenes": self.scenes,
             "personnages": self.personnages,
+            "unites": self.unites,
+            "repliques": self.repliques,
             "classements_incertains": self.classements_incertains,
             "avertissements": self.avertissements,
             "duree_secondes": self.duree_secondes,
@@ -349,10 +354,7 @@ def construire_docx(
     index = blocks.construire_index_structure(texte)
     document = creer_document()
 
-    lignes = blocks.classifier_document(texte, index)
-
-    if roles_liminaires:
-        lignes = _appliquer_roles_liminaires(lignes, texte, roles_liminaires)
+    lignes = lignes_classees(texte, index, roles_liminaires)
 
     paragraphes = 0
 
@@ -361,6 +363,27 @@ def construire_docx(
             paragraphes += 1
 
     return document, index, paragraphes
+
+
+def lignes_classees(
+    texte: str,
+    index: blocks.IndexStructure,
+    roles_liminaires: dict[int, blocks.TypeLigne] | None = None,
+) -> list[blocks.LigneClassee]:
+    """
+    Classe le document, rôles liminaires appliqués s'il y en a.
+
+    Extrait de `construire_docx()` pour que la sortie de répétition parte
+    **exactement** des mêmes lignes que le DOCX. Deux séquences de classification
+    parallèles finiraient par diverger, et le JSON présenterait alors une
+    structure que le document imprimé ne montre pas.
+    """
+    lignes = blocks.classifier_document(texte, index)
+
+    if roles_liminaires:
+        lignes = _appliquer_roles_liminaires(lignes, texte, roles_liminaires)
+
+    return lignes
 
 
 def _appliquer_roles_liminaires(
@@ -405,6 +428,55 @@ def _appliquer_roles_liminaires(
         resultat.append(ligne)
 
     return resultat
+
+
+def _ecrire_repet(
+    *,
+    chemins: io.CheminsLivre,
+    texte: str,
+    roles: dict[int, blocks.TypeLigne] | None,
+    index: blocks.IndexStructure,
+    resultat: ResultatLivre,
+) -> None:
+    """
+    Écrit la sortie destinée à l'outil de répétition.
+
+    **Le DOCX est déjà enregistré quand cette fonction est appelée, et c'est
+    délibéré.** La génération du document imprimé est la raison d'être de
+    l'étape ; la sortie de répétition en est un bénéfice annexe. Un défaut dans
+    cette seconde sortie ne doit donc jamais coûter la première, ni faire passer
+    le livre en échec.
+
+    L'exception est néanmoins **signalée** comme avertissement, jamais avalée :
+    un JSON manquant en silence serait découvert sur le téléphone, un dimanche
+    de filage.
+    """
+    from theatre_editor import repet_export
+
+    try:
+        lignes = lignes_classees(texte, index, roles)
+        document = repet_export.ecrire_repet(chemins, lignes, index)
+    except Exception as erreur:
+        resultat.avertissements.append(
+            f"la sortie de répétition n'a pas pu être écrite ({erreur}) — "
+            "le DOCX, lui, est bien généré"
+        )
+        return
+
+    totaux = repet_export.compter(document)
+    resultat.unites = totaux["unites"]
+    resultat.repliques = totaux["repliques"]
+
+    # Les anomalies de structure relevées à l'assemblage — un texte sans
+    # personnage annoncé, par exemple — remontent dans le rapport de l'étape.
+    # Sans cela, elles ne vivraient que dans un JSON que personne ne relit.
+    nouveaux = [
+        avertissement
+        for avertissement in document["avertissements"]
+        if avertissement not in resultat.avertissements
+        and avertissement not in index.avertissements
+    ]
+    resultat.avertissements.extend(nouveaux)
 
 
 def traiter_livre(
@@ -473,8 +545,21 @@ def _generer(*, chemins: io.CheminsLivre, resultat: ResultatLivre) -> None:
             "relancez l'étape « edition »"
         )
 
+    # Après l'affectation de `resultat.avertissements`, jamais avant : cette
+    # ligne remplace la liste, et y ajouter quoi que ce soit plus tôt serait
+    # écrasé sans trace. Le DOCX, lui, est déjà enregistré (voir _ecrire_repet).
+    _ecrire_repet(
+        chemins=chemins, texte=texte, roles=roles, index=index, resultat=resultat
+    )
+
     for avertissement in resultat.avertissements:
         journalisation.alerte(avertissement)
+
+    if resultat.repliques:
+        journalisation.succes(
+            f"{chemins.repet.name} — {resultat.unites} unité(s), "
+            f"{resultat.repliques} réplique(s)"
+        )
 
     journalisation.succes(
         f"{chemins.docx.name} — {paragraphes} paragraphes, "
@@ -548,6 +633,7 @@ def _afficher_recapitulatif(
             "Actes": sum(r.actes for r in resultats),
             "Scènes": sum(r.scenes for r in resultats),
             "Personnages": sum(r.personnages for r in resultats),
+            "Répliques (répétition)": sum(r.repliques for r in resultats),
             "Durée": journalisation.formater_duree(
                 sum(r.duree_secondes for r in resultats)
             ),

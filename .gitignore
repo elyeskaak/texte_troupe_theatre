@@ -33,6 +33,9 @@ temp/
 *_OCR.txt
 *_EDIT.txt
 *_REPORT.txt
+# Sortie de l'etape 4 pour l'outil de repetition : contient le texte integral
+# d'une oeuvre. Meme motif que exemples/ — jamais sur GitHub.
+*_REPET.json
 *_OCR_pages/
 *_EDIT_blocs/
 *_EDIT_raccords/

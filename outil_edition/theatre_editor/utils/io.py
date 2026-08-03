@@ -54,6 +54,9 @@ class CheminsLivre:
     # --- Visible dans le dossier principal ---------------------------
     pdf: Path
     docx: Path
+    # Sortie de l'étape 4 destinée à l'outil de répétition. Visible elle aussi,
+    # parce qu'elle est faite pour être transférée sur un téléphone.
+    repet: Path
 
     # --- Étape 1 -----------------------------------------------------
     dossier_pages: Path
@@ -129,9 +132,10 @@ def resoudre_chemins(nom_livre: str, dossier: Path | None = None) -> CheminsLivr
         nom=nom_livre,
         dossier=base,
         dossier_travail=travail,
-        # Seuls ces deux fichiers restent visibles dans le dossier principal.
+        # Seuls ces trois fichiers restent visibles dans le dossier principal.
         pdf=base / f"{nom_livre}.pdf",
         docx=base / f"{nom_livre}{config.SUFFIXE_DOCX}",
+        repet=base / f"{nom_livre}{config.SUFFIXE_REPET}",
         dossier_pages=travail / config.NOM_OCR_PAGES,
         ocr=travail / config.NOM_OCR,
         dossier_blocs=travail / config.NOM_EDIT_BLOCS,
