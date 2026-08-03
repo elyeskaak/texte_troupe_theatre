@@ -53,6 +53,10 @@ journal_*.json
 exemples/
 gap_1789.txt
 
+# Pièces chargées localement dans l'outil de répétition. Un REPET.json
+# contient le texte intégral d'une œuvre : même motif que exemples/.
+outil_repetition/pieces/
+
 # ============================================================
 # Système
 # ============================================================
