@@ -644,8 +644,8 @@ const ORDRE_EXIGENCE = [
   etatSession.MODE.TROUS,
   etatSession.MODE.ACRONYME,
   etatSession.MODE.MASQUAGE,
-  etatSession.MODE.AVEUGLE,
   etatSession.MODE.TOP,
+  etatSession.MODE.AVEUGLE,
   etatSession.MODE.VOIX,
 ];
 
@@ -1322,7 +1322,6 @@ function rechercher(fragment) {
 // ============================================================
 
 $('btn-sommaire').addEventListener('click', ouvrirBilan);
-$('btn-bilan').addEventListener('click', ouvrirBilan);
 $('btn-spot-check').addEventListener('click', spotCheck);
 $('btn-retour-texte').addEventListener('click', () => montrer('ecran-repetition'));
 

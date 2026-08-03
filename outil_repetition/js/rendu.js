@@ -232,18 +232,21 @@ function _outilsReplique() {
   const zone = document.createElement('div');
   zone.className = 'outils-replique';
 
-  // Le statut n'est **plus un bouton**. Il se mérite au micro (voir
-  // `modele.statutDepuisScores`) : le rendre cliquable inviterait à déclarer une
-  // maîtrise que rien ne mesure, et c'est précisément la confiance qui trompe.
+  // Le statut n'est **plus un bouton** — il se mérite au micro — et il n'est plus
+  // une pastille légendée. Une puce colorée suffit : sur une page de texte, une
+  // pastille « ○ à apprendre » sous chaque réplique répétait quatre-vingts fois
+  // une information qu'on lit d'un coup d'œil à la couleur. Le libellé reste en
+  // `title`, pour qui veut vérifier.
   const statut = document.createElement('span');
   statut.className = 'statut';
   statut.dataset.statut = 'a_apprendre';
-  statut.textContent = '○ à apprendre';
+  statut.title = 'à apprendre';
 
   const note = document.createElement('button');
   note.type = 'button';
   note.className = 'noter';
-  note.textContent = '✎ note';
+  note.textContent = '✎';
+  note.title = 'Note de jeu';
 
   zone.append(statut, note);
 
@@ -281,7 +284,7 @@ export function appliquerProgression(racine, index, progres, annotations) {
 
     if (bouton) {
       bouton.dataset.statut = statut;
-      bouton.textContent = LIBELLES_STATUT[statut] ?? LIBELLES_STATUT.a_apprendre;
+      bouton.title = (LIBELLES_STATUT[statut] ?? '').replace(/^\S+\s/, '');
     }
 
     const note = annotations[id];

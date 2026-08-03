@@ -12,7 +12,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#0d1117">
+<meta name="theme-color" content="#131415">
 <meta name="color-scheme" content="dark">
 <title>En Scène — répétition</title>
 <link rel="manifest" href="manifest.webmanifest">
@@ -22,16 +22,26 @@
     /* Palette bleue. Les noms restent ceux du théâtre — « projecteur » pour
        l'accent, « rideau » pour le fond chaud — parce qu'ils disent le rôle et
        non la teinte : changer de couleur ne demande alors qu'un changement ici. */
-    --scene:#0d1117;
-    --scene-2:#161e2b;
-    --rideau:#1e3a5f;
-    --projecteur:#6db3f2;
-    --projecteur-doux:rgba(109,179,242,0.14);
-    --papier:#e6edf3;
-    --encre:#0d1117;
-    --estompe:#8b9bb0;
-    --trait:rgba(109,179,242,0.24);
-    --alerte:#e5534b;
+    /*
+      Palette sobre. Les couleurs ne signalent plus une identité, seulement un
+      état : l'accent marque ce qui est actif, et le vert, l'ambre et le rouge
+      sont réservés aux verdicts de récitation. Tout le reste est neutre, pour que
+      le texte de la pièce domine.
+    */
+    --scene:#131415;
+    --scene-2:#1c1e20;
+    --rideau:#2a2d30;
+    --projecteur:#8fa3b8;
+    --projecteur-doux:rgba(143,163,184,0.10);
+    --papier:#e8e6e3;
+    --encre:#131415;
+    --estompe:#8a8987;
+    --trait:rgba(232,230,227,0.14);
+    --alerte:#c8695f;
+
+    /* Verdicts : les trois seules couleurs vraiment colorées. */
+    --juste:#8fbf8f;
+    --doute:#c9a961;
     --rayon:14px;
 
     /* Réglable depuis les préférences, en rem pour que tout suive. */
@@ -54,8 +64,7 @@
     /* 100dvh et non 100vh : la barre de Safari se replie au défilement. */
     min-height:100dvh;
     background:
-      radial-gradient(ellipse at 50% -10%, var(--projecteur-doux), transparent 55%),
-      radial-gradient(ellipse at 50% 110%, rgba(30,58,95,0.45), transparent 60%),
+      radial-gradient(ellipse at 50% -5%, rgba(232,230,227,0.045), transparent 60%),
       var(--scene);
     color:var(--papier);
     font-family:var(--sans);
@@ -108,7 +117,7 @@
   }
   .btn:active{ transform:scale(0.97); }
   .btn:disabled{ opacity:0.35; cursor:default; }
-  .btn-primaire{ background:var(--projecteur); color:#0b1a2b; }
+  .btn-primaire{ background:var(--papier); color:var(--encre); }
   .btn-fantome{
     background:transparent; color:var(--papier);
     border:1px solid rgba(230,237,243,0.28);
@@ -131,8 +140,8 @@
     transition:all .12s ease;
   }
   .pastille[aria-pressed="true"]{
-    background:var(--projecteur); color:#0b1a2b;
-    border-color:var(--projecteur); font-weight:700;
+    background:var(--papier); color:var(--encre);
+    border-color:var(--papier); font-weight:700;
   }
   .pastille .compte{ font-size:0.78rem; opacity:0.7; }
 
@@ -211,7 +220,7 @@
   /* Les crans déjà franchis restent lisibles : on voit d'où l'on vient. */
   .cran[data-franchi="1"]{ color:var(--papier); }
   .cran[aria-pressed="true"]{
-    background:var(--projecteur); color:#0b1a2b; font-weight:700;
+    background:var(--papier); color:var(--encre); font-weight:700;
   }
 
   /* ---- Le texte, à l'italienne ---- */
@@ -268,9 +277,10 @@
   .barre-tete{
     display:flex; align-items:center; justify-content:space-between; gap:10px;
   }
-  .barre-tete .surtitre{
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
-  }
+  /* Le titre passe à la ligne plutôt que d'être tronqué : « Agatha Christie -
+     La toile d'araignée » coupé par des points de suspension ne dit plus quelle
+     pièce on répète. */
+  .barre-tete .surtitre{ line-height:1.45; }
   #barre-contenu{ margin-top:12px; }
   .barre[data-ouverte="0"] #barre-contenu{ display:none; }
   /* En-tête de groupe dans la barre. Reprend le style de `label.champ` mais avec
@@ -469,29 +479,29 @@
     display:inline-block; margin-bottom:6px; padding:3px 10px;
     border-radius:999px; font-size:0.78rem; font-weight:700;
   }
-  .score[data-niveau="haut"]{ background:rgba(120,180,120,0.18); color:#a8dca8; }
-  .score[data-niveau="moyen"]{ background:rgba(109,179,242,0.18); color:var(--projecteur); }
-  .score[data-niveau="bas"]{ background:rgba(229,83,75,0.18); color:#f5b3ae; }
+  .score[data-niveau="haut"]{ background:rgba(143,191,143,0.16); color:var(--juste); }
+  .score[data-niveau="moyen"]{ background:rgba(201,169,97,0.16); color:var(--doute); }
+  .score[data-niveau="bas"]{ background:rgba(200,105,95,0.18); color:var(--alerte); }
 
   .valider-recitation{
     margin:0 0 6px 8px; min-height:32px; padding:3px 11px; border-radius:999px;
-    border:1px solid rgba(120,180,120,0.5); background:rgba(120,180,120,0.10);
-    color:#a8dca8; font:inherit; font-size:0.76rem; cursor:pointer;
+    border:1px solid rgba(143,191,143,0.45); background:rgba(143,191,143,0.08);
+    color:var(--juste); font:inherit; font-size:0.76rem; cursor:pointer;
   }
-  .score[data-valide="1"]{ border:1px solid rgba(120,180,120,0.6); }
+  .score[data-valide="1"]{ border:1px solid rgba(143,191,143,0.5); }
 
   .diff{ margin:0; font-size:0.95rem; line-height:1.7; }
-  .mot-correct{ color:#a8dca8; }
+  .mot-correct{ color:var(--juste); }
   .mot-oublie{ color:var(--estompe); text-decoration:line-through; }
   .mot-substitue{
-    color:#f0c05a; border-bottom:1px dashed rgba(240,192,90,0.6);
+    color:var(--doute); border-bottom:1px dashed rgba(201,169,97,0.55);
   }
   /* Le mot réellement dit est en attribut : il ne peut pas être confondu avec le
      texte de l'auteur, ni sélectionné avec lui. */
   .mot-substitue[data-dit]::after{
     content:" (" attr(data-dit) ")"; font-style:italic; opacity:0.75;
   }
-  .mot-ajoute{ color:#f0c05a; font-style:italic; opacity:0.8; }
+  .mot-ajoute{ color:var(--doute); font-style:italic; opacity:0.8; }
 
   /* ---- Progression par réplique ----
    *
@@ -499,24 +509,27 @@
    * boutons chacune feraient 216 cibles à l'écran pour une information qui tient
    * dans un symbole.
    */
-  /* Passif : ni curseur de main, ni hauteur de cible. Le statut se mérite au
-     micro, il ne se clique pas. */
+  /* Une puce, pas une pastille légendée : sur une page de texte, quatre-vingts
+     mentions « à apprendre » sont du bruit. La couleur suffit, et le libellé
+     reste en infobulle. */
   .statut{
-    display:inline-block; padding:3px 11px; border-radius:999px;
-    border:1px solid var(--trait); background:transparent;
-    color:var(--estompe); font-size:0.74rem;
+    display:inline-block; width:8px; height:8px; border-radius:50%;
+    background:var(--trait); border:none;
   }
+  .statut[data-statut="en_cours"]{ background:var(--projecteur); }
+  .statut[data-statut="a_reviser"]{ background:var(--doute); }
+  .statut[data-statut="maitrisee"]{ background:var(--juste); }
   .statut[data-statut="en_cours"]{ color:var(--projecteur); border-color:var(--projecteur); }
-  .statut[data-statut="a_reviser"]{ color:#f0c05a; border-color:rgba(240,192,90,0.55); }
+  .statut[data-statut="a_reviser"]{ color:var(--doute); border-color:rgba(201,169,97,0.5); }
   .statut[data-statut="maitrisee"]{
-    color:#a8dca8; border-color:rgba(120,180,120,0.55);
-    background:rgba(120,180,120,0.10);
+    color:var(--juste); border-color:rgba(143,191,143,0.5);
+    background:rgba(143,191,143,0.08);
   }
 
   /* Bandeau de couleur en tête d'unité, selon le statut le plus faible. */
   .unite[data-statut="en_cours"] .entete-unite{ border-bottom-color:var(--projecteur); }
-  .unite[data-statut="a_reviser"] .entete-unite{ border-bottom-color:rgba(240,192,90,0.6); }
-  .unite[data-statut="maitrisee"] .entete-unite{ border-bottom-color:rgba(120,180,120,0.6); }
+  .unite[data-statut="a_reviser"] .entete-unite{ border-bottom-color:rgba(201,169,97,0.5); }
+  .unite[data-statut="maitrisee"] .entete-unite{ border-bottom-color:rgba(143,191,143,0.5); }
 
   .annotation{
     margin-top:6px; padding:6px 10px; border-left:2px solid var(--trait);
@@ -524,11 +537,19 @@
   }
   .annotation:empty{ display:none; }
 
-  .outils-replique{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  /* Discrète : deux repères de 8 et 24 px, alignés sous le texte et à demi
+     effacés. Ils se révèlent au survol de la réplique. */
+  .outils-replique{
+    display:flex; gap:10px; align-items:center; justify-content:center;
+    margin-top:6px; opacity:0.35; transition:opacity .15s ease;
+  }
+  .replique:hover .outils-replique,
+  .replique:focus-within .outils-replique{ opacity:1; }
   .outils-replique button{
-    min-height:32px; padding:3px 9px; border-radius:999px;
-    border:1px solid rgba(230,237,243,0.2); background:transparent;
-    color:var(--estompe); font:inherit; font-size:0.72rem; cursor:pointer;
+    width:24px; height:24px; padding:0; border-radius:50%;
+    border:1px solid var(--trait); background:transparent;
+    color:var(--estompe); font:inherit; font-size:0.7rem; cursor:pointer;
+    line-height:1;
   }
 
   #recherche, #curseur-police{
@@ -549,7 +570,7 @@
     margin-right:7px; background:var(--estompe);
   }
   .puce-statut[data-statut="en_cours"]{ background:var(--projecteur); }
-  .puce-statut[data-statut="a_reviser"]{ background:#f0c05a; }
+  .puce-statut[data-statut="a_reviser"]{ background:var(--doute); }
   .puce-statut[data-statut="maitrisee"]{ background:#a8dca8; }
 
   /* Mes scènes uniquement : les autres se replient, dépliables au doigt. */
@@ -709,8 +730,8 @@
         <button type="button" class="cran" data-mode="trous"><span>3</span>Trous</button>
         <button type="button" class="cran" data-mode="acronyme"><span>4</span>Initiales</button>
         <button type="button" class="cran" data-mode="masquage"><span>5</span>Rideau</button>
-        <button type="button" class="cran" data-mode="aveugle"><span>6</span>Aveugle</button>
-        <button type="button" class="cran" data-mode="top"><span>7</span>Au top</button>
+        <button type="button" class="cran" data-mode="top"><span>6</span>Au top</button>
+        <button type="button" class="cran" data-mode="aveugle"><span>7</span>Aveugle</button>
         <button type="button" class="cran" data-mode="voix"><span>8</span>Au micro</button>
       </div>
 
@@ -727,23 +748,22 @@
         </div>
       </div>
 
-      <span class="entete-groupe">Affichage</span>
-      <div class="rangee">
+      <!-- Une seule rangée, sans en-tête. « Sommaire » et « Bilan » ouvraient
+           exactement le même écran : ils n'en font plus qu'un. -->
+      <div class="rangee" style="margin-top:14px">
         <button id="btn-mes-scenes" class="pastille pastille-mode" aria-pressed="false">
-          Mes scènes
+          Mes scènes seules
         </button>
         <button id="btn-top-court" class="pastille pastille-mode" aria-pressed="false">
-          Top court
+          Top raccourci
         </button>
-        <button id="btn-tout-remasquer" class="btn btn-fantome btn-mini">Remasquer</button>
-        <button id="btn-retour-roles" class="btn btn-fantome btn-mini">Rôles</button>
       </div>
 
-      <span class="entete-groupe">Progression</span>
-      <div class="rangee">
-        <button id="btn-sommaire" class="btn btn-fantome btn-mini">Sommaire</button>
-        <button id="btn-bilan" class="btn btn-fantome btn-mini">Bilan</button>
-        <button id="btn-exporter-3" class="btn btn-fantome btn-mini">Exporter</button>
+      <div class="rangee" style="margin-top:8px">
+        <button id="btn-sommaire" class="btn btn-fantome btn-mini">Où j'en suis</button>
+        <button id="btn-retour-roles" class="btn btn-fantome btn-mini">Mes rôles</button>
+        <button id="btn-tout-remasquer" class="btn btn-fantome btn-mini">Tout remasquer</button>
+        <button id="btn-exporter-3" class="btn btn-fantome btn-mini">Sauvegarder</button>
       </div>
 
       <label class="entete-groupe" for="recherche">Chercher dans la pièce</label>
