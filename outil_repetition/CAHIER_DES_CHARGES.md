@@ -291,12 +291,45 @@ plus celui de l'existant qui mérite d'être gardé.
 | **Masquage** | rien, sous un rideau à toucher pour révéler |
 | **Amorce seule** | les 3 premiers mots (réglable) |
 | **Mots à trous** | le texte avec un pourcentage réglable de mots masqués, révélables un à un — *repris de l'existant* |
+| **Acronyme géant** | uniquement la première lettre de chaque mot, ponctuation d'origine strictement conservée (ex. `A ?... O... C m...`) |
 | **Récitation à l'aveugle** | rien, et rien d'autre à l'écran ; on récite, puis on vérifie |
 | **Test du top** | seule la fin de la réplique précédente, rien de la mienne |
 
 Dans tous les modes masqués, **une réplique cachée indique toujours qui parle**
 (`JAN — masqué`) : je joue plusieurs rôles, et un bloc anonyme rendrait une
 scène entre deux de mes personnages illisible.
+
+### Comportement du mode « Acronyme géant »
+
+Chaque mot de ma réplique est remplacé par sa **première lettre**, en respectant
+la casse. Les signes de ponctuation, les apostrophes, les tirets, les espaces et
+les retours à la ligne sont **conservés sans aucune modification**.
+
+```
+Ai-je ?... Oui... Comme moi...   →   A-j ?... O... C m...
+Je ne crois pas qu'elle réponde. →   J n c p q'e r.
+```
+
+Quatre points de comportement, tous couverts par des tests :
+
+- **La casse et les accents de l'initiale sont préservés** : « Être » donne
+  « Ê », pas « E ».
+- **L'apostrophe et le tiret bornent deux mots** : « qu'elle » donne « q'e », et
+  « peut-être » donne « p-ê ». C'est la seule lecture cohérente de la règle —
+  conserver l'apostrophe tout en ne gardant qu'une initiale pour l'ensemble
+  donnerait « q' », qui laisse une apostrophe pendante. L'élision est de surcroît
+  un excellent rappel.
+- **Les espaces ne sont pas normalisés.** Le rythme visuel de la réplique est
+  précisément ce qui la rappelle : le réduire serait retirer l'indice.
+- **Les chiffres sont conservés entiers**, faute d'initiale : « 20 ans » donne
+  « 20 a ». Le cas est rare, l'édition imprimée écrivant ses nombres en lettres.
+
+**Pourquoi ce mode est utile là où les autres ne le sont pas.** Il ne cache pas
+une *part* du texte, il en garde le squelette entier. C'est donc un mode de
+**révision** et non d'apprentissage : on l'emploie quand la réplique est presque
+sue et qu'il ne manque que le déclic. La ponctuation intacte porte le phrasé —
+les silences, les questions, les suspensions — c'est-à-dire ce qu'une réplique
+masquée fait perdre en premier.
 
 **Mise en valeur du top.** La dernière réplique de l'autre personnage juste avant
 la mienne est encadrée et détachée, avec l'option de n'en montrer que les 3 à 5
@@ -516,7 +549,7 @@ Un commit par étape, comme pour `outil_edition`.
 | 2 | `ARCHITECTURE.md` d'`outil_repetition` | relecture et validation |
 | 3 | `repet_export.py` dans `outil_edition` (§3) + tests | tests unitaires du schéma sur les pièces d'exemple |
 | 4 | Coque : chargement d'une pièce, `localStorage`, écran de choix du rôle | une pièce chargée survit à une fermeture de Safari |
-| 5 | Écran de répétition : les 6 modes, le top, le repli de scènes | usage réel sur iPhone 15 |
+| 5 | Écran de répétition : les 7 modes, le top, le repli de scènes | usage réel sur iPhone 15 |
 | 6 | Suivi de progression, bilan, spot check, export / import | export puis import restitue à l'identique |
 | 7 | Confort : sommaire, recherche, marque-pages, annotations, défilement | — |
 | 8 | Micro et replis (§7) | testé sur iPhone 15 en HTTPS, **et** avion activé |

@@ -20,12 +20,20 @@
 
 import { CONFIG } from './config.js';
 
-/** Les six modes de masquage. */
+/**
+ * Les sept modes de masquage, du plus visible au moins visible.
+ *
+ * `ACRONYME` ne se range pas franchement sur cette échelle : il ne cache pas
+ * *une part* du texte, il en garde le squelette entier. C'est ce qui en fait un
+ * mode de révision plutôt qu'un mode d'apprentissage — on l'emploie quand la
+ * réplique est presque sue et qu'il ne manque que le déclic.
+ */
 export const MODE = Object.freeze({
   LECTURE: 'lecture',
   MASQUAGE: 'masquage',
   AMORCE: 'amorce',
   TROUS: 'trous',
+  ACRONYME: 'acronyme',
   AVEUGLE: 'aveugle',
   TOP: 'top',
 });
@@ -37,6 +45,7 @@ const MODES_MASQUANTS = Object.freeze([
   MODE.MASQUAGE,
   MODE.AMORCE,
   MODE.TROUS,
+  MODE.ACRONYME,
   MODE.AVEUGLE,
   MODE.TOP,
 ]);

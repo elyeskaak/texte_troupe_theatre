@@ -50,7 +50,7 @@ principe que `outil_edition` : l'outil sert l'œuvre, il ne la réécrit pas.
 
 La reconnaissance vocale exige le réseau sur iOS et échoue de façon capricieuse
 (§8). Elle est donc un **supplément**. Tout le reste — chargement d'une pièce,
-six modes de masquage, progression, annotations, bilan — fonctionne en mode
+sept modes de masquage, progression, annotations, bilan — fonctionne en mode
 avion. Un test de recette l'exige explicitement (§14, étape 8).
 
 ### P3 — Aucune erreur silencieuse
@@ -262,7 +262,7 @@ session ne réindexe donc rien.
   pieceId,
   mesRoles: Set<string>,       // ce que je joue dans cette pièce
   roleActif: Set<string>,      // ce que je répète maintenant (⊆ mesRoles)
-  mode,                        // lecture | masquage | amorce | trous | aveugle | top
+  mode,                        // les sept valeurs de MODE (etat.js)
   mesScenesSeules: bool,
   difficulte: 0..100,
   uniteCourante,
@@ -290,21 +290,25 @@ le DOM à chaque geste. C'est ce que fait l'existant, et c'est ce qui ne passera
 pas l'échelle.
 
 Or **le masquage est une question de présentation, pas de contenu.** Le texte
-d'une réplique est le même dans les six modes ; seule sa visibilité change.
+d'une réplique est le même dans les sept modes ; seule sa visibilité change — à
+la réserve près du mode « acronyme géant », traitée plus bas.
 
 ### 6.2 La conséquence : monter une fois, décorer en CSS
 
 Chacune de mes répliques est montée **une seule fois**, découpée de façon à ce que
-les six modes soient exprimables en CSS :
+les sept modes soient exprimables en CSS :
 
 ```html
 <div class="replique mienne" data-id="r_8f3a1c" data-perso="JAN">
   <div class="qui">JAN</div>
   <div class="texte">
-    <span class="amorce"><span class="mot">Je</span> <span class="mot">t'attendais</span>
-      <span class="mot">depuis</span></span>
-    <span class="suite"><span class="mot" data-trou="1">une</span>
-      <span class="mot">heure</span>.</span>
+    <span class="plein">
+      <span class="amorce"><span class="mot">Je</span> <span class="mot">t'attendais</span>
+        <span class="mot">depuis</span></span>
+      <span class="suite"><span class="mot" data-trou="1">une</span>
+        <span class="mot">heure</span>.</span>
+    </span>
+    <span class="acronyme">J t'a d u h.</span>
   </div>
 </div>
 ```
@@ -318,9 +322,28 @@ Le mode vit dans un attribut de la racine, et chaque mode est une règle :
                                                           background: var(--trou) }
 [data-mode="aveugle"]  .replique.actif  .texte      { visibility: hidden }
 [data-mode="top"]      .replique:not(.top)          { display: none }
+
+/* Acronyme géant : on échange les deux formes, sans rien recalculer. */
+.acronyme                                           { display: none }
+[data-mode="acronyme"] .replique.actif .plein        { display: none }
+[data-mode="acronyme"] .replique.actif .acronyme     { display: inline }
+
 .replique.revelee .texte, .mot.revelee              { visibility: visible !important }
+.replique.revelee .plein                            { display: inline !important }
+.replique.revelee .acronyme                         { display: none !important }
 [data-mes-scenes="1"] .unite:not(.mienne) .elements { display: none }
 ```
+
+**Le mode « acronyme géant » est le seul qui change le *contenu* et non la seule
+visibilité**, et c'est ce qui aurait pu l'exclure du principe de §6.1 : aucune
+règle CSS ne réduit un mot à son initiale. La solution est de monter **les deux
+formes côte à côte** — `texte.acronyme()` est appelé une fois par réplique, au
+montage — et de laisser le mode choisir laquelle s'affiche. Le principe tient
+donc intact : changer de mode reste une écriture d'attribut.
+
+Le coût est un second nœud de texte par réplique à moi, soit environ 15 % de plus
+sur l'unité montée. C'est sans commune mesure avec un re-rendu à chaque bascule,
+et le montage paresseux de §6.4 borne le total de toute façon.
 
 `.actif` marque les répliques du rôle actif. Il est posé par un sélecteur
 d'attribut, sans parcours JS :
@@ -341,6 +364,7 @@ une écriture d'attribut ou une règle CSS** — jamais un re-rendu.
 | changer de rôle actif | 1 règle CSS réécrite |
 | replier / déplier mes scènes | 1 écriture d'attribut |
 | changer la difficulté des trous | N écritures de `data-trou` sur l'unité visible |
+| passer en acronyme géant | 1 écriture d'attribut — l'acronyme est déjà monté |
 | révéler une réplique | 1 classe |
 | annoter, changer un statut | 1 nœud modifié |
 | naviguer vers une autre unité | montage paresseux (§6.4) |
@@ -736,7 +760,7 @@ Un commit par étape. Reprend le §13 du cahier, en le précisant.
 | 4 | ✅ *fait* — `config.js`, `schema.js`, `texte.js`, `comparaison.js`, `tirage.js` | 119 tests Node verts, pureté et contrat compris |
 | 5 | ✅ *fait* — `modele.js`, `etat.js` + tests | 219 tests Node verts, les trois cas de top couverts |
 | 6 | Coque : `index.html`, chargement d'une pièce, `stockage.js`, choix des rôles | une pièce chargée survit à la fermeture de Safari |
-| 7 | `rendu.js` : les 6 modes en CSS, le top, le repli de scènes, montage paresseux | usage réel sur iPhone 15 |
+| 7 | `rendu.js` : les 7 modes en CSS, le top, le repli de scènes, montage paresseux | usage réel sur iPhone 15 |
 | 8 | Progression, bilan, spot check, export / import | export puis import restitue à l'identique ; fusion vérifiée |
 | 9 | Confort : sommaire, recherche, marque-pages, annotations, défilement, Wake Lock | — |
 | 10 | `voix.js` et ses replis (Web Speech seul) | testé sur iPhone 15 en HTTPS **et en mode avion** |

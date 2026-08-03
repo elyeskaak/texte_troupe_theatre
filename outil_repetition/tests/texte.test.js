@@ -11,6 +11,7 @@ import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  acronyme,
   amorce,
   contient,
   derniersMots,
@@ -179,6 +180,101 @@ describe('amorce et derniersMots', () => {
   test('sur un texte vide, aucune erreur', () => {
     assert.equal(amorce('', 3), '');
     assert.equal(derniersMots('', 3), '');
+  });
+});
+
+describe('acronyme', () => {
+  test('l’exemple de référence', () => {
+    assert.equal(acronyme('Ai-je ?... Oui... Comme moi...'), 'A-j ?... O... C m...');
+  });
+
+  test('chaque mot est réduit à son initiale', () => {
+    assert.equal(acronyme('Nous y sommes enfin'), 'N y s e');
+  });
+
+  test('la ponctuation est conservée strictement', () => {
+    assert.equal(acronyme('Vraiment ?! Bien...'), 'V ?! B...');
+    assert.equal(acronyme('Un, deux ; trois.'), 'U, d ; t.');
+    assert.equal(acronyme('« Oui »'), '« O »');
+  });
+
+  test('la casse de l’initiale est préservée', () => {
+    assert.equal(acronyme('Jan et MARTHA'), 'J e M');
+  });
+
+  test('l’accent de l’initiale est préservé', () => {
+    assert.equal(acronyme('Être ou ne pas être'), 'Ê o n p ê');
+    assert.equal(acronyme('À propos'), 'À p');
+  });
+
+  test('l’accent survit à une forme décomposée', () => {
+    // Si le texte arrive en NFD, l'initiale est une lettre + un accent
+    // combinant : sans le groupe \p{M}*, l'accent serait perdu.
+    const decompose = 'être'.normalize('NFD');
+
+    assert.equal(acronyme(decompose).normalize('NFC'), 'ê');
+  });
+
+  test('l’apostrophe borne deux mots', () => {
+    // La conserver tout en ne gardant qu'une initiale donnerait « q' », qui
+    // laisse une apostrophe pendante.
+    assert.equal(acronyme("qu'elle"), "q'e");
+    assert.equal(acronyme('qu’elle réponde'), 'q’e r');
+    assert.equal(acronyme("aujourd'hui"), "a'h");
+  });
+
+  test('le tiret aussi', () => {
+    assert.equal(acronyme('peut-être'), 'p-ê');
+    assert.equal(acronyme('Ai-je bien entendu ?'), 'A-j b e ?');
+  });
+
+  test('les retours à la ligne d’un vers sont conservés', () => {
+    assert.equal(
+      acronyme('Je vous ai vu venir de loin,\nEt je n’ai pas bougé.'),
+      'J v a v v d l,\nE j n’a p b.',
+    );
+  });
+
+  test('les espaces multiples ne sont pas normalisés', () => {
+    // « sans modifier les espaces » : le rythme visuel est justement l'indice.
+    assert.equal(acronyme('un  deux'), 'u  d');
+  });
+
+  test('les chiffres sont conservés entiers', () => {
+    // Faute d'initiale. Le cas est rare : l'édition imprimée écrit ses nombres
+    // en lettres.
+    assert.equal(acronyme('vingt ans'), 'v a');
+    assert.equal(acronyme('20 ans'), '20 a');
+  });
+
+  test('un texte vide ou sans lettre passe tel quel', () => {
+    assert.equal(acronyme(''), '');
+    assert.equal(acronyme('... ?!'), '... ?!');
+  });
+
+  test('l’acronyme est plus court que le texte, jamais plus long', () => {
+    for (const texte of [
+      'Je ne crois pas qu’elle réponde.',
+      'Ai-je ?... Oui...',
+      'Nous y sommes enfin.',
+    ]) {
+      assert.ok(acronyme(texte).length <= texte.length, texte);
+    }
+  });
+
+  test('la ponctuation survivante est identique à celle du texte', () => {
+    // Garde-fou : c'est l'exigence explicite du mode, et une regex trop gourmande
+    // la casserait sans qu'aucun autre test ne le voie.
+    const texte = 'Ai-je ?... Oui, vraiment ; « bien » !';
+    const nonLettres = (s) => s.replace(/[\p{L}\p{M}\d]/gu, '');
+
+    assert.equal(nonLettres(acronyme(texte)), nonLettres(texte));
+  });
+
+  test('un mot par mot : autant de mots avant qu’après', () => {
+    const texte = 'Je ne crois pas qu’elle réponde.';
+
+    assert.equal(mots(acronyme(texte)).length, mots(texte).length);
   });
 });
 

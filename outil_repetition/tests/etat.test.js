@@ -123,10 +123,35 @@ describe('masque()', () => {
     assert.equal(masque(changerMode(etatInitial(DEPART), MODE.LECTURE)), false);
   });
 
-  test('les cinq autres modes masquent', () => {
-    for (const mode of [MODE.MASQUAGE, MODE.AMORCE, MODE.TROUS, MODE.AVEUGLE, MODE.TOP]) {
+  test('les six autres modes masquent', () => {
+    for (const mode of [
+      MODE.MASQUAGE,
+      MODE.AMORCE,
+      MODE.TROUS,
+      MODE.ACRONYME,
+      MODE.AVEUGLE,
+      MODE.TOP,
+    ]) {
       assert.equal(masque(changerMode(etatInitial(DEPART), mode)), true, mode);
     }
+  });
+
+  test('tout mode déclaré est acceptable, et aucun n’est oublié', () => {
+    // Garde-fou : un mode ajouté à MODE mais absent de MODES_MASQUANTS
+    // n'aurait pas de bouton « révéler », sans que rien ne le signale.
+    for (const mode of Object.values(MODE)) {
+      const etat = changerMode(etatInitial(DEPART), mode);
+
+      assert.equal(etat.mode, mode);
+      assert.equal(masque(etat), mode !== MODE.LECTURE, mode);
+    }
+  });
+
+  test('le mode acronyme masque et se révèle', () => {
+    let etat = changerMode(etatInitial(DEPART), MODE.ACRONYME);
+    etat = revelerReplique(etat, 'r_1');
+
+    assert.ok(estRevelee(etat, 'r_1'));
   });
 });
 

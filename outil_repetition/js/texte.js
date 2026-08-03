@@ -235,6 +235,45 @@ export function derniersMots(texte, combien) {
 }
 
 /**
+ * Suite de lettres : la première avec ses diacritiques, puis le reste.
+ *
+ * `\p{M}*` après la lettre initiale n'est pas une précaution vaine : si le texte
+ * arrive en forme décomposée, « être » est `e` + accent circonflexe combinant.
+ * Sans ce groupe, l'acronyme rendrait « e » au lieu de « ê » — une faute
+ * invisible dans le code et bien visible à l'écran.
+ */
+const SUITE_DE_LETTRES = /(\p{L}\p{M}*)[\p{L}\p{M}]*/gu;
+
+/**
+ * Réduit chaque mot à son initiale — le mode « acronyme géant ».
+ *
+ * Tout ce qui n'est pas une lettre est **conservé tel quel** : ponctuation,
+ * apostrophes, tirets, espaces et retours à la ligne. C'est ce qui fait
+ * l'intérêt du mode : le squelette rythmique de la réplique reste lisible, et
+ * c'est lui qui rappelle le texte.
+ *
+ *     « Ai-je ?... Oui... Comme moi... »  →  « A-j ?... O... C m... »
+ *
+ * L'apostrophe étant conservée, elle borne deux mots : « qu'elle » donne
+ * « q'e ». C'est la seule lecture cohérente de la règle — préserver
+ * l'apostrophe tout en ne gardant qu'une initiale pour l'ensemble donnerait
+ * « q' », qui laisse une apostrophe pendante. Et l'élision est en pratique un
+ * excellent rappel.
+ *
+ * La casse et les accents de l'initiale sont préservés : « Être » donne « Ê ».
+ *
+ * **Les chiffres sont conservés entiers**, faute d'initiale : « 20 » reste
+ * « 20 ». Le cas est rare — l'édition imprimée écrit ses nombres en lettres —
+ * et le préserver reste plus fidèle à la règle que d'inventer une troncature.
+ *
+ * @param {string} texte
+ * @returns {string}
+ */
+export function acronyme(texte) {
+  return texte.replace(SUITE_DE_LETTRES, '$1');
+}
+
+/**
  * Le texte contient-il le fragment cherché ? Recherche insensible à la casse et
  * aux accents.
  *
