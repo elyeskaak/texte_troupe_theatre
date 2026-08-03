@@ -358,9 +358,14 @@
    */
   @media (hover: hover) and (pointer: fine) {
     [data-mode="masquage"] .replique.actif:hover .texte,
-    [data-mode="amorce"]   .replique.actif:hover .texte,
     [data-mode="aveugle"]  .replique.actif:hover .texte,
     [data-mode="top"]      .replique.actif:hover .texte{ visibility:visible; }
+
+    /* L'amorce se révèle sur `.suite`, et non sur `.texte` — c'est le point qui
+       la faisait échouer. `visibility` est héritée, mais une valeur **explicite**
+       sur l'enfant l'emporte sur celle du parent : rendre `.texte` visible ne
+       défaisait donc pas le `hidden` posé sur `.suite`. */
+    [data-mode="amorce"] .replique.actif:hover .suite{ visibility:visible; }
 
     [data-mode="acronyme"] .replique.actif:hover .plein{ display:inline; }
     [data-mode="acronyme"] .replique.actif:hover .acronyme{ display:none; }
@@ -372,6 +377,42 @@
 
   /* Révélée durablement, au doigt ou au clic. */
   .replique.actif.revelee .texte{ visibility:visible; }
+
+  /* ---- Récitation contrôlée ----
+   *
+   * Masquée comme au rideau, mais chaque réplique porte son micro : on récite,
+   * l'outil transcrit, compare au texte et montre où la mémoire a lâché.
+   */
+  [data-mode="voix"] .replique.actif:not(.revelee) .texte{ visibility:hidden; }
+
+  .controle{ display:none; margin-top:9px; }
+  [data-mode="voix"] .replique.actif .controle{
+    display:flex; flex-wrap:wrap; align-items:center; gap:9px;
+  }
+  .controle-etat{ font-size:0.78rem; color:var(--estompe); }
+  .controle-resultat{ flex:1 1 100%; }
+  .controle-resultat:empty{ display:none; }
+
+  .score{
+    display:inline-block; margin-bottom:6px; padding:3px 10px;
+    border-radius:999px; font-size:0.78rem; font-weight:700;
+  }
+  .score[data-niveau="haut"]{ background:rgba(120,180,120,0.18); color:#a8dca8; }
+  .score[data-niveau="moyen"]{ background:rgba(109,179,242,0.18); color:var(--projecteur); }
+  .score[data-niveau="bas"]{ background:rgba(229,83,75,0.18); color:#f5b3ae; }
+
+  .diff{ margin:0; font-size:0.95rem; line-height:1.7; }
+  .mot-correct{ color:#a8dca8; }
+  .mot-oublie{ color:var(--estompe); text-decoration:line-through; }
+  .mot-substitue{
+    color:#f0c05a; border-bottom:1px dashed rgba(240,192,90,0.6);
+  }
+  /* Le mot réellement dit est en attribut : il ne peut pas être confondu avec le
+     texte de l'auteur, ni sélectionné avec lui. */
+  .mot-substitue[data-dit]::after{
+    content:" (" attr(data-dit) ")"; font-style:italic; opacity:0.75;
+  }
+  .mot-ajoute{ color:#f0c05a; font-style:italic; opacity:0.8; }
 
   /* Mes scènes uniquement : les autres se replient, dépliables au doigt. */
   [data-mes-scenes="1"] .unite:not(.mienne):not(.depliee) .elements{ display:none; }
@@ -512,6 +553,7 @@
         <button type="button" class="pastille pastille-mode" data-mode="acronyme">Acronyme</button>
         <button type="button" class="pastille pastille-mode" data-mode="aveugle">Aveugle</button>
         <button type="button" class="pastille pastille-mode" data-mode="top">Test du top</button>
+        <button type="button" class="pastille pastille-mode" data-mode="voix">Récitation contrôlée</button>
       </div>
 
       <!-- Sept pastilles sans légende n'expliquent rien : « test du top » ne dit
@@ -539,12 +581,6 @@
         <button id="btn-retour-roles" class="btn btn-fantome btn-mini">Rôles</button>
       </div>
 
-      <!-- Enregistrement audio. Le bloc est retiré du DOM si l'appareil ne sait
-           pas enregistrer : un bouton inerte est pire que pas de bouton (P3). -->
-      <div class="rangee" id="bloc-micro" style="margin-top:10px" hidden>
-        <button id="btn-micro" class="btn btn-fantome btn-mini">● M’enregistrer</button>
-        <audio id="lecteur-micro" controls hidden style="max-width:100%"></audio>
-      </div>
       <p class="aide" id="message-micro" hidden></p>
       </div>
     </div>

@@ -24,6 +24,7 @@ import {
   acronyme,
   amorceCouvreTout,
   derniersMots,
+  estMot,
   mots,
   positionsDesMots,
 } from './texte.js';
@@ -211,7 +212,86 @@ function _monterReplique(replique, { index, etat }) {
   bloc.setAttribute('role', 'button');
   bloc.setAttribute('tabindex', '0');
 
+  // Zone du mode « récitation contrôlée » : bouton de micro et résultat de la
+  // comparaison. Montée d'emblée mais masquée par le CSS hors de ce mode — même
+  // principe que l'acronyme, pour qu'un changement de mode ne re-rende rien.
+  bloc.appendChild(_zoneControle());
+
   return bloc;
+}
+
+function _zoneControle() {
+  const zone = document.createElement('div');
+  zone.className = 'controle';
+
+  const bouton = document.createElement('button');
+  bouton.type = 'button';
+  bouton.className = 'btn btn-fantome btn-mini reciter';
+  bouton.textContent = '🎙 Réciter';
+
+  const etat = document.createElement('span');
+  etat.className = 'controle-etat';
+
+  const resultat = document.createElement('div');
+  resultat.className = 'controle-resultat';
+
+  zone.append(bouton, etat, resultat);
+
+  return zone;
+}
+
+/**
+ * Affiche le résultat d'une comparaison sous une réplique.
+ *
+ * Le texte attendu est rendu mot à mot, chacun portant son état : c'est ce qui
+ * permet de voir *où* la mémoire a lâché, et non seulement combien.
+ *
+ * @param {HTMLElement} replique
+ * @param {object} resultat - sortie de `comparaison.comparer`
+ */
+export function afficherComparaison(replique, resultat) {
+  const zone = replique.querySelector('.controle-resultat');
+
+  if (!zone) {
+    return;
+  }
+
+  zone.textContent = '';
+
+  const score = document.createElement('div');
+  score.className = 'score';
+  score.dataset.niveau =
+    resultat.score >= 90 ? 'haut' : resultat.score >= 60 ? 'moyen' : 'bas';
+  score.textContent = `${resultat.score} % — ${resultat.corrects} mot(s) sur ${resultat.attendus}`;
+  zone.appendChild(score);
+
+  const diff = document.createElement('p');
+  diff.className = 'diff';
+
+  for (const detail of resultat.details) {
+    const noeud = document.createElement('span');
+    noeud.className = `mot-${detail.etat}`;
+    noeud.textContent = detail.mot;
+
+    // Le mot réellement dit est porté en attribut, affiché par le CSS : il ne
+    // peut donc pas être confondu avec le texte de l'auteur.
+    if (detail.dit) {
+      noeud.dataset.dit = detail.dit;
+    }
+
+    diff.append(noeud, document.createTextNode(' '));
+  }
+
+  zone.appendChild(diff);
+}
+
+/** Message d'état du micro sous une réplique. */
+export function afficherEtatControle(replique, texte) {
+  const zone = replique.querySelector('.controle-etat');
+
+  if (zone) {
+    zone.textContent = texte;
+  }
 }
 
 /**
@@ -279,6 +359,16 @@ function _formePleine(replique, etat) {
 
     for (const jeu of jeux.get(rang) ?? []) {
       cible.appendChild(_jeuDeScene(jeu));
+    }
+
+    // Un jeton de pure ponctuation — le « ! » que le français détache — n'est pas
+    // enveloppé. C'est le remède de fond : sans span `.mot`, il devient
+    // inatteignable par le tirage, y compris depuis `rafraichirTrous` qui
+    // indexait sur tous les spans et rendait le « ! » masquable à nouveau dès
+    // qu'on touchait au curseur de difficulté.
+    if (!estMot(mot)) {
+      cible.appendChild(document.createTextNode(mot));
+      return;
     }
 
     const noeud = document.createElement('span');
@@ -435,6 +525,8 @@ export function appliquerPresentation(racine, etat) {
  */
 export function rafraichirTrous(racine, etat) {
   for (const replique of racine.querySelectorAll('.replique.mienne')) {
+    // `.mot` n'enveloppe que de vrais mots (voir `_formePleine`) : indexer sur
+    // ces spans suffit donc, sans refaire le filtrage de la ponctuation.
     const noeuds = replique.querySelectorAll('.mot');
     const trous = new Set(
       motsAMasquer(

@@ -199,4 +199,208 @@ export const MESSAGES = Object.freeze({
     'Le micro a été refusé. Réglages → Safari → Microphone, puis rechargez la page.',
   echec: 'Le micro n’a pas pu démarrer.',
   vide: 'Aucun son n’a été capté — vérifiez que le micro n’est pas coupé.',
+  horsLigne:
+    'La reconnaissance vocale a besoin du réseau : la transcription se fait à ' +
+    'distance. Vous pouvez toujours vous enregistrer et vous réécouter.',
+  silence: 'Rien n’a été entendu. Reprenez, en parlant dès la fin du décompte.',
 });
+
+// ============================================================
+// RECONNAISSANCE VOCALE
+// ============================================================
+
+/**
+ * L'appareil sait-il transcrire ?
+ *
+ * `webkitSpeechRecognition` d'abord : c'est le nom exposé par Safari, y compris
+ * sur iOS depuis 14.5, où le nom standard n'existe pas.
+ */
+function _classeReconnaissance() {
+  return globalThis.SpeechRecognition ?? globalThis.webkitSpeechRecognition ?? null;
+}
+
+export function reconnaissanceDisponible() {
+  return _classeReconnaissance() !== null;
+}
+
+/**
+ * Crée un contrôleur de reconnaissance vocale.
+ *
+ * Cinq règles, toutes tirées des limites réelles d'iOS (§8.1 de ARCHITECTURE) :
+ *
+ * 1. **une réplique à la fois**, jamais d'écoute globale ;
+ * 2. **un décompte avant d'écouter.** Siri activé, Safari met deux à trois
+ *    secondes à ouvrir réellement le micro : sans ce délai, le début de la
+ *    réplique est systématiquement perdu ;
+ * 3. **écoute non continue**, avec un délai de garde. Des rapports récurrents
+ *    décrivent une écoute qui ne s'arrête jamais : le garde-fou est une
+ *    protection, pas un confort ;
+ * 4. **seuls les résultats finaux comptent.** Les intermédiaires sont affichés
+ *    s'ils arrivent, jamais utilisés pour un score ;
+ * 5. **un échec est un non-événement.** Aucun score enregistré, aucune modale.
+ *
+ * @param {object} rappels
+ * @param {(secondes: number) => void} [rappels.surDecompte]
+ * @param {(texte: string) => void} [rappels.surIntermediaire]
+ * @param {(texte: string) => void} [rappels.surTranscription]
+ * @param {(motif: string) => void} [rappels.surEchec]
+ * @param {() => void} [rappels.surFin]
+ * @param {object} [options]
+ */
+export function creerReconnaissance(rappels = {}, options = {}) {
+  const {
+    surDecompte = () => {},
+    surIntermediaire = () => {},
+    surTranscription = () => {},
+    surEchec = () => {},
+    surFin = () => {},
+  } = rappels;
+
+  const langue = options.langue ?? 'fr-FR';
+  const delaiAvant = options.delaiAvantEcouteMs ?? 2000;
+  const delaiMax = options.ecouteMaxMs ?? 30000;
+
+  let reconnaissance = null;
+  let minuterieDecompte = null;
+  let minuterieGarde = null;
+  let aRenduUnResultat = false;
+
+  function nettoyer() {
+    clearInterval(minuterieDecompte);
+    clearTimeout(minuterieGarde);
+    minuterieDecompte = null;
+    minuterieGarde = null;
+  }
+
+  return {
+    disponible: reconnaissanceDisponible,
+
+    actif: () => reconnaissance !== null,
+
+    /** Lance le décompte puis l'écoute. */
+    demarrer() {
+      const Classe = _classeReconnaissance();
+
+      if (Classe === null) {
+        surEchec('indisponible');
+        return;
+      }
+
+      if (reconnaissance !== null) {
+        return;
+      }
+
+      // `navigator.onLine` à `false` est fiable ; à `true` il ne prouve rien. Il
+      // sert donc à éviter une tentative vouée à l'échec, pas à garantir un
+      // succès : la reconnaissance iOS est distante.
+      if (globalThis.navigator?.onLine === false) {
+        surEchec('horsLigne');
+        return;
+      }
+
+      let restant = Math.round(delaiAvant / 1000);
+      surDecompte(restant);
+
+      minuterieDecompte = setInterval(() => {
+        restant -= 1;
+        surDecompte(restant);
+
+        if (restant > 0) {
+          return;
+        }
+
+        clearInterval(minuterieDecompte);
+        minuterieDecompte = null;
+        this._ecouter(Classe);
+      }, 1000);
+    },
+
+    /** @private */
+    _ecouter(Classe) {
+      aRenduUnResultat = false;
+      reconnaissance = new Classe();
+      reconnaissance.lang = langue;
+      reconnaissance.continuous = false;
+      reconnaissance.interimResults = true;
+      reconnaissance.maxAlternatives = 1;
+
+      reconnaissance.addEventListener('result', (evenement) => {
+        let intermediaire = '';
+        let definitif = '';
+
+        for (const resultat of evenement.results) {
+          if (resultat.isFinal) {
+            definitif += resultat[0].transcript;
+          } else {
+            intermediaire += resultat[0].transcript;
+          }
+        }
+
+        if (intermediaire) {
+          surIntermediaire(intermediaire);
+        }
+
+        if (definitif.trim()) {
+          aRenduUnResultat = true;
+          surTranscription(definitif.trim());
+        }
+      });
+
+      reconnaissance.addEventListener('error', (evenement) => {
+        // `no-speech` et `aborted` ne sont pas des pannes : on s'est arrêté, ou
+        // on n'a rien dit. Les présenter comme des erreurs serait bruyant.
+        const motif =
+          evenement.error === 'not-allowed' || evenement.error === 'service-not-allowed'
+            ? 'refuse'
+            : evenement.error === 'no-speech'
+              ? 'silence'
+              : evenement.error === 'aborted'
+                ? null
+                : 'echec';
+
+        if (motif !== null) {
+          surEchec(motif);
+        }
+      });
+
+      reconnaissance.addEventListener('end', () => {
+        nettoyer();
+        reconnaissance = null;
+
+        if (!aRenduUnResultat) {
+          surEchec('silence');
+        }
+
+        surFin();
+      });
+
+      try {
+        reconnaissance.start();
+      } catch (erreur) {
+        reconnaissance = null;
+        surEchec('echec');
+        return;
+      }
+
+      // Délai de garde : l'écoute iOS peut ne jamais s'arrêter d'elle-même.
+      minuterieGarde = setTimeout(() => this.arreter(), delaiMax);
+    },
+
+    /** Arrête l'écoute et le décompte. */
+    arreter() {
+      nettoyer();
+
+      if (reconnaissance === null) {
+        surFin();
+        return;
+      }
+
+      try {
+        reconnaissance.stop();
+      } catch {
+        reconnaissance = null;
+        surFin();
+      }
+    },
+  };
+}

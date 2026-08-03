@@ -21,7 +21,7 @@
 import { CONFIG } from './config.js';
 
 /**
- * Les sept modes de masquage, du plus visible au moins visible.
+ * Les huit modes de masquage, du plus visible au moins visible.
  *
  * `ACRONYME` ne se range pas franchement sur cette échelle : il ne cache pas
  * *une part* du texte, il en garde le squelette entier. C'est ce qui en fait un
@@ -36,6 +36,8 @@ export const MODE = Object.freeze({
   ACRONYME: 'acronyme',
   AVEUGLE: 'aveugle',
   TOP: 'top',
+  /** Récitation contrôlée : masquée comme au rideau, puis comparée au micro. */
+  VOIX: 'voix',
 });
 
 const MODES = Object.freeze(Object.values(MODE));
@@ -48,6 +50,7 @@ const MODES_MASQUANTS = Object.freeze([
   MODE.ACRONYME,
   MODE.AVEUGLE,
   MODE.TOP,
+  MODE.VOIX,
 ]);
 
 /**

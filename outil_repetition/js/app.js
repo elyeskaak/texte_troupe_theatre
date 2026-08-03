@@ -16,6 +16,7 @@ import * as modele from './modele.js';
 import * as etatSession from './etat.js';
 import * as rendu from './rendu.js';
 import * as voix from './voix.js';
+import { comparer } from './comparaison.js';
 import { creerStockage, ErreurStockage, idDePiece } from './stockage.js';
 
 const $ = (id) => document.getElementById(id);
@@ -480,6 +481,14 @@ function cablerInteractions(bloc) {
       return;
     }
 
+    // Le bouton de récitation est capté d'abord : sans cela, le clic remonterait
+    // et révélerait la réplique qu'on s'apprête justement à réciter de mémoire.
+    if (evenement.target.closest('.reciter')) {
+      evenement.stopPropagation();
+      basculerRecitation(replique);
+      return;
+    }
+
     // En mode trous, un clic sur un trou ne dévoile que ce mot : c'est
     // l'exigence « révélables un à un ». Cliquer ailleurs révèle la réplique
     // entière.
@@ -564,6 +573,10 @@ const DESCRIPTIONS_MODES = Object.freeze({
     'Seule la réplique qui vous donne le signal reste visible, marquée ' +
     '« votre signal ». C’est l’exercice du plateau : reconnaître son top et ' +
     'enchaîner sans rien avoir sous les yeux.',
+  voix:
+    'Vos répliques sont cachées. Touchez « Réciter », dites votre texte, et ' +
+    'l’outil le compare au vrai : mots justes en vert, oubliés barrés, ' +
+    'substitués soulignés, avec le score.',
 });
 
 function synchroniserCommandes() {
@@ -599,9 +612,8 @@ function allerAReplique(sens) {
 
   etat = etatSession.allerA(etat, { replique: cible });
 
-  // L'enregistrement appartient à la réplique qu'on vient de quitter : le garder
-  // ferait réécouter la précédente en croyant s'écouter sur la nouvelle.
-  enregistreur.oublier();
+  // L'écoute appartient à la réplique qu'on vient de quitter.
+  reconnaissance.arreter();
 
   document
     .querySelector(`.replique[data-id="${cible}"]`)
@@ -770,75 +782,86 @@ $('btn-barre').addEventListener('click', () => {
   $('btn-barre').setAttribute('aria-expanded', String(!ouverte));
 });
 
-// --- enregistrement audio ------------------------------------
+// --- récitation contrôlée ------------------------------------
 
-/**
- * Enregistreur unique pour la session.
- *
- * Le flux micro est conservé entre deux enregistrements : Safari redemande
- * l'autorisation à chaque `getUserMedia`, et la redemander à chaque réplique
- * rendrait la récitation à l'aveugle impraticable.
- */
-const enregistreur = voix.creerEnregistreur((etatMicro, details) => {
-  const bouton = $('btn-micro');
-  const lecteur = $('lecteur-micro');
+/** Réplique dont la récitation est en cours d'écoute, s'il y en a une. */
+let repliqueEcoutee = null;
 
-  if (etatMicro === 'enregistre') {
-    bouton.textContent = '■ Arrêter';
-    bouton.classList.add('btn-danger');
-    lecteur.hidden = true;
-    effacerMessageMicro();
-    return;
-  }
-
-  bouton.textContent = '● M’enregistrer';
-  bouton.classList.remove('btn-danger');
-
-  if (etatMicro === 'pret') {
-    lecteur.src = details.url;
-    lecteur.hidden = false;
-    return;
-  }
-
-  if (etatMicro !== 'inactif') {
-    afficherMessageMicro(voix.MESSAGES[etatMicro] ?? 'Le micro a échoué.');
-  }
-});
-
-function afficherMessageMicro(texte) {
+function messageMicro(texte) {
   $('message-micro').textContent = texte;
-  $('message-micro').hidden = false;
+  $('message-micro').hidden = texte === '';
 }
 
-function effacerMessageMicro() {
-  $('message-micro').hidden = true;
-}
+/**
+ * Contrôleur de reconnaissance, unique pour la session.
+ *
+ * Les rappels visent `repliqueEcoutee` : c'est ce qui tient la règle « une
+ * réplique à la fois » du §8.1, sans quoi une transcription tardive viendrait se
+ * poser sous la mauvaise réplique.
+ */
+const reconnaissance = voix.creerReconnaissance(
+  {
+    surDecompte: (secondes) => {
+      if (repliqueEcoutee) {
+        rendu.afficherEtatControle(
+          repliqueEcoutee,
+          secondes > 0 ? `à vous dans ${secondes}…` : 'je vous écoute',
+        );
+      }
+    },
+    surIntermediaire: (texte) => {
+      if (repliqueEcoutee) {
+        rendu.afficherEtatControle(repliqueEcoutee, `« ${texte} »`);
+      }
+    },
+    surTranscription: (texte) => {
+      if (!repliqueEcoutee) {
+        return;
+      }
 
-$('btn-micro').addEventListener('click', async () => {
-  if (enregistreur.actif()) {
-    await enregistreur.arreter();
+      const attendu = index.repliques.get(repliqueEcoutee.dataset.id)?.texte ?? '';
+
+      rendu.afficherComparaison(repliqueEcoutee, comparer(attendu, texte));
+      rendu.afficherEtatControle(repliqueEcoutee, '');
+    },
+    surEchec: (motif) => {
+      // Un échec est un non-événement : aucun score, aucune modale. Le message
+      // reste dans le bandeau d'aide, et la réplique garde son bouton.
+      messageMicro(voix.MESSAGES[motif] ?? 'La reconnaissance vocale a échoué.');
+
+      if (repliqueEcoutee) {
+        rendu.afficherEtatControle(repliqueEcoutee, '');
+      }
+    },
+    surFin: () => {
+      if (repliqueEcoutee) {
+        repliqueEcoutee.querySelector('.reciter').textContent = '🎙 Réciter';
+        repliqueEcoutee = null;
+      }
+    },
+  },
+  {
+    langue: CONFIG.LANGUE_RECONNAISSANCE,
+    delaiAvantEcouteMs: CONFIG.DELAI_AVANT_ECOUTE_MS,
+    ecouteMaxMs: CONFIG.ECOUTE_MAX_MS,
+  },
+);
+
+function basculerRecitation(replique) {
+  if (repliqueEcoutee === replique) {
+    reconnaissance.arreter();
     return;
   }
 
-  await enregistreur.demarrer();
-});
+  if (repliqueEcoutee !== null) {
+    reconnaissance.arreter();
+  }
 
-// Le micro ne s'affiche que si l'appareil sait enregistrer.
-$('bloc-micro').hidden = !voix.disponible();
-
-/**
- * Journal des erreurs inattendues.
- *
- * P3 : c'est ce qui aurait révélé le défaut `window.storage` en dix secondes au
- * lieu de le laisser vivre indéfiniment.
- */
-window.addEventListener('error', (evenement) => {
-  console.error('erreur non rattrapée', evenement.error ?? evenement.message);
-});
-
-window.addEventListener('unhandledrejection', (evenement) => {
-  console.error('promesse rejetée', evenement.reason);
-});
+  messageMicro('');
+  repliqueEcoutee = replique;
+  replique.querySelector('.reciter').textContent = '■ Arrêter';
+  reconnaissance.demarrer();
+}
 
 // ============================================================
 // DÉMARRAGE

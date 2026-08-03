@@ -123,7 +123,7 @@ describe('masque()', () => {
     assert.equal(masque(changerMode(etatInitial(DEPART), MODE.LECTURE)), false);
   });
 
-  test('les six autres modes masquent', () => {
+  test('les sept autres modes masquent', () => {
     for (const mode of [
       MODE.MASQUAGE,
       MODE.AMORCE,
@@ -131,6 +131,7 @@ describe('masque()', () => {
       MODE.ACRONYME,
       MODE.AVEUGLE,
       MODE.TOP,
+      MODE.VOIX,
     ]) {
       assert.equal(masque(changerMode(etatInitial(DEPART), mode)), true, mode);
     }
@@ -145,6 +146,14 @@ describe('masque()', () => {
       assert.equal(etat.mode, mode);
       assert.equal(masque(etat), mode !== MODE.LECTURE, mode);
     }
+  });
+
+  test('la récitation contrôlée masque, comme le rideau', () => {
+    // C'est ce qui en fait un mode de répétition et non un accessoire : le texte
+    // est caché, on récite, puis l'outil compare.
+    const etat = changerMode(etatInitial(DEPART), MODE.VOIX);
+
+    assert.equal(masque(etat), true);
   });
 
   test('le mode acronyme masque et se révèle', () => {
