@@ -239,6 +239,16 @@ partagent désormais la même charte — fond `--fond-projection`, texte
 et reprise par les boutons, champs et menus déroulants (règle générique sur
 `button, select, input`), pas seulement par la projection.
 
+**Deuxième passe, esthétique :** chaque section (import, attribution,
+fenêtre de contrôle) devient une carte distincte (`--fond-releve`, bordure,
+coins arrondis) plutôt qu'un simple empilement de titres et de champs sur
+le fond de page. Une couleur d'accent (`--accent`, un bleu neutre, choisi
+en dehors de la palette des dix slots pour ne pas laisser croire à un onzième
+slot) marque les titres de section et le bouton principal. États `:hover` /
+`:focus` sur les boutons, champs et menus déroulants, pour que l'écran
+réagisse visuellement à l'interaction — aucun de ces détails n'est
+fonctionnel, ils ne font que rendre l'écran moins austère.
+
 ---
 
 ## 7. La fenêtre de contrôle et sa synchronisation
@@ -282,6 +292,19 @@ discrète : *« Scène 2 — SIR ROWLAND (H1) »*. Toute frappe est diffusée
 immédiatement (pas de bouton « valider ») ; côté projection, un champ vide
 retombe sur le nom brut du slot — jamais une chaîne vide affichée à la place
 d'un nom.
+
+**Ajout à l'usage :** chaque champ affiche aussi, entre parenthèses, les
+personnages que ce slot joue dans la pièce chargée — *« H1 (Hugo) »* —
+pour qu'un lecteur découvrant son slot sache qui il va jouer avant même de
+saisir son prénom. `chargerRolesParSlot()` lit `lecture:v1:session` (le
+`pieceSlug` actif) puis `lecture:v1:cast:<pieceSlug>`, et regroupe par slot
+(`rolesParSlot`, fonction pure). Si le contrôle s'ouvre avant qu'une lecture
+démarre, ce champ reste vide au chargement, puis se complète tout seul :
+`diffuserPosition()` (§7.2) inclut désormais `roles` dans chaque message
+`position` — pas seulement en réponse à `bonjour` —, donc un contrôle déjà
+ouvert avant le démarrage se met à jour au premier changement de position.
+Coût négligeable : `rolesParSlot` ne parcourt qu'une quinzaine de
+personnages tout au plus.
 
 ---
 
@@ -338,16 +361,32 @@ doux (`scrollIntoView`) recentre la diapo courante à chaque navigation.
 
 Palette fixe de 10 couleurs (§12), indexée par slot, jamais par prénom : une
 règle CSS `[data-slot="H1"] { --couleur: … }` habille la réplique. L'étiquette
-(`etiquetteSlot(slot, prenoms)`, fonction pure) est injectée dans un
-`<span class="qui">`, mis à jour par la synchro de contrôle (§7.2) sans
-toucher au reste du DOM.
+est injectée dans un `<span class="qui">`, mis à jour par la synchro de
+contrôle (§7.2) sans toucher au reste du DOM.
 
 **Révision à l'usage :** l'étiquette affichait le prénom *à la place* du
 slot une fois saisi (« Émile » seul). Un lecteur qui ne joue le rôle actif
 qu'occasionnellement perdait alors le repère fixe (couleur + H1-H5/F1-F5)
-qui lui permet de reconnaître ses répliques d'un coup d'œil. L'étiquette
-affiche désormais toujours les deux : « H1 » sans prénom, « H1 — Émile »
-avec.
+qui lui permet de reconnaître ses répliques d'un coup d'œil. Corrigé une
+première fois pour toujours afficher les deux (« H1 » sans prénom, « H1 —
+Émile » avec, `etiquetteSlot`).
+
+**Deuxième révision, sur l'ordre cette fois :** l'en-tête montrait le slot
+en avant (pastille) et le personnage en petit sous-titre dessous. Retour
+d'usage : ce qu'on lit en premier devrait être *qui parle dans la pièce*,
+le lecteur qui prête sa voix n'étant qu'un détail entre parenthèses.
+`etiquetteReplique(personnage, slot, prenoms)` remplace `etiquetteSlot`
+pour cet usage : *« Clarissa (Caroline — H1) »*, ou *« Clarissa (H1) »*
+sans prénom. Le sous-titre `.personnage` séparé disparaît, fusionné dans
+la même pastille — un seul élément, plus de doublon visuel.
+`formaterPersonnage` convertit au passage la casse d'imprimerie du
+`REPET.json` (« CLARISSA ») en casse de lecture (« Clarissa »).
+
+Conséquence sur la mise à jour en direct (§7.2) : `mettreAJourPrenoms` ne
+peut plus se contenter de relire le slot, il lui faut aussi le personnage
+pour recalculer l'étiquette entière. `data-personnage`, posé sur la diapo
+au montage aux côtés de `data-slot`, le lui fournit sans avoir à
+retransmettre le `cast` complet à chaque frappe.
 
 ### 8.3 Didascalies internes
 

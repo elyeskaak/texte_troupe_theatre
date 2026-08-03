@@ -17,6 +17,7 @@
     --attenue: #9a9a9a;
     --fond-releve: #1a1a1e;
     --bordure: #333;
+    --accent: #5b8dee;
   }
 
   html, body { height: 100%; margin: 0; }
@@ -32,25 +33,78 @@
     background: var(--fond-releve);
     border: 1px solid var(--bordure);
     border-radius: 0.3rem;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
   }
   button { cursor: pointer; padding: 0.5rem 1rem; }
+  button:hover:not(:disabled) { background: #26262c; border-color: #4a4a4a; }
   select, input[type="text"] { padding: 0.4rem 0.6rem; }
+  select:focus, input[type="text"]:focus, input[type="file"]:focus {
+    outline: none; border-color: var(--accent);
+  }
   ::placeholder { color: var(--attenue); }
 
   /* ------------------------------------------------------------
      Écran de préparation (§6 de ARCHITECTURE.md) : import, attribution
-     personnage → slot, reprise de session.
+     personnage → slot, reprise de session. Retour d'usage : « un peu plus
+     joli » — sections en cartes distinctes, plutôt qu'un empilement brut
+     de titres et de champs.
      ------------------------------------------------------------ */
-  #ecran-preparation { padding: 2rem; max-width: 60rem; }
-  #ecran-preparation section { margin-bottom: 1.6rem; }
-  #ecran-preparation table { border-collapse: collapse; width: 100%; margin: 1rem 0; }
-  #ecran-preparation th, #ecran-preparation td {
-    border: 1px solid var(--bordure); padding: 0.4rem 0.6rem; text-align: left;
+  #ecran-preparation {
+    padding: 3rem 1.5rem;
+    max-width: 46rem;
+    margin: 0 auto;
   }
+  #ecran-preparation h1 {
+    font-size: 1.6rem;
+    margin-bottom: 2rem;
+    text-align: center;
+    letter-spacing: 0.02em;
+  }
+  #ecran-preparation h1::after {
+    content: '';
+    display: block;
+    width: 3rem; height: 0.2rem;
+    background: var(--accent);
+    margin: 0.7rem auto 0;
+    border-radius: 999px;
+  }
+  #ecran-preparation section {
+    background: var(--fond-releve);
+    border: 1px solid var(--bordure);
+    border-radius: 0.6rem;
+    padding: 1.4rem 1.6rem;
+    margin-bottom: 1.4rem;
+  }
+  #ecran-preparation h2 {
+    font-size: 1.05rem;
+    margin: 0 0 0.9rem;
+    padding-left: 0.8rem;
+    border-left: 0.25rem solid var(--accent);
+    color: var(--texte-clair);
+  }
+  #ecran-preparation p { color: var(--attenue); line-height: 1.5; }
+  #ecran-preparation table {
+    border-collapse: collapse; width: 100%; margin: 1rem 0;
+    border: 1px solid var(--bordure); border-radius: 0.4rem; overflow: hidden;
+  }
+  #ecran-preparation th {
+    background: #222226; text-transform: uppercase; font-size: 0.75rem;
+    letter-spacing: 0.05em; color: var(--attenue);
+  }
+  #ecran-preparation th, #ecran-preparation td {
+    border: 1px solid var(--bordure); padding: 0.5rem 0.7rem; text-align: left;
+  }
+  #ecran-preparation tbody tr:hover { background: #222226; }
   #ecran-preparation .swatch {
     display: inline-block; width: 0.9em; height: 0.9em; border-radius: 50%;
     margin-right: 0.4em; vertical-align: middle;
   }
+  #bouton-demarrer {
+    background: var(--accent); border-color: var(--accent); color: #0b0b0e;
+    font-weight: bold;
+  }
+  #bouton-demarrer:hover:not(:disabled) { background: #7aa4f2; }
+  #bouton-demarrer:disabled { opacity: 0.4; cursor: not-allowed; }
   .message-erreur {
     color: #ff9b9b; background: #3a1414; border: 1px solid #7a2020;
     padding: 0.6rem 0.9rem; border-radius: 0.3rem; font-weight: bold;
@@ -59,7 +113,6 @@
     color: #e8c468; background: #3a2f14; border: 1px solid #7a5f10;
     padding: 0.6rem 0.9rem; border-radius: 0.3rem;
   }
-  #bouton-demarrer:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* ------------------------------------------------------------
      Fenêtre de contrôle (§7 de ARCHITECTURE.md) : deuxième écran,
@@ -72,6 +125,12 @@
   }
   .ligne-slot { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.5rem; }
   .ligne-slot label { width: 2.4rem; font-weight: bold; }
+  /* Personnages du slot (retour d'usage, §7.3) : qui ce lecteur va jouer,
+     visible avant même de saisir un prénom. */
+  .ligne-slot .roles-slot {
+    flex: 1; color: var(--attenue); font-size: 0.85rem; font-style: italic;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .ligne-slot input { flex: 1; font-size: 1rem; }
 
   /* Basculement d'affichage selon `?fenetre=controle` (§7.1) : la même page
@@ -186,25 +245,21 @@
     margin-bottom: 0.6em;
   }
 
+  /*
+   * En-tête fusionné (retour d'usage) : personnage d'abord, lecteur entre
+   * parenthèses — « Clarissa (Caroline — H1) » — remplace l'ancien duo
+   * pastille de slot + sous-titre personnage séparé.
+   */
   .diapo.kind-replique .qui {
-    font-size: clamp(0.7rem, 1vw, 1.1rem);
+    font-size: clamp(0.7rem, 1.1vw, 1.2rem);
     font-weight: bold;
-    padding: 0.3em 0.9em;
+    padding: 0.3em 1em;
     border-radius: 999px;
-    margin-bottom: 0.5em;
+    margin-bottom: 0.6em;
+    max-width: 90%;
   }
 
-  .diapo.actif.kind-replique .qui { font-size: clamp(1rem, 1.8vw, 1.8rem); }
-
-  .diapo.kind-replique .personnage {
-    font-size: clamp(0.6rem, 0.8vw, 0.9rem);
-    color: var(--attenue);
-    margin-bottom: 0.5em;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-
-  .diapo.actif.kind-replique .personnage { font-size: clamp(0.8rem, 1.3vw, 1.3rem); margin-bottom: 0.8em; }
+  .diapo.actif.kind-replique .qui { font-size: clamp(1rem, 2vw, 2rem); margin-bottom: 0.9em; }
 
   .diapo.kind-replique .texte {
     font-size: clamp(0.9rem, 1.8vw, 1.6rem);
@@ -815,6 +870,67 @@ function etiquetteSlot(slot, prenoms) {
 }
 
 /**
+ * Nom de personnage mis en forme pour l'affichage : « CLARISSA » → « Clarissa »,
+ * « L'AGENT DUPONT » → « L'Agent Dupont ». Le `REPET.json` classe les noms en
+ * MAJUSCULES (convention d'imprimerie du théâtre, voir `nom_personnage` dans
+ * `repet_export.py`) ; ce n'est pas ce qu'on veut lire en gros sur un écran
+ * de projection, seulement ce qui distingue un personnage à l'analyse.
+ *
+ * @param {string} nom
+ */
+function formaterPersonnage(nom) {
+  return nom
+    .toLowerCase()
+    .split(/(\s+|['-])/)
+    .map((partie) => (/^[\s'-]+$/.test(partie) ? partie : partie.charAt(0).toUpperCase() + partie.slice(1)))
+    .join('');
+}
+
+/**
+ * En-tête d'une réplique projetée : le personnage en premier (ce qu'on lit),
+ * le lecteur entre parenthèses (qui le joue) — retour d'usage, qui inverse
+ * l'emphase de la version précédente (slot d'abord, personnage en petit
+ * sous-titre). « Clarissa (Caroline — H1) », ou « Clarissa (H1) » sans
+ * prénom saisi, ou juste « Clarissa » si le personnage n'a aucun slot
+ * attribué (ne devrait pas arriver une fois la lecture démarrée, §6, mais
+ * cette fonction ne suppose jamais qu'un appelant a bien fait son travail).
+ *
+ * @param {string} personnage
+ * @param {string|null} slot
+ * @param {Record<string,string>} prenoms
+ */
+function etiquetteReplique(personnage, slot, prenoms) {
+  const nomAffiche = formaterPersonnage(personnage);
+
+  if (!slot) {
+    return nomAffiche;
+  }
+
+  const prenom = prenoms && prenoms[slot];
+  return prenom ? `${nomAffiche} (${prenom} — ${slot})` : `${nomAffiche} (${slot})`;
+}
+
+/**
+ * Regroupe les personnages par slot (§7.3) : `{ H1: ['Clarissa'], … }`, noms
+ * mis en forme (`formaterPersonnage`). Sert à la fenêtre de contrôle, pour
+ * qu'un lecteur qui découvre son slot voie qui il va jouer avant de saisir
+ * son prénom — retour d'usage.
+ *
+ * @param {Record<string,string>} cast personnage → slot
+ * @returns {Record<string, string[]>}
+ */
+function rolesParSlot(cast) {
+  const roles = {};
+
+  for (const personnage of Object.keys(cast || {})) {
+    const slot = cast[personnage];
+    (roles[slot] || (roles[slot] = [])).push(formaterPersonnage(personnage));
+  }
+
+  return roles;
+}
+
+/**
  * Découpe le texte d'une réplique en segments ordonnés, en insérant les
  * didascalies internes au bon rang de mot (§2.1 de ARCHITECTURE.md et
  * `repet_export.py:separer_parole_et_jeu`, dont `avant_mot` reprend ici
@@ -1041,19 +1157,18 @@ function construireDiapoRepliqueFusionnee(elementsDuGroupe, cast, prenoms) {
   const diapo = document.createElement('div');
   diapo.className = 'diapo kind-replique';
   diapo.dataset.slot = slot || '';
+  diapo.dataset.personnage = elPremiere.personnage;
   diapo.style.setProperty('--couleur', couleur);
 
+  // En-tête fusionné (retour d'usage) : le personnage d'abord — ce qu'on
+  // lit —, le lecteur entre parenthèses — qui le joue. Remplace l'ancien
+  // duo pastille de slot (en avant) + sous-titre personnage (en petit).
   const qui = document.createElement('div');
   qui.className = 'qui';
-  qui.textContent = etiquetteSlot(slot, prenoms);
+  qui.textContent = etiquetteReplique(elPremiere.personnage, slot, prenoms);
   qui.style.background = couleur;
   qui.style.color = couleurTexteContrastee(couleur);
   diapo.appendChild(qui);
-
-  const perso = document.createElement('div');
-  perso.className = 'personnage';
-  perso.textContent = elPremiere.personnage;
-  diapo.appendChild(perso);
 
   const texte = document.createElement('div');
   texte.className = elPremiere.vers ? 'texte vers' : 'texte';
@@ -1197,16 +1312,21 @@ function monterProjection(container, elements, cast, prenoms) {
 }
 
 /**
- * Met à jour l'étiquette de tous les slots affichés, sans reconstruire le
- * DOM (§8.2) : appelée quand la fenêtre de contrôle diffuse de nouveaux
- * prénoms (§7.2, câblée à l'étape 5).
+ * Met à jour l'en-tête de toutes les répliques affichées, sans reconstruire
+ * le DOM (§8.2) : appelée quand la fenêtre de contrôle diffuse de nouveaux
+ * prénoms (§7.2). L'en-tête fusionne personnage et lecteur
+ * (`etiquetteReplique`) : `data-personnage`, posé sur la diapo au montage,
+ * est ce qui permet de la recalculer entièrement ici sans redemander le
+ * `cast` complet.
  */
 function mettreAJourPrenoms(container, prenoms) {
   for (const slot of CONFIG.SLOTS) {
-    const label = etiquetteSlot(slot, prenoms);
+    container.querySelectorAll(`[data-slot="${slot}"]`).forEach((diapo) => {
+      const qui = diapo.querySelector('.qui');
 
-    container.querySelectorAll(`[data-slot="${slot}"] .qui`).forEach((qui) => {
-      qui.textContent = label;
+      if (qui) {
+        qui.textContent = etiquetteReplique(diapo.dataset.personnage, slot, prenoms);
+      }
     });
   }
 }
@@ -1347,9 +1467,16 @@ function construirePanneauSommaire(container, sommaire) {
 // 8. RENDU CONTRÔLE — dix champs prénom, un par slot (§7.3)
 // ============================================================
 
-function construireChampSlot(slot, valeurInitiale) {
+/**
+ * Une ligne de la fenêtre de contrôle. `personnagesDuSlot` (retour d'usage)
+ * affiche entre parenthèses qui ce slot joue dans la pièce chargée — pour
+ * qu'un lecteur découvrant son slot sache de qui il s'agit avant même de
+ * saisir son prénom. Absent tant qu'aucune pièce n'a démarré (§7.3).
+ */
+function construireChampSlot(slot, valeurInitiale, personnagesDuSlot) {
   const ligne = document.createElement('div');
   ligne.className = 'ligne-slot';
+  ligne.dataset.ligneSlot = slot;
 
   const swatch = document.createElement('span');
   swatch.className = 'swatch';
@@ -1360,6 +1487,13 @@ function construireChampSlot(slot, valeurInitiale) {
   label.textContent = slot;
   label.setAttribute('for', `prenom-${slot}`);
   ligne.appendChild(label);
+
+  if (personnagesDuSlot && personnagesDuSlot.length > 0) {
+    const roles = document.createElement('span');
+    roles.className = 'roles-slot';
+    roles.textContent = `(${personnagesDuSlot.join(', ')})`;
+    ligne.appendChild(roles);
+  }
 
   const input = document.createElement('input');
   input.type = 'text';
@@ -1373,12 +1507,19 @@ function construireChampSlot(slot, valeurInitiale) {
   return ligne;
 }
 
-/** Construit les dix champs, pré-remplis depuis `prenoms` (§7.3). */
-function construireChampsControle(container, prenoms) {
+/**
+ * Construit les dix champs, pré-remplis depuis `prenoms` (§7.3) et annotés
+ * des personnages par slot (`roles`, résultat de `rolesParSlot`) s'ils sont
+ * connus. Rappelée telle quelle (reconstruction complète, pas de correctif
+ * ciblé) quand `roles` change en cours de session — dix éléments, le coût
+ * est négligeable, et les écouteurs restent valides : ils sont posés une
+ * fois par délégation sur `container`, jamais par champ (§10a).
+ */
+function construireChampsControle(container, prenoms, roles) {
   container.innerHTML = '';
 
   for (const slot of CONFIG.SLOTS) {
-    container.appendChild(construireChampSlot(slot, prenoms[slot]));
+    container.appendChild(construireChampSlot(slot, prenoms[slot], (roles || {})[slot]));
   }
 }
 
@@ -1530,6 +1671,24 @@ function lire(cle) {
 // 10a. FENÊTRE DE CONTRÔLE
 // ============================================================
 
+/**
+ * Lit le `cast` de la pièce en cours (si une lecture a déjà démarré,
+ * `lecture:v1:session` donne son `pieceSlug`) et le regroupe par slot
+ * (`rolesParSlot`, §7.3). Vide si aucune pièce n'a encore démarré — pas une
+ * erreur, juste rien à afficher pour l'instant.
+ */
+function chargerRolesParSlot() {
+  const session = lire(cleStockage('session'));
+
+  if (!session || !session.pieceSlug) {
+    return {};
+  }
+
+  const cast = lire(cleStockage(`cast:${session.pieceSlug}`));
+
+  return rolesParSlot(cast || {});
+}
+
 function demarrerFenetreControle() {
   // Bug corrigé : le HTML porte `hidden` sur #ecran-controle pour que la
   // fenêtre de projection (chargée sans `?fenetre=controle`) ne l'affiche
@@ -1542,7 +1701,13 @@ function demarrerFenetreControle() {
   const erreurControle = document.getElementById('controle-erreur');
 
   let prenoms = lire(cleStockage('prenoms')) || {};
-  construireChampsControle(champs, prenoms);
+  // Rôles connus dès l'ouverture si une pièce a déjà démarré (§10.1,
+  // `lecture:v1:session` donne le pieceSlug, `lecture:v1:cast:<slug>` le
+  // détail) ; sinon vide, et complété au premier message « position » reçu
+  // (§7.2) si une lecture démarre après coup pendant que ce contrôle est
+  // déjà ouvert.
+  let roles = chargerRolesParSlot();
+  construireChampsControle(champs, prenoms, roles);
 
   const canal = creerCanalSynchro();
 
@@ -1558,6 +1723,11 @@ function demarrerFenetreControle() {
 
       if (message && message.type === 'position') {
         rappel.textContent = texteRappelControle(message.scene, message.slotQuiParle, prenoms);
+
+        if (message.roles) {
+          roles = message.roles;
+          construireChampsControle(champs, prenoms, roles);
+        }
       }
     });
   }
@@ -1598,6 +1768,7 @@ if (MODE_FENETRE === 'controle') {
 if (MODE_FENETRE === 'projection') (() => {
   let piece = null;
   let slug = null;
+  let castCourant = {};
   let personnagesCourants = [];
   let elements = [];
   let diapos = [];
@@ -1646,6 +1817,11 @@ if (MODE_FENETRE === 'projection') (() => {
       type: 'position',
       scene: entree ? libelleScene(entree.acte, entree.scene) : null,
       slotQuiParle: diapo && diapo.dataset.slot ? diapo.dataset.slot : null,
+      // Envoyé à chaque navigation, pas seulement en réponse à « bonjour »
+      // (§10a) : couvre aussi bien une fenêtre de contrôle déjà ouverte
+      // quand une pièce démarre qu'une fenêtre ouverte après coup. Coût
+      // négligeable (quelques personnages tout au plus).
+      roles: rolesParSlot(castCourant),
     });
   }
 
@@ -1749,6 +1925,7 @@ if (MODE_FENETRE === 'projection') (() => {
   function demarrerProjection(piecePreparee, cast, positionDepart) {
     piece = piecePreparee;
     slug = pieceSlug(piece.piece);
+    castCourant = cast;
 
     // aplatir → mesurer → paginer → sommaire → montage, dans cet ordre : le
     // sommaire et le montage doivent travailler sur la liste *après*
