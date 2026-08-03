@@ -270,7 +270,8 @@ def ajouter_paragraphe(document, ligne: blocks.LigneClassee) -> bool:
 
     if ligne.type is blocks.TypeLigne.SEPARATEUR:
         paragraphe = document.add_paragraph(style=nom_style(blocks.TypeLigne.DIDASCALIE))
-        paragraphe.add_run(TEXTE_SEPARATEUR)
+        run = paragraphe.add_run(TEXTE_SEPARATEUR)
+        _appliquer_emphase_du_style(run, blocks.TypeLigne.DIDASCALIE)
         return True
 
     paragraphe = document.add_paragraph(style=nom_style(ligne.type))
@@ -280,16 +281,36 @@ def ajouter_paragraphe(document, ligne: blocks.LigneClassee) -> bool:
     return True
 
 
+def _appliquer_emphase_du_style(run, type_ligne: blocks.TypeLigne) -> None:
+    """
+    Force le gras et l'italique du run d'après `DEFINITIONS_STYLES`, en plus
+    de ce que porte déjà le style de paragraphe.
+
+    Redondant avec le style **en théorie** : `python-docx` renseigne bien
+    `style.font.italic`, et Word l'honore. Mais un défaut réel, constaté sur
+    `le_dindon_feydeau_LT.docx`, a montré qu'un lecteur peut afficher une
+    didascalie longue en romain alors que son style porte `italique=True` —
+    tout en respectant correctement l'alignement du même style. La mise en
+    forme au niveau du run, elle, ne dépend d'aucune interprétation du style
+    par le lecteur.
+    """
+    definition = config.DEFINITIONS_STYLES[type_ligne.value]
+    run.bold = bool(definition["gras"])
+    run.italic = bool(definition["italique"])
+
+
 def _ajouter_runs(paragraphe, ligne: blocks.LigneClassee) -> None:
     """
     Ajoute le contenu d'une ligne, en respectant ses emphases internes.
 
-    Les emphases ne sont découpées que dans le corps du texte. Sur un titre ou
-    un nom de personnage, le style porte déjà le gras, et les marqueurs ont été
-    retirés par `contenu_sans_marqueurs()` : il n'y a rien à interpréter.
+    Les emphases ne sont découpées que dans le corps du texte. Sur un titre,
+    un nom de personnage ou une didascalie, le paragraphe est entièrement dans
+    un seul registre : gras et italique s'appliquent donc au run entier,
+    d'après la même définition que le style (voir `_appliquer_emphase_du_style`).
     """
     if ligne.type is not blocks.TypeLigne.TEXTE:
-        paragraphe.add_run(ligne.texte)
+        run = paragraphe.add_run(ligne.texte)
+        _appliquer_emphase_du_style(run, ligne.type)
         return
 
     for fragment in blocks.decouper_en_runs(ligne.texte):
