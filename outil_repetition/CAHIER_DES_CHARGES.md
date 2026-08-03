@@ -7,9 +7,10 @@
 > l'entrée n'est plus un format préparé à la main, la cible de déploiement
 > devient **HTTPS + iPhone 15**, et l'existant est réécrit.
 >
-> Reste à rédiger et valider l'`ARCHITECTURE.md` du sous-projet avant d'écrire
-> une ligne de code (même discipline que
-> [`outil_edition/`](../outil_edition/ARCHITECTURE.md)).
+> L'[`ARCHITECTURE.md`](ARCHITECTURE.md) qui le réalise est rédigé et **reste à
+> valider** : il révise le §11.1 ci-dessous (découpage en fichiers) et porte
+> quatre décisions ouvertes. Aucun code avant cette validation, même discipline
+> qu'[`outil_edition/`](../outil_edition/ARCHITECTURE.md).
 
 ---
 

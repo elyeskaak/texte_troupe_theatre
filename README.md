@@ -15,7 +15,8 @@ sous-projet indépendant, dans son propre dossier.
 - **[outil_repetition/](outil_repetition/CAHIER_DES_CHARGES.md)** — outil de
   répétition de son texte, page web publiée en HTTPS et utilisable sur iPhone.
   Lit le `REPET.json` produit par `outil_edition`. En cours de conception : voir
-  son [cahier des charges](outil_repetition/CAHIER_DES_CHARGES.md).
+  son [cahier des charges](outil_repetition/CAHIER_DES_CHARGES.md) et son
+  [architecture](outil_repetition/ARCHITECTURE.md).
 - **outil_lecture/** — outil de lecture interactif à venir, pour projeter une
   pièce lors d'une lecture avec la troupe.
 
