@@ -808,11 +808,12 @@ function messageMicro(texte) {
  */
 const reconnaissance = voix.creerReconnaissance(
   {
-    surDecompte: (secondes) => {
+    // -1 : le micro n'est pas encore ouvert. 0 : il l'est, on peut parler.
+    surDecompte: (etape) => {
       if (repliqueEcoutee) {
         rendu.afficherEtatControle(
           repliqueEcoutee,
-          secondes > 0 ? `à vous dans ${secondes}…` : 'je vous écoute',
+          etape < 0 ? 'préparation du micro…' : '● je vous écoute',
         );
       }
     },
@@ -855,7 +856,7 @@ const reconnaissance = voix.creerReconnaissance(
   },
   {
     langue: CONFIG.LANGUE_RECONNAISSANCE,
-    delaiAvantEcouteMs: CONFIG.DELAI_AVANT_ECOUTE_MS,
+    delaiAttenteMicroMs: CONFIG.DELAI_ATTENTE_MICRO_MS,
     ecouteMaxMs: CONFIG.ECOUTE_MAX_MS,
   },
 );

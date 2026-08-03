@@ -202,7 +202,7 @@ export const MESSAGES = Object.freeze({
   horsLigne:
     'La reconnaissance vocale a besoin du réseau : la transcription se fait à ' +
     'distance. Vous pouvez toujours vous enregistrer et vous réécouter.',
-  silence: 'Rien n’a été entendu. Reprenez, en parlant dès la fin du décompte.',
+  silence: 'Rien n’a été entendu. Reprenez dès que « je vous écoute » s’affiche.',
 });
 
 // ============================================================
@@ -229,9 +229,11 @@ export function reconnaissanceDisponible() {
  * Cinq règles, toutes tirées des limites réelles d'iOS (§8.1 de ARCHITECTURE) :
  *
  * 1. **une réplique à la fois**, jamais d'écoute globale ;
- * 2. **un décompte avant d'écouter.** Siri activé, Safari met deux à trois
- *    secondes à ouvrir réellement le micro : sans ce délai, le début de la
- *    réplique est systématiquement perdu ;
+ * 2. **aucune attente imposée.** L'écoute démarre au doigt. L'API annonce
+ *    elle-même l'ouverture du micro par `audiostart` : l'interface dit
+ *    « préparation… » puis « je vous écoute », ce qui informe sans faire
+ *    patienter. Une version antérieure imposait deux secondes de décompte —
+ *    long à l'usage, et inutile puisque l'événement existe ;
  * 3. **écoute non continue**, avec un délai de garde. Des rapports récurrents
  *    décrivent une écoute qui ne s'arrête jamais : le garde-fou est une
  *    protection, pas un confort ;
@@ -257,18 +259,18 @@ export function creerReconnaissance(rappels = {}, options = {}) {
   } = rappels;
 
   const langue = options.langue ?? 'fr-FR';
-  const delaiAvant = options.delaiAvantEcouteMs ?? 2000;
+  const delaiAttenteMicro = options.delaiAttenteMicroMs ?? 1200;
   const delaiMax = options.ecouteMaxMs ?? 30000;
 
   let reconnaissance = null;
-  let minuterieDecompte = null;
+  let minuterieMicro = null;
   let minuterieGarde = null;
   let aRenduUnResultat = false;
 
   function nettoyer() {
-    clearInterval(minuterieDecompte);
+    clearTimeout(minuterieMicro);
     clearTimeout(minuterieGarde);
-    minuterieDecompte = null;
+    minuterieMicro = null;
     minuterieGarde = null;
   }
 
@@ -277,7 +279,7 @@ export function creerReconnaissance(rappels = {}, options = {}) {
 
     actif: () => reconnaissance !== null,
 
-    /** Lance le décompte puis l'écoute. */
+    /** Ouvre le micro et écoute, sans délai imposé. */
     demarrer() {
       const Classe = _classeReconnaissance();
 
@@ -298,21 +300,11 @@ export function creerReconnaissance(rappels = {}, options = {}) {
         return;
       }
 
-      let restant = Math.round(delaiAvant / 1000);
-      surDecompte(restant);
-
-      minuterieDecompte = setInterval(() => {
-        restant -= 1;
-        surDecompte(restant);
-
-        if (restant > 0) {
-          return;
-        }
-
-        clearInterval(minuterieDecompte);
-        minuterieDecompte = null;
-        this._ecouter(Classe);
-      }, 1000);
+      // Démarrage immédiat. « Préparation » ne fait pas attendre : cet état
+      // explique seulement que le micro n'est pas encore ouvert, et il cède la
+      // place dès qu'`audiostart` arrive.
+      surDecompte(-1);
+      this._ecouter(Classe);
     },
 
     /** @private */
@@ -323,6 +315,13 @@ export function creerReconnaissance(rappels = {}, options = {}) {
       reconnaissance.continuous = false;
       reconnaissance.interimResults = true;
       reconnaissance.maxAlternatives = 1;
+
+      // Le micro est réellement ouvert : c'est le moment de parler.
+      reconnaissance.addEventListener('audiostart', () => {
+        clearTimeout(minuterieMicro);
+        minuterieMicro = null;
+        surDecompte(0);
+      });
 
       reconnaissance.addEventListener('result', (evenement) => {
         let intermediaire = '';
@@ -382,11 +381,15 @@ export function creerReconnaissance(rappels = {}, options = {}) {
         return;
       }
 
+      // Repli : certains moteurs n'émettent pas `audiostart`. Passé ce délai on
+      // suppose le micro ouvert, plutôt que de laisser « préparation… » sans fin.
+      minuterieMicro = setTimeout(() => surDecompte(0), delaiAttenteMicro);
+
       // Délai de garde : l'écoute iOS peut ne jamais s'arrêter d'elle-même.
       minuterieGarde = setTimeout(() => this.arreter(), delaiMax);
     },
 
-    /** Arrête l'écoute et le décompte. */
+    /** Arrête l'écoute et ses minuteries. */
     arreter() {
       nettoyer();
 

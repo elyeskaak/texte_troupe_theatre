@@ -492,9 +492,18 @@ L'écran de bilan affiche la date du dernier export et alerte au-delà de
 Cinq règles, toutes issues des limites réelles d'iOS (§4.3 du cahier) :
 
 1. **Un bouton par réplique**, jamais global : une réplique à la fois.
-2. **Décompte visible de `DELAI_AVANT_ECOUTE_MS`** avant d'écouter. Siri activé,
-   Safari met 2 à 3 secondes à ouvrir réellement le micro : sans ce délai, le
-   début de la réplique est systématiquement perdu.
+2. **Aucune attente imposée.** L'écoute démarre au doigt.
+   L'API annonce elle-même l'ouverture du micro par `audiostart` :
+   l'interface affiche « préparation du micro… » puis
+   « je vous écoute », ce qui informe sans faire patienter.
+
+   > **Révision du 2026-08-03, après essai sur iPhone.** La première
+   > version imposait deux secondes de décompte avant même de démarrer,
+   > au motif que Safari met ce temps à ouvrir le micro et que le début
+   > de la réplique se perdait. À l'usage, l'attente était
+   > insupportable — et elle était inutile : l'événement existait.
+   > `DELAI_ATTENTE_MICRO_MS` ne sert plus que de repli pour les moteurs
+   > qui n'émettent pas `audiostart`.
 3. **Écoute non continue**, arrêt explicite au doigt, plus un délai de garde
    `ECOUTE_MAX_MS`. Des rapports récurrents décrivent une écoute qui ne s'arrête
    jamais : le délai de garde est la protection, pas le confort.

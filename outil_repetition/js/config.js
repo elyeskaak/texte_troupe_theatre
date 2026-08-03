@@ -50,12 +50,20 @@ export const CONFIG = Object.freeze({
 
   // --- Reconnaissance vocale ---------------------------------------
   /**
-   * Décompte avant l'écoute effective.
+   * Délai au-delà duquel on annonce l'écoute sans en avoir la confirmation.
    *
-   * Siri activé, Safari met deux à trois secondes à ouvrir réellement le
-   * micro : sans ce délai, le début de la réplique est systématiquement perdu.
+   * **Ce n'est plus un décompte imposé.** La première version attendait deux
+   * secondes avant même de démarrer, parce que Safari met ce temps à ouvrir le
+   * micro et que le début de la réplique se perdait. À l'usage, l'attente était
+   * insupportable — et elle était inutile : l'API émet `audiostart` quand la
+   * capture commence réellement. On démarre donc aussitôt, et l'interface annonce
+   * « je vous écoute » sur cet événement.
+   *
+   * Ce délai ne sert plus que de repli, pour les moteurs qui n'émettent pas
+   * `audiostart` : passé ce temps, on suppose le micro ouvert plutôt que de
+   * laisser « préparation… » indéfiniment.
    */
-  DELAI_AVANT_ECOUTE_MS: 2000,
+  DELAI_ATTENTE_MICRO_MS: 1200,
   /** Délai de garde : l'écoute iOS peut ne jamais s'arrêter d'elle-même. */
   ECOUTE_MAX_MS: 30000,
   LANGUE_RECONNAISSANCE: 'fr-FR',
