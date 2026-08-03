@@ -189,6 +189,59 @@
     border:1px dashed var(--trait); color:var(--estompe); font-size:0.82rem;
   }
 
+
+  /* ---- Échelle d'exigence ---- */
+  .echelle{
+    display:flex; gap:3px; align-items:stretch;
+    border:1px solid var(--trait); border-radius:12px; padding:3px;
+    background:rgba(230,237,243,0.03);
+  }
+  .cran{
+    flex:1 1 0; min-width:0; min-height:52px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:2px; padding:5px 2px; border:none; border-radius:9px;
+    background:transparent; color:var(--estompe);
+    font:inherit; font-size:0.6rem; letter-spacing:0.01em;
+    cursor:pointer; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    transition:background .12s ease, color .12s ease;
+  }
+  .cran span{
+    font-size:0.78rem; font-weight:700; font-variant-numeric:tabular-nums;
+  }
+  /* Les crans déjà franchis restent lisibles : on voit d'où l'on vient. */
+  .cran[data-franchi="1"]{ color:var(--papier); }
+  .cran[aria-pressed="true"]{
+    background:var(--projecteur); color:#0b1a2b; font-weight:700;
+  }
+
+  /* ---- Le texte, à l'italienne ---- */
+  .replique{ margin:24px 0; padding:0; border:none; }
+  .replique .qui{
+    text-align:center; font-family:var(--serif);
+    font-size:0.82rem; font-weight:700; letter-spacing:0.14em;
+    text-transform:uppercase; color:var(--estompe); margin-bottom:5px;
+  }
+  .replique.mienne .qui{ color:var(--projecteur); }
+  .replique .texte{
+    font-family:var(--serif); font-size:1.06rem; line-height:1.85;
+    white-space:pre-wrap;
+  }
+  /* Ma réplique active se signale par un fond, non par un filet : le filet
+     décalait le texte et rompait l'axe central des noms. */
+  .replique.mienne.actif{
+    padding:10px 13px; border-radius:12px;
+    background:rgba(109,179,242,0.05);
+  }
+  .element.lieu, .element.didascalie{
+    text-align:center; font-family:var(--serif); font-style:italic;
+    color:var(--estompe); margin:18px auto; max-width:34ch;
+  }
+  .entete-unite h2{ font-family:var(--serif); }
+
+  /* ---- Accueil ---- */
+  #bloc-ajout[hidden], #bloc-collage[hidden]{ display:none; }
+  #bloc-ajout{ margin-top:4px; }
+
   .invisible{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
 
   /* ================= ÉCRAN DE RÉPÉTITION ================= */
@@ -556,20 +609,36 @@
       <div id="liste-pieces" class="pile"></div>
     </div>
 
-    <label class="champ" for="saisie-piece">Charger une pièce</label>
-    <p class="aide" style="margin-bottom:8px">
-      Le fichier <code>_REPET.json</code> produit par l'outil d'édition.
-      Collez-le, ou importez-le depuis Fichiers.
-    </p>
-    <textarea id="saisie-piece" spellcheck="false"
-      placeholder='{ "schema": "repetition/1", … }'></textarea>
+    <!-- L'ajout est replié : un comédien ne doit pas voir de JSON pour répéter.
+         L'import de fichier vient en premier, le collage en second recours. -->
+    <div class="rangee" style="margin-top:22px">
+      <button id="btn-ouvrir-ajout" class="btn btn-primaire" aria-expanded="false"
+              aria-controls="bloc-ajout">+ Ajouter une pièce</button>
+    </div>
 
-    <div class="rangee" style="margin-top:12px">
-      <button id="btn-charger" class="btn btn-primaire">Charger</button>
-      <label class="btn btn-fantome" for="fichier-piece" style="display:inline-flex;align-items:center">
-        Importer un fichier
-      </label>
-      <input id="fichier-piece" type="file" accept=".json,application/json" class="invisible">
+    <div id="bloc-ajout" hidden>
+      <p class="aide" style="margin:14px 0 10px">
+        Le fichier <code>_REPET.json</code> produit par l'outil d'édition.
+      </p>
+
+      <div class="rangee">
+        <label class="btn btn-primaire" for="fichier-piece"
+               style="display:inline-flex;align-items:center">
+          Choisir le fichier…
+        </label>
+        <input id="fichier-piece" type="file" accept=".json,application/json" class="invisible">
+        <button id="btn-basculer-collage" class="btn btn-fantome btn-mini">
+          ou coller le texte
+        </button>
+      </div>
+
+      <div id="bloc-collage" hidden>
+        <textarea id="saisie-piece" spellcheck="false"
+          placeholder='{ "schema": "repetition/1", … }'></textarea>
+        <div class="rangee" style="margin-top:10px">
+          <button id="btn-charger" class="btn btn-primaire">Charger</button>
+        </div>
+      </div>
     </div>
 
     <div id="message-accueil" class="message" hidden></div>
@@ -630,17 +699,22 @@
       </div>
 
       <div id="barre-contenu">
-      <span class="entete-groupe">Modes de répétition</span>
-      <div class="rangee" id="choix-mode" role="group" aria-label="Mode de répétition">
-        <button type="button" class="pastille pastille-mode" data-mode="lecture">Lecture</button>
-        <button type="button" class="pastille pastille-mode" data-mode="masquage">Rideau</button>
-        <button type="button" class="pastille pastille-mode" data-mode="amorce">Amorce</button>
-        <button type="button" class="pastille pastille-mode" data-mode="trous">Trous</button>
-        <button type="button" class="pastille pastille-mode" data-mode="acronyme">Acronyme</button>
-        <button type="button" class="pastille pastille-mode" data-mode="aveugle">Aveugle</button>
-        <button type="button" class="pastille pastille-mode" data-mode="top">Test du top</button>
-        <button type="button" class="pastille pastille-mode" data-mode="voix">Récitation contrôlée</button>
+      <span class="entete-groupe">Exigence — du plus guidé au plus nu</span>
+
+      <!-- Les huit modes ordonnés par difficulté. L'échelle dit où l'on est et
+           vers quoi on va, ce qu'un alignement de pastilles ne disait pas. -->
+      <div class="echelle" id="choix-mode" role="group" aria-label="Mode de répétition">
+        <button type="button" class="cran" data-mode="lecture"><span>1</span>Lecture</button>
+        <button type="button" class="cran" data-mode="amorce"><span>2</span>Amorce</button>
+        <button type="button" class="cran" data-mode="trous"><span>3</span>Trous</button>
+        <button type="button" class="cran" data-mode="acronyme"><span>4</span>Initiales</button>
+        <button type="button" class="cran" data-mode="masquage"><span>5</span>Rideau</button>
+        <button type="button" class="cran" data-mode="aveugle"><span>6</span>Aveugle</button>
+        <button type="button" class="cran" data-mode="top"><span>7</span>Au top</button>
+        <button type="button" class="cran" data-mode="voix"><span>8</span>Au micro</button>
       </div>
+
+      <p class="aide" id="description-mode"></p>
 
 
       <div id="bloc-difficulte" hidden>

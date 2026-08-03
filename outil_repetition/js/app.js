@@ -234,6 +234,10 @@ function chargerDepuisTexte(texte) {
   const id = enregistrement.ok ? enregistrement.valeur : idDePiece(verdict.piece.piece);
 
   $('saisie-piece').value = '';
+  $('bloc-ajout').hidden = true;
+  $('bloc-collage').hidden = true;
+  $('btn-ouvrir-ajout').textContent = '+ Ajouter une pièce';
+  $('btn-ouvrir-ajout').setAttribute('aria-expanded', 'false');
   rafraichirListePieces();
   ouvrirPiece(id, verdict.piece);
 }
@@ -627,10 +631,59 @@ function appliquer() {
   rendu.appliquerRevelations($('app'), etat);
 }
 
+/**
+ * Les modes, du plus guidé au plus nu.
+ *
+ * L'ordre porte du sens : c'est celui de l'échelle affichée, et il permet de
+ * marquer les crans déjà franchis. Le tenir ici plutôt que dans le HTML évite
+ * qu'un réagencement de la barre ne le contredise en silence.
+ */
+const ORDRE_EXIGENCE = [
+  etatSession.MODE.LECTURE,
+  etatSession.MODE.AMORCE,
+  etatSession.MODE.TROUS,
+  etatSession.MODE.ACRONYME,
+  etatSession.MODE.MASQUAGE,
+  etatSession.MODE.AVEUGLE,
+  etatSession.MODE.TOP,
+  etatSession.MODE.VOIX,
+];
+
+/**
+ * Une phrase par mode, affichée pour le **seul mode actif**.
+ *
+ * Une version antérieure les affichait toutes, ce qui prenait trop de place ;
+ * les avoir retirées rendait « Au top » incompréhensible. Une seule ligne, celle
+ * qui sert, est le bon compromis.
+ */
+const DESCRIPTIONS_MODES = Object.freeze({
+  lecture: 'Tout est visible. Pour une première lecture, ou retrouver le rythme.',
+  amorce: `Les ${CONFIG.MOTS_AMORCE} premiers mots restent. Une réplique trop courte est cachée en entier.`,
+  trous: 'Des mots manquent. Touchez un trou pour ce seul mot, ailleurs pour toute la réplique.',
+  acronyme: 'Chaque mot réduit à son initiale, ponctuation gardée. Le phrasé reste.',
+  masquage: 'Vos répliques sont cachées, la scène reste autour. Leur place est tenue.',
+  aveugle: 'Votre nom seul à l’écran. Aucun appui : vous récitez de mémoire.',
+  top: 'Seule la réplique qui vous donne le signal reste, marquée « votre signal ».',
+  voix: 'Récitez au micro : l’outil compare et montre où la mémoire a lâché.',
+});
+
 function synchroniserCommandes() {
-  for (const pastille of $('choix-mode').children) {
-    pastille.setAttribute('aria-pressed', String(pastille.dataset.mode === etat.mode));
+  const rangActif = ORDRE_EXIGENCE.indexOf(etat.mode);
+
+  for (const cran of $('choix-mode').children) {
+    const actif = cran.dataset.mode === etat.mode;
+
+    cran.setAttribute('aria-pressed', String(actif));
+
+    // Les crans déjà franchis restent lisibles : on voit d'où l'on vient.
+    if (ORDRE_EXIGENCE.indexOf(cran.dataset.mode) < rangActif) {
+      cran.dataset.franchi = '1';
+    } else {
+      delete cran.dataset.franchi;
+    }
   }
+
+  $('description-mode').textContent = DESCRIPTIONS_MODES[etat.mode] ?? '';
 
 
   $('bloc-difficulte').hidden = etat.mode !== etatSession.MODE.TROUS;
@@ -748,6 +801,24 @@ function lireFichier(input, suite) {
 // ============================================================
 // ÉCOUTEURS
 // ============================================================
+
+$('btn-ouvrir-ajout').addEventListener('click', () => {
+  const bloc = $('bloc-ajout');
+  const ouvert = bloc.hidden;
+
+  bloc.hidden = !ouvert;
+  $('btn-ouvrir-ajout').setAttribute('aria-expanded', String(ouvert));
+  $('btn-ouvrir-ajout').textContent = ouvert ? 'Annuler' : '+ Ajouter une pièce';
+});
+
+$('btn-basculer-collage').addEventListener('click', () => {
+  const bloc = $('bloc-collage');
+
+  bloc.hidden = !bloc.hidden;
+  $('btn-basculer-collage').textContent = bloc.hidden
+    ? 'ou coller le texte'
+    : 'masquer le collage';
+});
 
 $('btn-charger').addEventListener('click', () => {
   const texte = $('saisie-piece').value.trim();
