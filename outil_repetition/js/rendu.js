@@ -20,7 +20,13 @@
  */
 
 import { CONFIG } from './config.js';
-import { acronyme, amorce as premiersMots, derniersMots, mots } from './texte.js';
+import {
+  acronyme,
+  amorceCouvreTout,
+  derniersMots,
+  mots,
+  positionsDesMots,
+} from './texte.js';
 import { graineReplique, motsAMasquer } from './tirage.js';
 import { MOTIF_SANS_TOP, TOP } from './modele.js';
 
@@ -190,11 +196,20 @@ function _monterReplique(replique, { index, etat }) {
   texte.appendChild(_formeAcronyme(replique));
   bloc.appendChild(texte);
 
-  const rideau = document.createElement('button');
-  rideau.type = 'button';
-  rideau.className = 'rideau';
-  rideau.textContent = 'toucher pour révéler';
-  bloc.appendChild(rideau);
+  // Une réplique de trois mots ou moins n'a pas de suite à cacher : le mode
+  // « amorce » l'afficherait en entier, sans rien demander à la mémoire. Le CSS
+  // la masque alors complètement.
+  if (amorceCouvreTout(replique.texte, CONFIG.MOTS_AMORCE)) {
+    bloc.dataset.courte = '1';
+  }
+
+  // Aucun bouton de révélation. Il occupait une ligne sous chaque réplique, si
+  // bien que le texte ne gardait pas la même place selon qu'il était masqué ou
+  // révélé — un défilement qui bouge sous le doigt en pleine récitation. La
+  // révélation se fait sur la réplique elle-même : au survol sur un écran qui en
+  // a, au doigt partout (voir `index.html` et `cablerInteractions`).
+  bloc.setAttribute('role', 'button');
+  bloc.setAttribute('tabindex', '0');
 
   return bloc;
 }
@@ -210,12 +225,17 @@ function _formePleine(replique, etat) {
   plein.className = 'plein';
 
   const listeMots = mots(replique.texte);
+
+  // Le tirage porte sur les **mots**, pas sur les jetons : masquer un « ! » ne
+  // demande aucun effort de mémoire et gaspille un trou. Les positions tirées
+  // sont ensuite ramenées dans l'espace des jetons.
+  const positions = positionsDesMots(replique.texte);
   const trous = new Set(
     motsAMasquer(
-      listeMots.length,
+      positions.length,
       etat.difficulte,
       graineReplique(replique.id, etat.difficulte, etat.passageTrous),
-    ),
+    ).map((rang) => positions[rang]),
   );
 
   // Positions des jeux de scène, en nombre de mots parlés qui les précèdent.
@@ -235,7 +255,11 @@ function _formePleine(replique, etat) {
   const suite = document.createElement('span');
   suite.className = 'suite';
 
-  const nbAmorce = Math.min(CONFIG.MOTS_AMORCE, listeMots.length);
+  // L'amorce s'arrête après le N-ième **mot**, ponctuation attachée comprise.
+  const nbAmorce =
+    positions.length === 0
+      ? 0
+      : positions[Math.min(CONFIG.MOTS_AMORCE, positions.length) - 1] + 1;
 
   // Le texte d'origine est parcouru caractère par mot afin de conserver ses
   // séparateurs : un vers doit garder ses retours à la ligne, et les espaces

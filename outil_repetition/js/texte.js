@@ -62,6 +62,45 @@ export function lignes(texte) {
 }
 
 /**
+ * Le jeton porte-t-il du texte à retenir ?
+ *
+ * Le français typographique place une espace avant `!`, `?`, `;` et `:` : le
+ * découpage sur les espaces produit donc des jetons de pure ponctuation.
+ * « Alors ? » compte deux jetons, dont un seul est un mot.
+ *
+ * Sans ce filtre, deux modes se dérèglent. Les mots à trous masquent un « ! »,
+ * ce qui ne demande aucun effort de mémoire et gaspille un trou. Et l'amorce
+ * « les trois premiers mots » n'en montre que deux dès qu'une ponctuation
+ * s'intercale.
+ *
+ * @param {string} jeton
+ */
+export function estMot(jeton) {
+  return /[\p{L}\p{N}]/u.test(jeton);
+}
+
+/**
+ * Positions, dans `mots(texte)`, des jetons qui sont de vrais mots.
+ *
+ * Rend des positions plutôt que les mots eux-mêmes : le rendu a besoin de
+ * retrouver le bon `<span>` pour y poser un trou.
+ *
+ * @param {string} texte
+ * @returns {number[]}
+ */
+export function positionsDesMots(texte) {
+  const positions = [];
+
+  mots(texte).forEach((jeton, rang) => {
+    if (estMot(jeton)) {
+      positions.push(rang);
+    }
+  });
+
+  return positions;
+}
+
+/**
  * Normalise un texte pour le comparer à une récitation.
  *
  * Appliquée au texte attendu **comme** au texte récité, par un chemin unique :
@@ -215,11 +254,38 @@ function _centaines(nombre) {
 /**
  * Premiers mots d'un texte — le mode « amorce seule ».
  *
+ * Compte les **mots**, pas les jetons : « Alors ? Vraiment ? Bien. » doit donner
+ * trois mots, non « Alors ? Vraiment ». La ponctuation qui les accompagne est
+ * néanmoins rendue, puisqu'elle fait partie du texte.
+ *
  * @param {string} texte
  * @param {number} combien
  */
 export function amorce(texte, combien) {
-  return mots(texte).slice(0, combien).join(' ');
+  const jetons = mots(texte);
+  const positions = positionsDesMots(texte);
+
+  if (positions.length === 0) {
+    return '';
+  }
+
+  const dernier = positions[Math.min(combien, positions.length) - 1];
+
+  return jetons.slice(0, dernier + 1).join(' ');
+}
+
+/**
+ * L'amorce dévoilerait-elle toute la réplique ?
+ *
+ * Une réplique de trois mots ou moins n'a pas de suite à cacher : le mode
+ * « amorce » l'afficherait en entier, sans rien demander à la mémoire. Le rendu
+ * la masque alors complètement (§ mode amorce dans `index.html`).
+ *
+ * @param {string} texte
+ * @param {number} combien - mots d'amorce
+ */
+export function amorceCouvreTout(texte, combien) {
+  return positionsDesMots(texte).length <= combien;
 }
 
 /**

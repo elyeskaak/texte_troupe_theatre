@@ -465,28 +465,48 @@ function monterToutLeTexte() {
   contenant.appendChild(fragment);
 }
 
+/**
+ * Un seul écouteur par unité, par délégation.
+ *
+ * Poser un écouteur sur chaque mot d'une pièce en ferait des dizaines de
+ * milliers.
+ */
 function cablerInteractions(bloc) {
-  for (const rideau of bloc.querySelectorAll('.rideau')) {
-    rideau.addEventListener('click', (evenement) => {
-      const replique = evenement.target.closest('.replique');
-
-      etat = etatSession.revelerReplique(etat, replique.dataset.id);
-      replique.classList.add('revelee');
-    });
-  }
-
-  // Mots à trous : chaque trou se dévoile au doigt, un à un. Un seul écouteur
-  // par unité, par délégation — poser un écouteur sur chaque mot en ferait des
-  // milliers.
   bloc.addEventListener('click', (evenement) => {
-    if (etat.mode !== etatSession.MODE.TROUS) {
+    const replique = evenement.target.closest('.replique.actif');
+
+    if (!replique) {
       return;
     }
 
-    const mot = evenement.target.closest('.mot[data-trou]');
+    // En mode trous, un clic sur un trou ne dévoile que ce mot : c'est
+    // l'exigence « révélables un à un ». Cliquer ailleurs révèle la réplique
+    // entière.
+    if (etat.mode === etatSession.MODE.TROUS) {
+      const mot = evenement.target.closest('.mot[data-trou]');
 
-    if (mot && mot.closest('.replique.actif')) {
-      mot.classList.add('devoile');
+      if (mot) {
+        mot.classList.add('devoile');
+        return;
+      }
+    }
+
+    etat = etatSession.revelerReplique(etat, replique.dataset.id);
+    replique.classList.add('revelee');
+  });
+
+  // Au clavier, pour la même action : la réplique porte `role="button"`.
+  bloc.addEventListener('keydown', (evenement) => {
+    if (evenement.key !== 'Enter' && evenement.key !== ' ') {
+      return;
+    }
+
+    const replique = evenement.target.closest('.replique.actif');
+
+    if (replique) {
+      evenement.preventDefault();
+      etat = etatSession.revelerReplique(etat, replique.dataset.id);
+      replique.classList.add('revelee');
     }
   });
 }
@@ -515,10 +535,42 @@ function appliquer() {
   rendu.appliquerRevelations($('app'), etat);
 }
 
+/**
+ * Ce que chaque mode fait, en une phrase.
+ *
+ * Le prototype en avait, et je les avais laissées tomber. Sept pastilles sans
+ * légende n'expliquent rien : « test du top » ne dit pas ce qu'est un top, et
+ * « aveugle » ne dit pas en quoi il diffère du rideau. La question a été posée.
+ */
+const DESCRIPTIONS_MODES = Object.freeze({
+  lecture: 'Tout le texte est visible. Pour une première lecture, ou pour retrouver le rythme.',
+  masquage:
+    'Vos répliques sont cachées, la scène reste autour. Leur place est tenue : ' +
+    'vous voyez leur longueur. Survolez ou touchez pour révéler.',
+  amorce:
+    `Seuls les ${CONFIG.MOTS_AMORCE} premiers mots de vos répliques restent. ` +
+    'Une réplique trop courte est cachée entièrement.',
+  trous:
+    'Une partie des mots est masquée. Touchez un trou pour ce seul mot, ' +
+    'ailleurs pour toute la réplique.',
+  acronyme:
+    'Chaque mot est réduit à son initiale, ponctuation conservée. ' +
+    'Le squelette du phrasé reste : pour réviser ce qui est presque su.',
+  aveugle:
+    'Seul le nom de votre personnage reste à l’écran — pas même la scène autour. ' +
+    'Aucun appui : vous récitez de mémoire.',
+  top:
+    'Seule la réplique qui vous donne le signal reste visible, marquée ' +
+    '« votre signal ». C’est l’exercice du plateau : reconnaître son top et ' +
+    'enchaîner sans rien avoir sous les yeux.',
+});
+
 function synchroniserCommandes() {
   for (const pastille of $('choix-mode').children) {
     pastille.setAttribute('aria-pressed', String(pastille.dataset.mode === etat.mode));
   }
+
+  $('description-mode').textContent = DESCRIPTIONS_MODES[etat.mode] ?? '';
 
   $('bloc-difficulte').hidden = etat.mode !== etatSession.MODE.TROUS;
   $('curseur-difficulte').value = String(etat.difficulte);

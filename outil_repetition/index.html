@@ -261,21 +261,26 @@
    * aucun nœud n'est reconstruit, quelle que soit la longueur de la pièce.
    */
   .acronyme{ display:none; }
-  .rideau{
-    display:none; margin-top:7px; min-height:44px;
-    padding:9px 16px; border-radius:999px; border:1px dashed var(--trait);
-    background:rgba(240,192,90,0.06); color:var(--projecteur);
-    font:inherit; font-size:0.78rem; letter-spacing:0.06em;
-    text-transform:uppercase; cursor:pointer;
-  }
 
-  /* Masquage et récitation à l'aveugle : rien du texte. */
-  [data-mode="masquage"] .replique.actif:not(.revelee) .texte,
-  [data-mode="aveugle"]  .replique.actif:not(.revelee) .texte,
-  [data-mode="top"]      .replique.actif:not(.revelee) .texte{ visibility:hidden; }
+  /* Le texte masqué garde sa place : `visibility` et non `display`. La réplique
+     occupe donc toujours le même espace, révélée ou non, et rien ne bouge sous
+     le doigt en pleine récitation. */
+  .replique.mienne.actif{ cursor:pointer; }
+  .replique.mienne.actif:focus-visible{ outline:2px solid var(--projecteur); }
+
+  /* Rideau : mon texte disparaît, tout le reste demeure. Sa place est tenue, si
+     bien que la longueur de la réplique reste visible — c'est un appui, et c'est
+     la différence avec le mode aveugle. */
+  [data-mode="masquage"] .replique.actif:not(.revelee) .texte{ visibility:hidden; }
 
   /* Amorce seule : les premiers mots restent. */
   [data-mode="amorce"] .replique.actif:not(.revelee) .suite{ visibility:hidden; }
+
+  /* Une réplique de trois mots ou moins n'a pas de suite : l'amorce la
+     montrerait en entier. On la masque donc comme au rideau. */
+  [data-mode="amorce"] .replique.actif[data-courte="1"]:not(.revelee) .texte{
+    visibility:hidden;
+  }
 
   /* Mots à trous, révélables un à un au doigt. */
   [data-mode="trous"] .replique.actif:not(.revelee) .mot[data-trou="1"]{
@@ -295,16 +300,51 @@
   [data-mode="acronyme"] .replique.actif:not(.revelee) .plein{ display:none; }
   [data-mode="acronyme"] .replique.actif:not(.revelee) .acronyme{ display:inline; }
 
-  /* Test du top : seuls les tops et mes répliques restent à l'écran. */
-  [data-mode="top"] .element:not(.top):not(.replique.actif){ display:none; }
+  /* ---- Aveugle et test du top : le contexte disparaît aussi ----
+   *
+   * C'est ce qui les distingue du rideau, où tout le reste de la scène demeure.
+   *
+   *   rideau  : mon texte caché, la scène entière autour de moi.
+   *   aveugle : mon nom seul à l'écran. Aucun appui, rien à lire — je récite de
+   *             mémoire ou pas du tout.
+   *   top     : mon nom, plus la seule réplique qui me donne le signal.
+   */
+  [data-mode="aveugle"] .element:not(.replique.actif){ display:none; }
+  [data-mode="top"]     .element:not(.top):not(.replique.actif){ display:none; }
 
-  /* Le rideau ne s'offre que là où il y a quelque chose à révéler. */
-  [data-mode="masquage"] .replique.actif:not(.revelee) .rideau,
-  [data-mode="aveugle"]  .replique.actif:not(.revelee) .rideau,
-  [data-mode="acronyme"] .replique.actif:not(.revelee) .rideau,
-  [data-mode="amorce"]   .replique.actif:not(.revelee) .rideau,
-  [data-mode="trous"]    .replique.actif:not(.revelee) .rideau,
-  [data-mode="top"]      .replique.actif:not(.revelee) .rideau{ display:inline-flex; }
+  [data-mode="aveugle"] .replique.actif:not(.revelee) .texte,
+  [data-mode="top"]     .replique.actif:not(.revelee) .texte{ visibility:hidden; }
+
+  /* Le top est nommé : sans étiquette, il ressemble à une réplique ordinaire et
+     le mode paraît ne rien faire. */
+  [data-mode="top"] .top::before{
+    content:"votre signal";
+    display:block; font-size:0.66rem; letter-spacing:0.14em;
+    text-transform:uppercase; color:var(--projecteur); margin-bottom:5px;
+  }
+
+  /* ---- Révélation ----
+   *
+   * Au survol là où il y en a un, au doigt partout. `hover:hover` écarte les
+   * écrans tactiles, où le survol est simulé au premier toucher et laisserait la
+   * réplique révélée sans qu'on l'ait demandé.
+   */
+  @media (hover: hover) and (pointer: fine) {
+    [data-mode="masquage"] .replique.actif:hover .texte,
+    [data-mode="amorce"]   .replique.actif:hover .texte,
+    [data-mode="aveugle"]  .replique.actif:hover .texte,
+    [data-mode="top"]      .replique.actif:hover .texte{ visibility:visible; }
+
+    [data-mode="acronyme"] .replique.actif:hover .plein{ display:inline; }
+    [data-mode="acronyme"] .replique.actif:hover .acronyme{ display:none; }
+
+    [data-mode="trous"] .replique.actif:hover .mot[data-trou="1"]{
+      color:var(--papier); background:rgba(240,192,90,0.08);
+    }
+  }
+
+  /* Révélée durablement, au doigt ou au clic. */
+  .replique.actif.revelee .texte{ visibility:visible; }
 
   /* Mes scènes uniquement : les autres se replient, dépliables au doigt. */
   [data-mes-scenes="1"] .unite:not(.mienne):not(.depliee) .elements{ display:none; }
@@ -435,6 +475,10 @@
         <button type="button" class="pastille pastille-mode" data-mode="aveugle">Aveugle</button>
         <button type="button" class="pastille pastille-mode" data-mode="top">Test du top</button>
       </div>
+
+      <!-- Sept pastilles sans légende n'expliquent rien : « test du top » ne dit
+           pas ce qu'est un top. Le texte vient de DESCRIPTIONS_MODES. -->
+      <p class="aide" id="description-mode"></p>
 
       <div id="bloc-difficulte" hidden>
         <label class="champ" for="curseur-difficulte">

@@ -13,7 +13,10 @@ import assert from 'node:assert/strict';
 import {
   acronyme,
   amorce,
+  amorceCouvreTout,
   contient,
+  estMot,
+  positionsDesMots,
   derniersMots,
   lignes,
   mots,
@@ -180,6 +183,69 @@ describe('amorce et derniersMots', () => {
   test('sur un texte vide, aucune erreur', () => {
     assert.equal(amorce('', 3), '');
     assert.equal(derniersMots('', 3), '');
+  });
+});
+
+describe('estMot et positionsDesMots', () => {
+  test('la ponctuation française détachée n’est pas un mot', () => {
+    // Le français place une espace avant « ! ? ; : » : le découpage produit donc
+    // des jetons de pure ponctuation, qu'il ne faut ni masquer, ni compter.
+    assert.ok(estMot('Alors'));
+    assert.ok(!estMot('!'));
+    assert.ok(!estMot('?...'));
+    assert.ok(!estMot('«'));
+  });
+
+  test('un mot avec sa ponctuation collée reste un mot', () => {
+    assert.ok(estMot('heure.'));
+    assert.ok(estMot("qu'elle"));
+  });
+
+  test('un nombre est un mot', () => {
+    assert.ok(estMot('1789'));
+  });
+
+  test('positionsDesMots écarte les jetons de ponctuation', () => {
+    // « Alors ? Vraiment ! » = 4 jetons, 2 mots.
+    assert.deepEqual(positionsDesMots('Alors ? Vraiment !'), [0, 2]);
+  });
+
+  test('un texte sans mot ne rend aucune position', () => {
+    assert.deepEqual(positionsDesMots('... ?!'), []);
+  });
+});
+
+describe('amorce comptée en mots', () => {
+  test('la ponctuation détachée ne consomme pas un mot d’amorce', () => {
+    // Sans ce comptage, l'amorce ne montrerait que deux mots ici.
+    assert.equal(amorce('Alors ? Vraiment ! Bien sûr.', 3), 'Alors ? Vraiment ! Bien');
+  });
+
+  test('la ponctuation collée est rendue avec son mot', () => {
+    assert.equal(amorce('Un, deux, trois, quatre.', 2), 'Un, deux,');
+  });
+
+  test('une réplique plus courte que l’amorce est rendue en entier', () => {
+    assert.equal(amorce('Oui.', 3), 'Oui.');
+  });
+});
+
+describe('amorceCouvreTout', () => {
+  test('vrai quand la réplique n’a pas de suite à cacher', () => {
+    // Le mode « amorce » l'afficherait alors en entier, sans rien demander à la
+    // mémoire : le rendu la masque complètement.
+    assert.ok(amorceCouvreTout('Monsieur Costello.', 3));
+    assert.ok(amorceCouvreTout('Oui.', 3));
+    assert.ok(amorceCouvreTout('Alors ?', 3));
+  });
+
+  test('faux dès qu’il reste un mot après l’amorce', () => {
+    assert.ok(!amorceCouvreTout('Je cherche Mme Brown.', 3));
+  });
+
+  test('la ponctuation ne fait pas basculer le verdict', () => {
+    // « Bien ! » ne fait qu'un mot : trois jetons ne sont pas trois mots.
+    assert.ok(amorceCouvreTout('Ah ! Bon ?', 3));
   });
 });
 
