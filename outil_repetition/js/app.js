@@ -267,8 +267,51 @@ function ouvrirPiece(id, dejaValidee = null) {
   piece = verdict.piece;
   etat = etatSession.etatInitial({ pieceId: id, mesRoles: [] });
 
-  preparerEcranRoles();
-  montrer('ecran-roles');
+  // Rôles retenus de la dernière fois. Ils sont **confrontés à la distribution
+  // courante** : une pièce régénérée peut avoir renommé ou fusionné un
+  // personnage, et restaurer un rôle disparu masquerait les répliques de
+  // personne. Ce qui subsiste suffit ; s'il ne reste rien, on redemande.
+  const retenus = restaurerRoles(id);
+
+  if (retenus === null) {
+    preparerEcranRoles();
+    montrer('ecran-roles');
+    return;
+  }
+
+  // Les rôles sont connus : on va droit au texte. Le bouton « Rôles » de la
+  // barre permet d'y revenir.
+  commencer();
+}
+
+/**
+ * Restaure les rôles d'une pièce, ou rend `null` s'il n'y a rien d'utilisable.
+ *
+ * @param {string} id
+ */
+function restaurerRoles(id) {
+  const retenus = stockage.lireRoles(id);
+
+  if (retenus === null) {
+    return null;
+  }
+
+  const connus = new Set(piece.personnages.map((personnage) => personnage.nom));
+  const miens = (retenus.mesRoles ?? []).filter((nom) => connus.has(nom));
+
+  if (miens.length === 0) {
+    return null;
+  }
+
+  etat = etatSession.changerMesRoles(etat, miens);
+
+  const actifs = (retenus.roleActif ?? []).filter((nom) => miens.includes(nom));
+
+  if (actifs.length > 0) {
+    etat = etatSession.changerRoleActif(etat, actifs);
+  }
+
+  return miens;
 }
 
 // ============================================================
@@ -390,13 +433,19 @@ function rafraichirChoixDesRoles() {
 function commencer() {
   index = modele.indexer(piece, etat.mesRoles);
 
+  // Les rôles sont retenus pour cette pièce : c'est ce qui évite de les
+  // resélectionner à chaque ouverture.
   avecStockage(
     () =>
-      stockage.ecrireSession({
-        pieceId: etat.pieceId,
+      stockage.ecrireRoles(etat.pieceId, {
         mesRoles: etat.mesRoles,
         roleActif: etat.roleActif,
       }),
+    'message-roles',
+  );
+
+  avecStockage(
+    () => stockage.ecrireSession({ pieceId: etat.pieceId, mesRoles: etat.mesRoles }),
     'message-roles',
   );
 

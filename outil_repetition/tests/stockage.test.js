@@ -404,3 +404,52 @@ describe('session et réglages', () => {
     assert.equal(stockage.lireSession(), null);
   });
 });
+
+describe('rôles retenus par pièce', () => {
+  test('aller-retour', () => {
+    const id = stockage.enregistrerPiece(PIECE);
+
+    stockage.ecrireRoles(id, { mesRoles: ['JAN', 'MARTHA'], roleActif: ['JAN'] });
+
+    assert.deepEqual(stockage.lireRoles(id), {
+      mesRoles: ['JAN', 'MARTHA'],
+      roleActif: ['JAN'],
+    });
+  });
+
+  test('sans rien d’enregistré, null', () => {
+    // C'est ce qui distingue « pas encore choisi » de « choisi puis vidé ».
+    assert.equal(stockage.lireRoles('inconnue'), null);
+  });
+
+  test('rangés par pièce, non par session', () => {
+    // On répète Henry dans l'une et Clarissa dans l'autre : une clé unique
+    // ferait perdre le choix à chaque changement de texte.
+    const a = stockage.enregistrerPiece(PIECE);
+    const b = stockage.enregistrerPiece({ ...PIECE, piece: 'Les Justes' });
+
+    stockage.ecrireRoles(a, { mesRoles: ['JAN'], roleActif: ['JAN'] });
+    stockage.ecrireRoles(b, { mesRoles: ['MARTHA'], roleActif: ['MARTHA'] });
+
+    assert.deepEqual(stockage.lireRoles(a).mesRoles, ['JAN']);
+    assert.deepEqual(stockage.lireRoles(b).mesRoles, ['MARTHA']);
+  });
+
+  test('supprimer la pièce emporte ses rôles', () => {
+    const id = stockage.enregistrerPiece(PIECE);
+    stockage.ecrireRoles(id, { mesRoles: ['JAN'], roleActif: ['JAN'] });
+
+    stockage.supprimerPiece(id);
+
+    assert.equal(stockage.lireRoles(id), null);
+  });
+
+  test('les rôles ne partent pas dans l’export', () => {
+    // Un export sert à transporter la progression : les rôles se rechoisissent
+    // en deux touches, et les imposer sur un autre appareil serait présumer.
+    const id = stockage.enregistrerPiece(PIECE);
+    stockage.ecrireRoles(id, { mesRoles: ['JAN'], roleActif: ['JAN'] });
+
+    assert.ok(!('roles' in stockage.exporter()));
+  });
+});

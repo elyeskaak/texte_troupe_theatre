@@ -430,7 +430,8 @@ Reprise du §10 du cahier :
 repet:v1:index                        liste des pièces
 repet:v1:piece:<id>                   le REPET.json — écrit une fois, jamais modifié
 repet:v1:progres:<id>:<PERSONNAGE>    statuts et historique
-repet:v1:annotations:<id>             annotations et marque-pages
+repet:v1:annotations:<id>             annotations
+repet:v1:roles:<id>                   mes rôles et le rôle actif, par pièce
 repet:v1:reglages                     mode, taille de police, vitesse, sombre
 repet:v1:session                      pièce et unité courantes
 ```

@@ -34,6 +34,7 @@ export const CLE = Object.freeze({
   piece: (idPiece) => `${P}:piece:${idPiece}`,
   progres: (idPiece, personnage) => `${P}:progres:${idPiece}:${personnage}`,
   annotations: (idPiece) => `${P}:annotations:${idPiece}`,
+  roles: (idPiece) => `${P}:roles:${idPiece}`,
   reglages: () => `${P}:reglages`,
   session: () => `${P}:session`,
   dernierExport: () => `${P}:dernier-export`,
@@ -219,6 +220,7 @@ export function creerStockage(support = undefined) {
     supprimerPiece(id) {
       socle.removeItem(CLE.piece(id));
       socle.removeItem(CLE.annotations(id));
+      socle.removeItem(CLE.roles(id));
 
       for (const cle of _clesCommencantPar(socle, `${P}:progres:${id}:`)) {
         socle.removeItem(cle);
@@ -239,6 +241,19 @@ export function creerStockage(support = undefined) {
     },
 
     // --- annotations, réglages, session --------------------------
+    /**
+     * Rôles retenus pour une pièce.
+     *
+     * Rangés **par pièce**, et non dans la session : on répète Henry dans l'une et
+     * Clarissa dans l'autre, et une clé unique ferait perdre le choix à chaque
+     * changement de texte.
+     */
+    lireRoles: (id) => lireTolerant(CLE.roles(id), null),
+
+    ecrireRoles(id, roles) {
+      ecrire(CLE.roles(id), roles);
+    },
+
     lireAnnotations: (id) => lireTolerant(CLE.annotations(id), {}),
     ecrireAnnotations(id, annotations) {
       ecrire(CLE.annotations(id), annotations);
