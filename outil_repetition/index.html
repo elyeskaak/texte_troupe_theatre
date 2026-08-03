@@ -86,8 +86,16 @@
   }
   .aide{ color:var(--estompe); font-size:0.85rem; margin:6px 0 0; }
 
-  section{ display:none; flex:1; flex-direction:column; }
-  section.active{ display:flex; }
+  /* `#app > section` et non `section` : les unités jouables sont elles aussi des
+     <section>, et une règle non ancrée les masquait toutes. Le texte de la pièce
+     existait dans le DOM, en `display:none` — la page restait à la hauteur d'un
+     écran pour 1196 répliques, et le défilement ne menait nulle part. */
+  #app > section{ display:none; flex-direction:column; }
+
+  /* `flex:1 0 auto` et non `flex:1` : ce dernier vaut `flex-basis:0` avec
+     `flex-shrink:1`, ce qui autorise la section à se réduire sous la taille de
+     son contenu. */
+  #app > section.active{ display:flex; flex:1 0 auto; }
 
   /* --- commandes ------------------------------------------------- */
   /* 44 px de haut au minimum : atteignable au pouce, une main occupée. */
@@ -180,6 +188,129 @@
   }
 
   .invisible{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+
+  /* ================= ÉCRAN DE RÉPÉTITION ================= */
+
+  .barre{
+    position:sticky; top:calc(env(safe-area-inset-top) * -1);
+    z-index:5; padding:10px 0 12px;
+    background:linear-gradient(var(--scene) 78%, transparent);
+  }
+  .barre .rangee{ gap:7px; }
+  .pastille-mode{ min-height:38px; padding:7px 13px; font-size:0.82rem; }
+
+  #curseur-difficulte{ width:100%; accent-color:var(--projecteur); min-height:44px; }
+  #bloc-difficulte[hidden]{ display:none; }
+
+  /* --- unité jouable --- */
+  .unite{ margin:0 0 26px; }
+  .entete-unite{
+    display:flex; justify-content:space-between; align-items:baseline; gap:10px;
+    padding:9px 0; border-bottom:1px solid var(--trait); cursor:pointer;
+  }
+  .entete-unite h2{ font-size:1.05rem; color:var(--projecteur); }
+  .marque-unite{ font-size:0.74rem; color:var(--estompe); }
+  .unite:not(.mienne) .entete-unite h2{ color:var(--estompe); }
+
+  .elements{ padding:6px 0; }
+
+  /* Un lieu, une didascalie : italique, en retrait, jamais confondus avec du dit. */
+  .element.lieu, .element.didascalie{
+    font-style:italic; color:var(--estompe); margin:12px 0;
+  }
+  .element.texte_sans_personnage{
+    margin:12px 0; padding-left:10px;
+    border-left:2px solid rgba(193,84,58,0.6);
+  }
+
+  .replique{ margin:14px 0; }
+  .replique .qui{
+    font-family:var(--serif); font-size:0.95rem; font-weight:700;
+    letter-spacing:0.04em; color:var(--projecteur);
+  }
+  .replique:not(.mienne) .qui{ color:var(--estompe); }
+  .replique .texte{
+    /* pre-wrap : un vers garde ses retours à la ligne, et les espaces multiples
+       portent le rythme visuel dont le mode acronyme fait son indice. */
+    white-space:pre-wrap;
+  }
+  .replique.mienne{
+    padding-left:11px; border-left:2px solid var(--rideau);
+  }
+  .replique.actif{ border-left-color:var(--projecteur); }
+  .jeu{ font-style:italic; color:var(--estompe); }
+
+  /* --- le top --- */
+  .top{
+    padding:9px 12px; margin:14px 0; border-radius:10px;
+    background:var(--projecteur-doux); border:1px solid var(--trait);
+  }
+  .top-court{ display:none; }
+  [data-top-reduit="1"] .top .texte{ display:none; }
+  [data-top-reduit="1"] .top .top-court{ display:inline; }
+
+  /* Enchaînement : dire qu'il n'y a pas de top est une information utile. */
+  .replique[data-sans-top]::before{
+    content:attr(data-message-sans-top);
+    display:block; font-size:0.7rem; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--estompe); margin-bottom:3px;
+  }
+
+  /* ================= LES SEPT MODES ================= *
+   * Tout se joue ici. Changer de mode est une écriture d'attribut sur #app :
+   * aucun nœud n'est reconstruit, quelle que soit la longueur de la pièce.
+   */
+  .acronyme{ display:none; }
+  .rideau{
+    display:none; margin-top:7px; min-height:44px;
+    padding:9px 16px; border-radius:999px; border:1px dashed var(--trait);
+    background:rgba(240,192,90,0.06); color:var(--projecteur);
+    font:inherit; font-size:0.78rem; letter-spacing:0.06em;
+    text-transform:uppercase; cursor:pointer;
+  }
+
+  /* Masquage et récitation à l'aveugle : rien du texte. */
+  [data-mode="masquage"] .replique.actif:not(.revelee) .texte,
+  [data-mode="aveugle"]  .replique.actif:not(.revelee) .texte,
+  [data-mode="top"]      .replique.actif:not(.revelee) .texte{ visibility:hidden; }
+
+  /* Amorce seule : les premiers mots restent. */
+  [data-mode="amorce"] .replique.actif:not(.revelee) .suite{ visibility:hidden; }
+
+  /* Mots à trous, révélables un à un au doigt. */
+  [data-mode="trous"] .replique.actif:not(.revelee) .mot[data-trou="1"]{
+    color:transparent; background:rgba(240,192,90,0.16);
+    border-radius:3px; box-shadow:inset 0 -1px 0 var(--trait);
+    cursor:pointer;
+  }
+  /* Le sélecteur reprend celui du masquage **et** ajoute `.devoile`. Sans cette
+     précaution il serait moins spécifique et n'aurait aucun effet : `:not()` ne
+     compte pas pour lui-même, mais son argument compte, et `.revelee` suffisait
+     à faire pencher la balance du côté du masquage. */
+  [data-mode="trous"] .replique.actif:not(.revelee) .mot[data-trou="1"].devoile{
+    color:var(--papier); background:rgba(240,192,90,0.08);
+  }
+
+  /* Acronyme géant : les deux formes sont montées, on échange laquelle sort. */
+  [data-mode="acronyme"] .replique.actif:not(.revelee) .plein{ display:none; }
+  [data-mode="acronyme"] .replique.actif:not(.revelee) .acronyme{ display:inline; }
+
+  /* Test du top : seuls les tops et mes répliques restent à l'écran. */
+  [data-mode="top"] .element:not(.top):not(.replique.actif){ display:none; }
+
+  /* Le rideau ne s'offre que là où il y a quelque chose à révéler. */
+  [data-mode="masquage"] .replique.actif:not(.revelee) .rideau,
+  [data-mode="aveugle"]  .replique.actif:not(.revelee) .rideau,
+  [data-mode="acronyme"] .replique.actif:not(.revelee) .rideau,
+  [data-mode="amorce"]   .replique.actif:not(.revelee) .rideau,
+  [data-mode="trous"]    .replique.actif:not(.revelee) .rideau,
+  [data-mode="top"]      .replique.actif:not(.revelee) .rideau{ display:inline-flex; }
+
+  /* Mes scènes uniquement : les autres se replient, dépliables au doigt. */
+  [data-mes-scenes="1"] .unite:not(.mienne):not(.depliee) .elements{ display:none; }
+
+  /* Cale d'une unité démontée : conserve la hauteur, donc la position. */
+  .cale{ display:block; }
 </style>
 </head>
 <body>
@@ -261,24 +392,48 @@
     </div>
   </section>
 
-  <!-- ================= RÉPÉTITION (coque) ================= -->
+  <!-- ================= RÉPÉTITION ================= -->
   <section id="ecran-repetition">
-    <p class="surtitre" id="repetition-surtitre">Répétition</p>
-    <h1 id="repetition-titre">—</h1>
-    <p class="aide" id="repetition-resume"></p>
+    <div class="barre">
+      <p class="surtitre" id="repetition-surtitre">Répétition</p>
+      <div class="rangee" id="choix-mode" role="group" aria-label="Mode de masquage">
+        <button type="button" class="pastille pastille-mode" data-mode="lecture">Lecture</button>
+        <button type="button" class="pastille pastille-mode" data-mode="masquage">Rideau</button>
+        <button type="button" class="pastille pastille-mode" data-mode="amorce">Amorce</button>
+        <button type="button" class="pastille pastille-mode" data-mode="trous">Trous</button>
+        <button type="button" class="pastille pastille-mode" data-mode="acronyme">Acronyme</button>
+        <button type="button" class="pastille pastille-mode" data-mode="aveugle">Aveugle</button>
+        <button type="button" class="pastille pastille-mode" data-mode="top">Test du top</button>
+      </div>
 
-    <label class="champ">Sommaire</label>
-    <ul id="sommaire" class="sommaire"></ul>
+      <div id="bloc-difficulte" hidden>
+        <label class="champ" for="curseur-difficulte">
+          Mots masqués — <span id="valeur-difficulte">45</span>&nbsp;%
+        </label>
+        <input id="curseur-difficulte" type="range" min="5" max="100" step="5" value="45">
+        <div class="rangee">
+          <button id="btn-nouveau-tirage" class="btn btn-fantome btn-mini">Nouveau tirage</button>
+        </div>
+      </div>
 
-    <div class="provisoire">
-      L'écran de répétition — les sept modes de masquage, la mise en valeur du top
-      et le défilement — arrive à l'étape 7 du plan de livraison. Ce que vous
-      voyez ici confirme que la pièce est chargée, indexée et conservée sur
-      l'appareil.
+      <div class="rangee" style="margin-top:10px">
+        <button id="btn-mes-scenes" class="pastille pastille-mode" aria-pressed="false">
+          Mes scènes
+        </button>
+        <button id="btn-top-court" class="pastille pastille-mode" aria-pressed="false">
+          Top court
+        </button>
+        <button id="btn-tout-remasquer" class="btn btn-fantome btn-mini">Remasquer</button>
+        <button id="btn-retour-roles" class="btn btn-fantome btn-mini">Rôles</button>
+      </div>
     </div>
 
-    <div class="rangee" style="margin-top:18px">
-      <button id="btn-retour-roles" class="btn btn-fantome">Changer de rôle</button>
+    <p class="aide" id="repetition-resume"></p>
+    <div id="texte-piece"></div>
+
+    <div class="rangee" style="margin-top:20px">
+      <button id="btn-top-precedent" class="btn btn-fantome">← Réplique</button>
+      <button id="btn-top-suivant" class="btn btn-fantome">Réplique →</button>
     </div>
   </section>
 

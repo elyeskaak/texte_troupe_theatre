@@ -369,22 +369,54 @@ une écriture d'attribut ou une règle CSS** — jamais un re-rendu.
 | annoter, changer un statut | 1 nœud modifié |
 | naviguer vers une autre unité | montage paresseux (§6.4) |
 
-### 6.4 Montage paresseux par unité
+### 6.4 Montage : tout d'emblée — le paresseux a été écrit, mesuré, puis retiré
 
-Une pièce de 300 pages où j'ai 800 répliques de 25 mots ferait 20 000 `<span>`
-si tout était monté d'emblée. Le DOM est donc borné :
+> **Révision du 2026-08-03**, contre la décision 3 du §15. Le montage paresseux a
+> été implémenté, éprouvé sur une pièce réelle, et **retiré**. La mesure a montré
+> qu'il protégeait d'un coût imaginaire.
 
-- l'unité jouable (§3.2 du cahier) est **l'unité de montage** — c'est déjà l'unité
-  de repli et de sommaire ;
-- une unité est montée à la demande : navigation par sommaire, ou approche au
-  défilement détectée par `IntersectionObserver` ;
-- au-delà de `UNITES_MONTEES_MAX` unités montées, les plus lointaines sont
-  démontées ; leur hauteur est conservée par un bloc de remplacement pour ne pas
-  faire sauter le défilement.
+La conception craignait 20 000 nœuds sur un téléphone. La mesure, sur *La toile
+d'araignée* — trois actes, 44 scènes, **1196 répliques** :
 
-La recherche, le sommaire et le bilan portent sur **l'index, pas sur le DOM** :
-ils fonctionnent donc sur toute la pièce même si une seule unité est montée.
-C'est une conséquence de §5.1, et la raison pour laquelle l'index doit exister.
+| Mesure | Valeur |
+|---|---|
+| Montage de la pièce entière | **80 ms** |
+| Nœuds dans le DOM | 5 263 |
+| Mémoire JavaScript | 4 Mo |
+| Bascule d'un mode à l'autre | **0,1 à 1,1 ms** |
+
+Un iPhone 15 avale cela sans y penser. Et 5 263 nœuds, non 20 000 : l'estimation
+d'origine oubliait que **seules mes répliques** sont découpées en mots, soit 72
+sur 1196 pour un rôle ordinaire.
+
+Ce que le montage paresseux a coûté avant d'être retiré — trois défauts, dont
+aucun n'était évident sur le papier :
+
+1. **Va-et-vient.** Dès que la portée de montage dépassait le plafond, chaque
+   passe démontait ce que la précédente venait de monter. À position de défilement
+   *fixe*, l'ensemble monté alternait entre deux groupes de huit unités.
+2. **Éviction par ancienneté.** Elle sacrifiait des unités à l'écran. Il fallait
+   évincer par distance au centre de la fenêtre.
+3. **Une cale ne fait pas la hauteur du bloc qui la remplace.** La page se
+   contractait à chaque montage, amenant d'autres cales dans la portée, et le
+   contenu glissait sous une position inchangée. Insoluble sans mesurer d'abord
+   ce qu'on n'a pas encore affiché.
+
+À reprendre si une pièce se révélait un jour trop lourde — et alors avec des
+hauteurs **mesurées**, jamais estimées. `CONFIG.UNITES_MONTEES_MAX` et
+`MARGE_MONTAGE` restent en place pour ce jour-là.
+
+**Une part du diagnostic était fausse, et il faut le dire.** Les trois défauts
+ci-dessus ont été aggravés par un bug de feuille de style sans rapport : la règle
+qui masque les écrans, `section { display: none }`, frappait aussi les unités
+jouables — qui sont elles aussi des `<section>`. Le texte existait dans le DOM,
+invisible, et la page restait haute d'un écran pour 1196 répliques. Corrigé en
+ancrant la règle (`#app > section`). Le va-et-vient, lui, avait bien été observé
+alors que la page mesurait ses 52 000 pixels : il était réel.
+
+La recherche, le sommaire et le bilan portent sur **l'index, pas sur le DOM** —
+et cela reste vrai, indépendamment du montage. C'est une conséquence de §5.1, et
+la raison pour laquelle l'index doit exister.
 
 ---
 
@@ -760,7 +792,7 @@ Un commit par étape. Reprend le §13 du cahier, en le précisant.
 | 4 | ✅ *fait* — `config.js`, `schema.js`, `texte.js`, `comparaison.js`, `tirage.js` | 119 tests Node verts, pureté et contrat compris |
 | 5 | ✅ *fait* — `modele.js`, `etat.js` + tests | 219 tests Node verts, les trois cas de top couverts |
 | 6 | ✅ *fait* — coque : `index.html`, `stockage.js`, `app.js`, manifeste, icône | 285 tests Node ; pièce vérifiée survivante au rechargement |
-| 7 | `rendu.js` : les 7 modes en CSS, le top, le repli de scènes, montage paresseux | usage réel sur iPhone 15 |
+| 7 | ✅ *fait* — `rendu.js` : les 7 modes en CSS, le top, le repli de scènes | éprouvé sur *La toile d'araignée*, 1196 répliques |
 | 8 | Progression, bilan, spot check, export / import | export puis import restitue à l'identique ; fusion vérifiée |
 | 9 | Confort : sommaire, recherche, marque-pages, annotations, défilement, Wake Lock | — |
 | 10 | `voix.js` et ses replis (Web Speech seul) | testé sur iPhone 15 en HTTPS **et en mode avion** |
@@ -784,7 +816,7 @@ peut commencer à l'étape 3 du [plan de livraison](#14-plan-de-livraison).
 |---|---|---|---|
 | 1 | Découpage en fichiers | **12 fichiers**, modules ES natifs, aucune étape de build | §3.1, §3.2 |
 | 2 | Exécution des tests | **`node --test`** sur les 7 modules purs, `tests.html` en complément pour le rendu | §13 |
-| 3 | Montage du DOM | **paresseux par unité dès l'étape 7**, pas de rendu complet transitoire | §6.4 |
+| 3 | Montage du DOM | ~~paresseux par unité~~ → **révisé le 2026-08-03 : montage complet**, mesures à l'appui | §6.4 |
 | 4 | Repli enregistrement audio | **retiré du périmètre** | §8.2, étape 10 |
 
 Deux remarques sur la portée de ces choix.

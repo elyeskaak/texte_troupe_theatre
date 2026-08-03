@@ -16,8 +16,24 @@ export const CONFIG = Object.freeze({
   DIFFICULTE_DEFAUT: 45,
 
   // --- Rendu -------------------------------------------------------
-  /** Unités jouables gardées montées dans le DOM (§6.4 de ARCHITECTURE.md). */
-  UNITES_MONTEES_MAX: 5,
+  /**
+   * Unités jouables gardées montées dans le DOM (§6.4 de ARCHITECTURE.md).
+   *
+   * Doit rester **nettement supérieur** au nombre d'unités tenant dans la portée
+   * de montage (`MARGE_MONTAGE`). Sinon chaque passe évince ce que la précédente
+   * vient de monter : constaté avec un plafond de 5 pour une portée de dix
+   * unités, où l'ensemble monté alternait entre deux groupes à chaque événement
+   * de défilement — soit exactement le coût que le montage paresseux évite.
+   */
+  UNITES_MONTEES_MAX: 8,
+
+  /**
+   * Portée de montage, en hauteurs d'écran de part et d'autre.
+   *
+   * Un demi-écran d'avance suffit à la vitesse d'un défilement de lecture, et
+   * garde la portée à trois ou quatre unités — largement sous le plafond.
+   */
+  MARGE_MONTAGE: 0.5,
 
   // --- Persistance -------------------------------------------------
   /** Scores vocaux conservés par réplique, les plus anciens chassés d'abord. */

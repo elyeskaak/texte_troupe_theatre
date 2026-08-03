@@ -85,6 +85,10 @@ LONGUEUR_EMPREINTE = 12
 
 MOTIF_ESPACES = re.compile(r"\s+")
 
+# Apostrophes ramenées à la forme droite dans un nom de personnage. Voir
+# `nom_personnage` : sans cela, la même personne se dédouble.
+MOTIF_APOSTROPHES = re.compile(r"[’‘‛`´]")
+
 
 # ============================================================
 # 1. IDENTIFIANTS
@@ -95,17 +99,29 @@ def nom_personnage(label: str) -> str:
     """
     Nom canonique d'un personnage, à partir de son label de réplique.
 
-    La convention typographique écrit « **JAN.** », et le point final est une
-    convention d'imprimerie : il annonce la réplique. Il n'appartient pas au nom,
-    et le conserver donnerait « JAN. » dans le sélecteur de rôles de l'outil de
-    répétition, puis deux personnages distincts le jour où une édition écrit
-    « JAN » sans point.
+    Deux normalisations, et **la même raison pour les deux** : un personnage ne
+    doit pas se dédoubler parce que sa graphie varie d'une réplique à l'autre.
+
+    **Le point final est retiré.** La convention typographique écrit
+    « **JAN.** », et ce point est une convention d'imprimerie — il annonce la
+    réplique. Le conserver donnerait « JAN. » dans le sélecteur de rôles, puis
+    deux personnages distincts le jour où une édition écrit « JAN » sans point.
+
+    **Les apostrophes sont ramenées à la forme droite.** Constaté sur un texte
+    réel : « L'AGENT DUPONT » (apostrophe droite, 3 répliques) et « L’AGENT
+    DUPONT » (apostrophe typographique, 108 répliques) donnaient deux rôles là
+    où il n'y en a qu'un. Choisir l'un aurait laissé les répliques de l'autre
+    visibles, sans que rien ne le signale. Un traitement de texte substitue
+    l'apostrophe automatiquement, mais pas toujours : la variation est
+    inévitable dans un document saisi à la main.
 
     Volontairement **pas** `blocks.normaliser_label()`, qui retire aussi les
     diacritiques : ce nom-là est affiché, et « LE MAÎTRE » ne doit pas devenir
     « LE MAITRE » sur l'écran de choix.
     """
-    return blocks.MOTIF_PONCTUATION_FINALE.sub("", label.strip()).strip()
+    sans_ponctuation = blocks.MOTIF_PONCTUATION_FINALE.sub("", label.strip())
+
+    return MOTIF_APOSTROPHES.sub("'", sans_ponctuation).strip()
 
 
 def normaliser_pour_identifiant(texte: str) -> str:
@@ -290,6 +306,10 @@ class _Constructeur:
         self._mots: dict[str, int] = {}
         self._occurrences: dict[tuple[str, str], int] = {}
 
+        # Graphies rencontrées pour chaque nom canonique, afin de signaler les
+        # fusions plutôt que de les taire (voir `_relever_graphie`).
+        self._graphies: dict[str, set[str]] = {}
+
     # --- entrée principale ------------------------------------------
 
     def ajouter(self, ligne: blocks.LigneClassee) -> None:
@@ -314,6 +334,7 @@ class _Constructeur:
 
         if ligne.type is blocks.TypeLigne.PERSONNAGE:
             self._personnage = nom_personnage(ligne.texte)
+            self._relever_graphie(ligne.texte, self._personnage)
             return
 
         nom_element = TYPES_ELEMENT_SIMPLE.get(ligne.type)
@@ -330,9 +351,28 @@ class _Constructeur:
             f"« {ligne.type.value} » — ligne « {_extrait(ligne.texte)} »"
         )
 
+    def _relever_graphie(self, brut: str, canonique: str) -> None:
+        """
+        Consigne les graphies d'un même nom, pour signaler toute fusion.
+
+        `nom_personnage` réunit « L'AGENT DUPONT » et « L’AGENT DUPONT » — c'est
+        voulu. Mais une fusion muette empêcherait de découvrir que le document
+        source mélange deux graphies, ce qui se paie ailleurs : dans le DOCX
+        imprimé, où les deux apparaissent, et dans l'outil de coupes.
+        """
+        self._graphies.setdefault(canonique, set()).add(brut.strip())
+
     def terminer(self) -> None:
         """Referme ce qui reste ouvert."""
         self._fermer_replique()
+
+        for canonique, graphies in sorted(self._graphies.items()):
+            if len(graphies) > 1:
+                variantes = " / ".join(f"« {g} »" for g in sorted(graphies))
+                self.avertissements.append(
+                    f"graphies multiples réunies sous « {canonique} » : {variantes} "
+                    "— à uniformiser dans le document source"
+                )
 
         if self._unite is not None and not self._unite.vide():
             self.unites.append(self._unite)

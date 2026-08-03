@@ -14,6 +14,7 @@ import { CONFIG } from './config.js';
 import * as schema from './schema.js';
 import * as modele from './modele.js';
 import * as etatSession from './etat.js';
+import * as rendu from './rendu.js';
 import { creerStockage, ErreurStockage, idDePiece } from './stockage.js';
 
 const $ = (id) => document.getElementById(id);
@@ -372,7 +373,7 @@ function rafraichirChoixDesRoles() {
 }
 
 // ============================================================
-// ÉCRAN DE RÉPÉTITION (coque de l'étape 6)
+// ÉCRAN DE RÉPÉTITION
 // ============================================================
 
 function commencer() {
@@ -388,8 +389,8 @@ function commencer() {
     'message-roles',
   );
 
-  $('repetition-titre').textContent = piece.piece;
-  $('repetition-surtitre').textContent = etat.roleActif.join(' & ');
+  $('repetition-surtitre').textContent =
+    `${piece.piece} — ${etat.roleActif.join(' & ')}`;
 
   const miennes = index.unites.filter((u) => u.mienne).length;
 
@@ -397,38 +398,157 @@ function commencer() {
     `${index.mesRepliques.length} réplique(s) à apprendre, ` +
     `dans ${miennes} scène(s) sur ${index.unites.length}.`;
 
-  remplirSommaire();
+  // L'écran est montré **avant** de construire le squelette. Ce n'est pas
+  // cosmétique : tant que la section est en `display:none`, ses cales ont une
+  // hauteur nulle, l'`IntersectionObserver` ne voit rien d'intersectant, et
+  // aucune unité ne se monte jamais. Le texte restait vide.
   montrer('ecran-repetition');
+
+  monterToutLeTexte();
+  rendu.declarerRoleActif(etat.roleActif);
+  appliquer();
+  synchroniserCommandes();
+
+  // On ouvre sur la première scène où j'ai du texte, plutôt qu'au début d'une
+  // pièce où je n'entre qu'au deuxième acte.
+  const premiere = index.unites.find((u) => u.mienne) ?? index.unites[0];
+
+  if (premiere) {
+    etat = etatSession.allerA(etat, { unite: premiere.id });
+    document
+      .querySelector(`.unite[data-id="${premiere.id}"]`)
+      ?.scrollIntoView({ block: 'start' });
+  }
 }
 
-function remplirSommaire() {
-  const liste = $('sommaire');
-  liste.innerHTML = '';
+/**
+ * Monte toutes les unités de la pièce.
+ *
+ * **Un montage paresseux a été écrit, mesuré, puis retiré.** La conception le
+ * prévoyait (§6.4), et l'expérience a montré que le remède coûtait plus que le
+ * mal. Le principe était d'occuper la place d'une unité par une cale de hauteur
+ * estimée, puis de la remplacer par le texte à l'approche. Trois défauts en sont
+ * sortis, chacun réparable et le troisième insoluble sans mesure préalable :
+ *
+ * 1. l'ensemble monté partait en va-et-vient dès que la portée dépassait le
+ *    plafond — deux groupes alternant à position de défilement fixe ;
+ * 2. l'éviction par ancienneté sacrifiait des unités à l'écran ; il fallait
+ *    évincer par distance ;
+ * 3. **une cale ne fait jamais la hauteur du bloc qui la remplace.** La page se
+ *    contractait à chaque montage, ce qui amenait d'autres cales dans la portée,
+ *    et le contenu glissait sous une position inchangée.
+ *
+ * Or la mesure dit que le problème n'existait pas : « La toile d'araignée », trois
+ * actes et 1196 répliques, tient dans quelques mégaoctets de mémoire JavaScript.
+ * Un iPhone 15 en dispose largement. Le montage paresseux protégeait donc d'un
+ * coût imaginaire, au prix de trois défauts réels et d'une classe entière de bugs
+ * de position.
+ *
+ * À reprendre si une pièce se révélait un jour trop lourde — et alors avec des
+ * hauteurs mesurées d'abord, jamais estimées.
+ */
+function monterToutLeTexte() {
+  const contenant = $('texte-piece');
+  const fragment = document.createDocumentFragment();
 
-  index.sommaire.forEach((entree) => {
-    const ligne = document.createElement('li');
+  for (const unite of index.unites) {
+    const bloc = rendu.monterUnite(unite, { index, etat });
 
-    const titre = document.createElement('span');
+    cablerInteractions(bloc);
+    appliquerMessagesSansTop(bloc);
+    fragment.appendChild(bloc);
+  }
 
-    // Une unité implicite est ouverte par un `***` : elle n'a pas de titre dans
-    // le texte de l'auteur, et lui en inventer un afficherait une scène qui
-    // n'existe pas. Elle se désigne donc comme la suite de la précédente.
-    titre.textContent =
-      entree.titre ?? `${entree.scene ?? entree.acte ?? 'Scène'} — suite`;
+  // Un seul rattachement au document : construire dans un fragment évite autant
+  // de recalculs de mise en page qu'il y a d'unités.
+  contenant.innerHTML = '';
+  contenant.appendChild(fragment);
+}
 
-    const compte = document.createElement('span');
+function cablerInteractions(bloc) {
+  for (const rideau of bloc.querySelectorAll('.rideau')) {
+    rideau.addEventListener('click', (evenement) => {
+      const replique = evenement.target.closest('.replique');
 
-    if (entree.mienne) {
-      compte.className = 'compte';
-      compte.textContent = `${entree.nbMesRepliques} répl.`;
-    } else {
-      ligne.classList.add('absent');
-      compte.textContent = 'absent';
+      etat = etatSession.revelerReplique(etat, replique.dataset.id);
+      replique.classList.add('revelee');
+    });
+  }
+
+  // Mots à trous : chaque trou se dévoile au doigt, un à un. Un seul écouteur
+  // par unité, par délégation — poser un écouteur sur chaque mot en ferait des
+  // milliers.
+  bloc.addEventListener('click', (evenement) => {
+    if (etat.mode !== etatSession.MODE.TROUS) {
+      return;
     }
 
-    ligne.append(titre, compte);
-    liste.appendChild(ligne);
+    const mot = evenement.target.closest('.mot[data-trou]');
+
+    if (mot && mot.closest('.replique.actif')) {
+      mot.classList.add('devoile');
+    }
   });
+}
+
+/**
+ * Renseigne le message d'absence de top.
+ *
+ * Le texte vit dans un attribut, affiché par une règle `::before` : il ne peut
+ * donc être ni sélectionné, ni copié, ni confondu avec du texte de la pièce.
+ */
+function appliquerMessagesSansTop(bloc) {
+  for (const replique of bloc.querySelectorAll('.replique[data-sans-top]')) {
+    replique.dataset.messageSansTop =
+      replique.dataset.sansTop === 'debut'
+        ? 'ouvre la scène — pas de top'
+        : 'enchaînement — pas de top';
+  }
+}
+
+// ============================================================
+// COMMANDES DE RÉPÉTITION
+// ============================================================
+
+function appliquer() {
+  rendu.appliquerPresentation($('app'), etat);
+  rendu.appliquerRevelations($('app'), etat);
+}
+
+function synchroniserCommandes() {
+  for (const pastille of $('choix-mode').children) {
+    pastille.setAttribute('aria-pressed', String(pastille.dataset.mode === etat.mode));
+  }
+
+  $('bloc-difficulte').hidden = etat.mode !== etatSession.MODE.TROUS;
+  $('curseur-difficulte').value = String(etat.difficulte);
+  $('valeur-difficulte').textContent = String(etat.difficulte);
+  $('btn-mes-scenes').setAttribute('aria-pressed', String(etat.mesScenesSeules));
+  $('btn-top-court').setAttribute('aria-pressed', String(etat.reglages.topReduit));
+}
+
+function enregistrerReglages() {
+  // Un réglage non conservé est un désagrément, pas une panne (P4). L'échec est
+  // néanmoins affiché, jamais avalé.
+  avecStockage(
+    () => stockage.ecrireReglages(etatSession.partiePersistante(etat)),
+    'bandeau-stockage',
+  );
+}
+
+/** Amène à ma réplique suivante ou précédente, en montant son unité au besoin. */
+function allerAReplique(sens) {
+  const cible = modele.repliqueVoisine(index, etat.repliqueCourante, sens);
+
+  if (cible === null) {
+    return;
+  }
+
+  etat = etatSession.allerA(etat, { replique: cible });
+
+  document
+    .querySelector(`.replique[data-id="${cible}"]`)
+    ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 // ============================================================
@@ -530,6 +650,56 @@ $('btn-retour-accueil').addEventListener('click', () => {
   montrer('ecran-accueil');
 });
 $('btn-retour-roles').addEventListener('click', () => montrer('ecran-roles'));
+
+// --- commandes de répétition ---------------------------------
+
+for (const pastille of $('choix-mode').children) {
+  pastille.addEventListener('click', () => {
+    etat = etatSession.changerMode(etat, pastille.dataset.mode);
+    appliquer();
+    synchroniserCommandes();
+    enregistrerReglages();
+  });
+}
+
+$('curseur-difficulte').addEventListener('input', (evenement) => {
+  etat = etatSession.changerDifficulte(etat, Number(evenement.target.value));
+  $('valeur-difficulte').textContent = String(etat.difficulte);
+
+  // Seuls les attributs des répliques montées changent : aucun nœud n'est
+  // reconstruit, même en glissant le curseur d'un bout à l'autre.
+  rendu.rafraichirTrous($('app'), etat);
+});
+
+$('curseur-difficulte').addEventListener('change', enregistrerReglages);
+
+$('btn-nouveau-tirage').addEventListener('click', () => {
+  etat = etatSession.nouveauTirage(etat);
+  rendu.rafraichirTrous($('app'), etat);
+  enregistrerReglages();
+});
+
+$('btn-mes-scenes').addEventListener('click', () => {
+  etat = etatSession.basculerMesScenesSeules(etat);
+  appliquer();
+  synchroniserCommandes();
+  enregistrerReglages();
+});
+
+$('btn-top-court').addEventListener('click', () => {
+  etat = etatSession.changerReglage(etat, 'topReduit', !etat.reglages.topReduit);
+  appliquer();
+  synchroniserCommandes();
+  enregistrerReglages();
+});
+
+$('btn-tout-remasquer').addEventListener('click', () => {
+  etat = etatSession.toutRemasquer(etat);
+  appliquer();
+});
+
+$('btn-top-suivant').addEventListener('click', () => allerAReplique(1));
+$('btn-top-precedent').addEventListener('click', () => allerAReplique(-1));
 
 /**
  * Journal des erreurs inattendues.

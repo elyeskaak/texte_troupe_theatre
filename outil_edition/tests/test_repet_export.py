@@ -475,6 +475,45 @@ class NomDePersonnage(unittest.TestCase):
         """Ce nom est affiché : « LE MAÎTRE » ne doit pas devenir « LE MAITRE »."""
         self.assertEqual(repet_export.nom_personnage("LE MAÎTRE."), "LE MAÎTRE")
 
+    def test_les_deux_apostrophes_donnent_le_meme_nom(self):
+        """
+        Constaté sur un texte réel : « L'AGENT DUPONT » (apostrophe droite) et
+        « L’AGENT DUPONT » (apostrophe typographique) donnaient deux rôles là où
+        il n'y en a qu'un. Choisir l'un laissait les répliques de l'autre
+        visibles, sans que rien ne le signale.
+        """
+        self.assertEqual(
+            repet_export.nom_personnage("L'AGENT DUPONT."),
+            repet_export.nom_personnage("L’AGENT DUPONT."),
+        )
+
+    def test_les_repliques_des_deux_graphies_sont_reunies(self):
+        texte = (
+            "**L'INSPECTEUR.**\nPremière.\n\n"
+            "**JAN.**\nAutre chose.\n\n"
+            "**L’INSPECTEUR.**\nSeconde.\n"
+        )
+        document = construire(texte)
+        par_nom = {p["nom"]: p for p in document["personnages"]}
+
+        self.assertIn("L'INSPECTEUR", par_nom)
+        self.assertEqual(par_nom["L'INSPECTEUR"]["repliques"], 2)
+
+    def test_la_fusion_est_signalee(self):
+        """Une fusion muette cacherait un défaut du document source."""
+        texte = "**L'AGENT.**\nUn.\n\n**L’AGENT.**\nDeux.\n"
+        document = construire(texte)
+
+        self.assertTrue(
+            any("graphies multiples" in a for a in document["avertissements"]),
+            document["avertissements"],
+        )
+
+    def test_une_graphie_unique_ne_declenche_aucun_avertissement(self):
+        document = construire("**JAN.**\nUn.\n\n**JAN.**\nDeux.\n")
+
+        self.assertFalse([a for a in document["avertissements"] if "graphies" in a])
+
     def test_distinct_de_normaliser_label(self):
         self.assertNotEqual(
             repet_export.nom_personnage("LE MAÎTRE."),
