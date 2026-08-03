@@ -377,20 +377,19 @@ const CONFIG = Object.freeze({
   CANAL_SYNCHRO: 'lecture:v1',
 
   /**
-   * Mots par page avant qu'une réplique trop longue soit coupée en
-   * plusieurs (§8.5 de ARCHITECTURE.md, pagination). Depuis la fusion des
-   * pages en un seul bloc continu (§8.5) et la taille de police désormais
-   * fixe (§8.1), une réplique n'a plus besoin de tenir seule sur l'écran
-   * pour rester confortable — seules les tirades vraiment longues
-   * bénéficient d'un arrêt intermédiaire. Retour d'usage : 45 (coupure
-   * forcée à 63, §8.5) coupait des répliques d'une soixantaine de mots qui
-   * tenaient pourtant très bien à l'écran, voisines comprises. Relevé à
-   * 100 (coupure forcée à 140). Approximation par nombre de mots, pas par
-   * hauteur réellement mesurée (aucune mesure de layout n'est faite avant
-   * montage, §8.1) : à retoucher si l'usage réel montre encore des coupures
-   * inutiles, ou à l'inverse des tirades qui débordent avant ce seuil.
+   * Part de la hauteur de fenêtre qu'une réplique seule vise à ne pas
+   * dépasser avant d'être paginée (§8.5 de ARCHITECTURE.md, révisé une
+   * cinquième fois). Remplace un nombre de mots fixe : le rendu réel
+   * (taille de police relative en `vw`, résolution, ratio d'écran) diffère
+   * forcément entre un petit écran et un vidéoprojecteur, donc un seuil en
+   * mots ne peut être juste que pour un seul gabarit d'écran à la fois.
+   * `mesurerMotsParPage` (§8.5) mesure la hauteur réellement rendue de
+   * chaque réplique dans le navigateur courant et en déduit, réplique par
+   * réplique, combien de mots par page tiennent dans cette part d'écran.
+   * 0.6 laisse de la place pour apercevoir une réplique voisine, cohérent
+   * avec le retour d'usage « voir la réplique et celle d'en dessous ».
    */
-  MOTS_PAR_PAGE: 100,
+  PART_ECRAN_CIBLE: 0.6,
 
   /**
    * Nombre de diapos avant/après la position courante affectées par le
@@ -852,9 +851,11 @@ function paginerSegments(segments, motsParPage) {
  * coupée en plusieurs pages.
  *
  * @param {object[]} elements résultat de `aplatirEnElements`
- * @param {number} motsParPage
+ * @param {Map<string, number>} motsParPageParReplique fourni par
+ *   `mesurerMotsParPage` (§8.5) : une réplique absente de la map n'est
+ *   jamais coupée (équivaut à un quota infini).
  */
-function paginerElements(elements, motsParPage) {
+function paginerElements(elements, motsParPageParReplique) {
   const resultat = [];
 
   for (const el of elements) {
@@ -863,6 +864,7 @@ function paginerElements(elements, motsParPage) {
       continue;
     }
 
+    const motsParPage = motsParPageParReplique.get(el.id) ?? Infinity;
     const segments = segmenterAvecDidascalies(el.texte, el.didascaliesInternes);
     const pages = paginerSegments(segments, motsParPage);
 
@@ -1008,6 +1010,70 @@ function construireDiapoRepliqueFusionnee(elementsDuGroupe, cast, prenoms) {
   diapo.appendChild(texte);
 
   return { diapo, ancres };
+}
+
+/**
+ * Mesure la hauteur réellement rendue de chaque réplique dans le
+ * navigateur courant, et en déduit — réplique par réplique — combien de
+ * mots par page tiennent dans `CONFIG.PART_ECRAN_CIBLE` de la fenêtre
+ * (§8.5, révision : un nombre de mots fixe ne peut pas s'adapter à la fois
+ * à un petit écran et à un vidéoprojecteur, une mesure réelle si).
+ *
+ * Monte chaque réplique seule (texte complet, non paginée), à la taille
+ * `.actif` — celle qui compte pour juger si ça déborde — dans un
+ * conteneur hors-champ mais réellement rendu (`visibility: hidden`,
+ * jamais `display: none` : sans layout, `scrollHeight` vaudrait toujours
+ * zéro). Les écritures DOM sont groupées avant les lectures de hauteur
+ * (`scrollHeight`), pour ne forcer qu'une seule mise en page du
+ * navigateur au lieu d'une par réplique (« layout thrashing »), ce qui
+ * garde ce passage — une seule fois, à l'ouverture d'une pièce — rapide
+ * même sur une pièce de plusieurs centaines de répliques.
+ *
+ * @param {object[]} elements résultat de `aplatirEnElements` (non paginé)
+ * @param {Record<string,string>} cast
+ * @returns {Map<string, number>} mots par page, indexée par id de
+ *   réplique ; absente de la map = pas besoin d'être coupée.
+ */
+function mesurerMotsParPage(elements, cast) {
+  const conteneurMesure = document.createElement('div');
+  conteneurMesure.style.position = 'fixed';
+  conteneurMesure.style.visibility = 'hidden';
+  conteneurMesure.style.top = '0';
+  conteneurMesure.style.left = '0';
+  conteneurMesure.style.width = '100vw';
+  conteneurMesure.style.fontFamily = "Georgia, 'Times New Roman', serif";
+  document.body.appendChild(conteneurMesure);
+
+  const repliques = elements.filter((el) => el.kind === 'replique');
+  const diapos = repliques.map((el) => {
+    const { diapo } = construireDiapoRepliqueFusionnee([el], cast, {});
+    diapo.classList.add('actif');
+    return diapo;
+  });
+
+  // Écritures groupées : tout monter avant de mesurer quoi que ce soit.
+  for (const diapo of diapos) {
+    conteneurMesure.appendChild(diapo);
+  }
+
+  const cible = window.innerHeight * CONFIG.PART_ECRAN_CIBLE;
+  const resultat = new Map();
+
+  // Lectures groupées : une seule mise en page pour tout le lot.
+  repliques.forEach((el, i) => {
+    const hauteur = diapos[i].scrollHeight;
+    const segments = segmenterAvecDidascalies(el.texte, el.didascaliesInternes);
+    const nombreDeMots = segments.filter((s) => s.type === 'mot').length;
+
+    if (hauteur > cible && nombreDeMots > 1) {
+      const nombrePages = Math.max(2, Math.ceil(hauteur / cible));
+      resultat.set(el.id, Math.max(1, Math.ceil(nombreDeMots / nombrePages)));
+    }
+  });
+
+  document.body.removeChild(conteneurMesure);
+
+  return resultat;
 }
 
 /**
@@ -1608,12 +1674,15 @@ if (MODE_FENETRE === 'projection') (() => {
     piece = piecePreparee;
     slug = pieceSlug(piece.piece);
 
-    // aplatir → paginer → sommaire → montage, dans cet ordre : le sommaire
-    // et le montage doivent travailler sur la liste *après* pagination
-    // (§8.5), sinon leurs positions ne correspondraient plus aux diapos
-    // réellement montées dès qu'une réplique est coupée en plusieurs pages.
+    // aplatir → mesurer → paginer → sommaire → montage, dans cet ordre : le
+    // sommaire et le montage doivent travailler sur la liste *après*
+    // pagination (§8.5), sinon leurs positions ne correspondraient plus aux
+    // diapos réellement montées dès qu'une réplique est coupée en pages.
+    // La mesure a lieu une fois, ici, avant de savoir combien de pages il y
+    // aura — c'est elle qui répond à la question, pas un nombre de mots fixe.
     const elementsBruts = aplatirEnElements(piece);
-    const elements = paginerElements(elementsBruts, CONFIG.MOTS_PAR_PAGE);
+    const motsParPageParReplique = mesurerMotsParPage(elementsBruts, cast);
+    const elements = paginerElements(elementsBruts, motsParPageParReplique);
     sommaire = calculerSommaire(elements);
     diapos = monterProjection(contenu, elements, cast, prenoms);
     construirePanneauSommaire(panneauSommaire, sommaire);

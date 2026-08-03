@@ -361,13 +361,14 @@ pouvait encore déborder du bas de l'écran, et la seule parade (`scrollIntoView
 aligné en haut) laissait le lecteur devoir faire défiler manuellement — la
 pire des solutions pour un outil pensé « aucune souris nécessaire ».
 
-`paginerElements(elements, motsParPage)` s'insère entre l'aplatissement (§5)
-et le calcul du sommaire : toute réplique de plus de `CONFIG.MOTS_PAR_PAGE`
-mots est coupée en plusieurs éléments `kind: 'replique'` logiques, un par
-page. La coupe préfère un saut de ligne (un vers) une fois 60 % du quota
-atteint — pour ne jamais trancher un vers en deux — et se force à 140 % du
-quota sinon, pour qu'une tirade en prose sans retour à la ligne ne parte pas
-en une seule page démesurée (`paginerSegments`, fonction pure, testée).
+`paginerElements(elements, motsParPageParReplique)` s'insère entre
+l'aplatissement (§5) et le calcul du sommaire : toute réplique dont le quota
+de mots par page (déterminé réplique par réplique, voir plus bas) est dépassé
+est coupée en plusieurs éléments `kind: 'replique'` logiques, un par page. La
+coupe préfère un saut de ligne (un vers) une fois 60 % du quota atteint —
+pour ne jamais trancher un vers en deux — et se force à 140 % du quota
+sinon, pour qu'une tirade en prose sans retour à la ligne ne parte pas en
+une seule page démesurée (`paginerSegments`, fonction pure, testée).
 
 **Deux révisions à l'usage sur la façon de montrer ces pages,** l'une après
 l'autre, capture à l'appui :
@@ -429,13 +430,50 @@ la taille de la réplique active est désormais **fixe** (`clamp(1.2rem,
 fusion des pages et la taille fixe ci-dessus, une réplique n'a plus besoin
 de tenir seule sur l'écran pour rester confortable — seule une tirade
 *vraiment* longue justifie encore un arrêt intermédiaire. Retour d'usage :
-`MOTS_PAR_PAGE` à 45 (coupure forcée à 63, voir plus haut) coupait des
-répliques d'une soixantaine de mots qui tenaient pourtant très bien à
-l'écran, voisines comprises. Relevé à 100 (coupure forcée à 140). Reste
-une approximation par nombre de mots, pas par hauteur réellement mesurée
-— aucune mesure de layout n'est faite avant montage (§8.1) — à retoucher
-si l'usage réel montre encore des coupures inutiles, ou à l'inverse des
-tirades qui débordent avant ce seuil.
+`MOTS_PAR_PAGE` à 45 (coupure forcée à 63) coupait des répliques d'une
+soixantaine de mots qui tenaient pourtant très bien à l'écran, voisines
+comprises. Relevé à 100 (coupure forcée à 140) — mais annoncé dès cette
+révision comme une approximation par nombre de mots, pas par hauteur
+réellement mesurée, à corriger si l'usage le demandait.
+
+**Cinquième révision : remplacer le nombre de mots fixe par une mesure
+réelle.** L'usage l'a effectivement demandé, et pour la raison prévue :
+un seuil en mots ne peut être juste que pour *un* gabarit d'écran, or le
+rendu diffère forcément entre un petit écran et un vidéoprojecteur (même
+taille en `vw` : proportionnelle à des viewports de largeurs et ratios
+différents). `CONFIG.MOTS_PAR_PAGE` (constante unique) est remplacée par
+`CONFIG.PART_ECRAN_CIBLE` (0.6, soit 60 % de la hauteur de fenêtre) et
+`mesurerMotsParPage(elements, cast)`, qui :
+
+1. monte chaque réplique **seule**, texte complet non paginé, à la taille
+   `.actif`, dans un conteneur hors-champ mais réellement rendu
+   (`visibility: hidden`, jamais `display: none` — sans layout,
+   `scrollHeight` vaudrait toujours zéro) ;
+2. mesure sa hauteur réellement rendue dans **le navigateur courant**, à
+   **la résolution courante** ;
+3. si elle dépasse `CONFIG.PART_ECRAN_CIBLE × window.innerHeight`, calcule
+   combien de pages seraient nécessaires (`Math.ceil(hauteur / cible)`) et
+   en déduit un quota de mots par page **propre à cette réplique** —
+   jamais une constante globale.
+
+`paginerElements` accepte donc désormais une `Map<idRéplique, motsParPage>`
+au lieu d'un nombre unique ; une réplique absente de la map (celles qui
+tiennent déjà) n'est jamais coupée.
+
+Pour rester rapide même sur une pièce de plusieurs centaines de répliques,
+les écritures DOM (montage de toutes les répliques dans le conteneur de
+mesure) sont groupées, puis les lectures (`scrollHeight`) le sont aussi :
+alterner écriture et lecture forcerait une mise en page du navigateur par
+réplique (« layout thrashing »), le tout groupé n'en force qu'une seule.
+Mesuré sur la pièce complète utilisée pour les tests (1206 répliques,
+44 scènes) : environ 25 ms — un aller-retour imperceptible à l'ouverture
+d'une pièce, jamais pendant la lecture elle-même.
+
+Limite assumée : `mesurerMotsParPage` s'exécute une fois, à l'ouverture de
+la pièce, avec la fenêtre à sa taille du moment. Un redimensionnement en
+cours de lecture (rotation d'écran, changement de sortie vidéo) ne
+redéclenche pas la mesure — cohérent avec le reste de l'outil, qui ne gère
+pas non plus le redimensionnement à chaud ailleurs.
 
 ### 8.6 Sommaire cliquable
 
@@ -529,7 +567,7 @@ const CONFIG = Object.freeze({
   PREFIXE_STOCKAGE: 'lecture:v1',
   DELAI_ECRITURE_MS: 500,
   CANAL_SYNCHRO: 'lecture:v1',
-  MOTS_PAR_PAGE: 100, // §8.5, relevé de 45 après retour d'usage (coupures inutiles)
+  PART_ECRAN_CIBLE: 0.6, // §8.5, remplace un ancien MOTS_PAR_PAGE fixe (45 puis 100)
   PORTEE_GRADIENT: 6, // §8.1, portée du dégradé continu autour de la position
 });
 ```
