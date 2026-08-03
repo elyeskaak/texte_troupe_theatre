@@ -294,19 +294,30 @@ en plein écran). À l'essai, ça isole trop la réplique courante : le lecteur
 suivant ne voit pas venir son tour, et le fil de la scène disparaît entre deux
 répliques. Toutes les diapos restent donc **montées dans le flux normal**
 (`#contenu-projection` défile, `overflow-y: auto`), en permanence visibles.
-Deux classes distinguent ce qui mérite l'attention :
 
-- `.actif` — la réplique courante, opacité et taille pleines ;
-- `.suivant` — la suivante, opacité et taille intermédiaires, pour que son
-  lecteur se prépare ;
-- toutes les autres restent affichées mais réduites et atténuées (opacité
-  ~0.35), pour le contexte, sans distraire de la réplique en cours.
+**Deuxième révision à l'usage :** un premier essai distinguait trois paliers
+fixes par classe — `.actif` (pleine taille), `.suivant` (taille
+intermédiaire), le reste (réduit) — mais ça donnait l'impression que deux
+répliques se disputaient l'attention, plutôt qu'une seule mise en avant
+nette. Remplacé par `appliquerGradient(diapos, position)` : un **dégradé
+continu**, calculé en JS et posé en variables CSS (`--opacite`, `--echelle`)
+sur chaque diapo, qui décroît progressivement avec la distance à la position
+courante jusqu'à un plancher au-delà de `CONFIG.PORTEE_GRADIENT` diapos (6 par
+défaut). Le CSS ne fait que lire ces variables, avec un repli (`opacity: var(
+--opacite, 0.25)`) pour les diapos jamais touchées.
 
-Changer de réplique reste une écriture de classe (deux `classList.toggle`),
-jamais un re-rendu — le principe de §6 de `outil_repetition/ARCHITECTURE.md`
-tient toujours, seule la présentation CSS change. Un seul ajout : un
-défilement doux (`scrollIntoView({block: 'center'})`) recentre la diapo
-courante à chaque navigation.
+Pour rester bon marché même sur une pièce de plusieurs milliers d'éléments,
+`appliquerGradient` n'écrit **que sur une fenêtre bornée** autour de la
+position (2 × portée + 1 diapos), jamais sur la liste entière : la fenêtre
+du tour précédent est effacée (`style.removeProperty`) avant d'appliquer la
+nouvelle, pour qu'un grand saut (clic sur une diapo lointaine, sommaire §8.6)
+ne laisse jamais une diapo agrandie par erreur loin de la position réelle.
+
+Changer de réplique reste borné et cohérent avec le principe de §6 de
+`outil_repetition/ARCHITECTURE.md` : jamais de reconstruction du DOM, une
+écriture de classe (`.actif`, ancre du défilement et sélecteur de taille de
+police, §8.2) plus un nombre constant d'écritures de style. Un défilement
+doux (`scrollIntoView`) recentre la diapo courante à chaque navigation.
 
 ### 8.2 Couleur et étiquette
 
@@ -365,10 +376,9 @@ Avec la pagination en place, `tailleActiveReplique` n'a plus besoin de
 couvrir des tirades de plusieurs centaines de mots : son écart a été resserré
 (2vw → 1.3vw selon le nombre de mots **de la page**, plafonné à 1.9rem en
 CSS) pour que la réplique en cours reste nettement lisible sans dominer
-l'écran — deuxième retour d'usage après un premier resserrement (4vw → 3vw
-en §8.1, puis celui-ci). L'effet d'échelle (`transform: scale()`) entre
-diapos a été réduit pour la même raison : il se cumulait avec l'écart de
-taille de police et exagérait la différence.
+l'écran — deuxième resserrement après un premier (4vw → 3vw en §8.1). Le
+dégradé continu de §8.1 (`appliquerGradient`) est la suite de cette même
+recherche d'un écart plus doux entre répliques.
 
 ### 8.6 Sommaire cliquable
 
@@ -463,6 +473,7 @@ const CONFIG = Object.freeze({
   DELAI_ECRITURE_MS: 500,
   CANAL_SYNCHRO: 'lecture:v1',
   MOTS_PAR_PAGE: 45, // §8.5, ajouté après retour d'usage sur les tirades longues
+  PORTEE_GRADIENT: 6, // §8.1, portée du dégradé continu autour de la position
 });
 ```
 

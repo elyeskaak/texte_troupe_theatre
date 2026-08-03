@@ -93,6 +93,17 @@
     scroll-behavior: smooth;
   }
 
+  /*
+   * Retour d'usage : trois paliers fixes (actif / suivant / reste) donnaient
+   * l'impression que deux répliques se disputaient l'attention, plutôt
+   * qu'une vraie mise en avant de la seule réplique courante. Remplacé par
+   * un dégradé continu : `--opacite` et `--echelle` sont calculées par
+   * `appliquerGradient()` (§8.1) selon la distance à la position courante,
+   * et décroissent progressivement au lieu de sauter entre deux valeurs.
+   * Une diapo hors de portée du dégradé retombe sur les valeurs par défaut
+   * ci-dessous (le cas normal : la grande majorité de la pièce, à tout
+   * instant).
+   */
   .diapo {
     flex: none;
     width: 100%;
@@ -103,19 +114,13 @@
     box-sizing: border-box;
     padding: 1.4vw 8vw;
     text-align: center;
-    opacity: 0.35;
-    /* Écart de taille volontairement discret (retour d'usage) : la
-       différence entre répliques vient surtout des clamp() de font-size
-       ci-dessous, pas de cet effet d'échelle — sinon les deux se
-       cumulaient et la réplique active paraissait démesurée. */
-    transform: scale(0.96);
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    opacity: var(--opacite, 0.25);
+    transform: scale(var(--echelle, 0.5));
+    transition: opacity 0.15s ease, transform 0.15s ease;
     cursor: pointer;
   }
 
   .diapo:hover:not(.actif) { opacity: 0.55; }
-
-  .diapo.suivant { opacity: 0.65; transform: scale(0.98); }
 
   .diapo.actif { opacity: 1; transform: scale(1); }
 
@@ -376,6 +381,13 @@ const CONFIG = Object.freeze({
    * page tienne confortablement à l'écran à la taille active habituelle.
    */
   MOTS_PAR_PAGE: 45,
+
+  /**
+   * Nombre de diapos avant/après la position courante affectées par le
+   * dégradé continu de taille/opacité (§8.1, révisé à l'usage). Au-delà,
+   * une diapo retombe sur le plancher visuel défini en CSS.
+   */
+  PORTEE_GRADIENT: 6,
 });
 
 // ============================================================
@@ -995,24 +1007,67 @@ function mettreAJourPrenoms(container, prenoms) {
 }
 
 /**
- * Change l'élément mis en avant par une écriture de classe (§8.1) : toutes
- * les diapos restent montées et visibles (défilement continu), seules
- * `.actif` (courante) et `.suivant` (pour se préparer) se distinguent par
- * l'opacité et la taille (§8, révisé pour garder plusieurs répliques à
- * l'écran à la fois).
+ * Fenêtre d'indices affectée par le dégradé au tour précédent
+ * (`{ debut, fin }`), pour l'effacer proprement au tour suivant sans
+ * parcourir toute la liste de diapos. Voir `appliquerGradient`.
+ */
+let _porteeGradient = null;
+
+/**
+ * Calcule et applique un dégradé continu de taille/opacité autour de la
+ * position courante (§8.1, révisé une seconde fois à l'usage) : la réplique
+ * courante est pleine taille, les voisines diminuent progressivement avec
+ * la distance, jusqu'à un plancher au-delà de `CONFIG.PORTEE_GRADIENT`
+ * diapos. Remplace l'ancien système à trois paliers fixes (actif / suivant
+ * / reste), qui donnait l'impression que deux répliques se disputaient
+ * l'attention plutôt qu'un vrai fondu vers la réplique courante.
+ *
+ * N'écrit que sur une fenêtre bornée autour de la position (2 × portée + 1
+ * diapos), jamais sur la liste entière : le coût reste constant même sur
+ * une pièce de plusieurs milliers d'éléments. La fenêtre précédente est
+ * effacée (`removeProperty`, retour au plancher défini en CSS) avant
+ * d'appliquer la nouvelle — sans quoi un grand saut (clic, sommaire, §8.6)
+ * laisserait une diapo lointaine agrandie par erreur.
+ */
+function appliquerGradient(diapos, position) {
+  const portee = CONFIG.PORTEE_GRADIENT;
+  const debut = Math.max(0, position - portee);
+  const fin = Math.min(diapos.length - 1, position + portee);
+
+  if (_porteeGradient) {
+    for (let i = _porteeGradient.debut; i <= _porteeGradient.fin; i += 1) {
+      if (i < debut || i > fin) {
+        diapos[i].style.removeProperty('--opacite');
+        diapos[i].style.removeProperty('--echelle');
+      }
+    }
+  }
+
+  for (let i = debut; i <= fin; i += 1) {
+    const t = Math.min(1, Math.abs(i - position) / portee);
+    diapos[i].style.setProperty('--opacite', (1 - t * 0.75).toFixed(3));
+    diapos[i].style.setProperty('--echelle', (1 - t * 0.5).toFixed(3));
+  }
+
+  _porteeGradient = { debut, fin };
+}
+
+/**
+ * Change l'élément mis en avant : dégradé continu (`appliquerGradient`) plus
+ * la classe `.actif`, qui sert d'ancre pour le défilement et de sélecteur
+ * pour la taille de police de la réplique courante (§8.2).
  *
  * Le défilement recentre la diapo courante (`block: 'center'`) — sauf si
  * elle est plus haute que la fenêtre (longue tirade) : la recentrer
  * couperait alors son début. On aligne plutôt son sommet (`block: 'start'`),
- * pour commencer la lecture au début du texte plutôt qu'au milieu. Reste
- * une limite assumée : une tirade vraiment très longue peut encore déborder
- * en bas de fenêtre malgré la réduction de taille de `tailleActiveReplique`.
+ * pour commencer la lecture au début du texte plutôt qu'au milieu.
  */
 function afficherPosition(diapos, position) {
   diapos.forEach((diapo, index) => {
     diapo.classList.toggle('actif', index === position);
-    diapo.classList.toggle('suivant', index === position + 1);
   });
+
+  appliquerGradient(diapos, position);
 
   const actif = diapos[position];
 
