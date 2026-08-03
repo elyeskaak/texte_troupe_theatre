@@ -12,24 +12,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#161011">
+<meta name="theme-color" content="#0d1117">
 <meta name="color-scheme" content="dark">
 <title>En Scène — répétition</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icone.svg">
 <style>
   :root{
-    /* Palette reprise du prototype : ocre de projecteur sur bordeaux de rideau. */
-    --scene:#161011;
-    --scene-2:#1d1516;
-    --rideau:#6b1d29;
-    --projecteur:#f0c05a;
-    --projecteur-doux:rgba(240,192,90,0.16);
-    --papier:#f3ead9;
-    --encre:#241c1a;
-    --estompe:#a4907d;
-    --trait:rgba(240,192,90,0.22);
-    --alerte:#c1543a;
+    /* Palette bleue. Les noms restent ceux du théâtre — « projecteur » pour
+       l'accent, « rideau » pour le fond chaud — parce qu'ils disent le rôle et
+       non la teinte : changer de couleur ne demande alors qu'un changement ici. */
+    --scene:#0d1117;
+    --scene-2:#161e2b;
+    --rideau:#1e3a5f;
+    --projecteur:#6db3f2;
+    --projecteur-doux:rgba(109,179,242,0.14);
+    --papier:#e6edf3;
+    --encre:#0d1117;
+    --estompe:#8b9bb0;
+    --trait:rgba(109,179,242,0.24);
+    --alerte:#e5534b;
     --rayon:14px;
 
     /* Réglable depuis les préférences, en rem pour que tout suive. */
@@ -53,7 +55,7 @@
     min-height:100dvh;
     background:
       radial-gradient(ellipse at 50% -10%, var(--projecteur-doux), transparent 55%),
-      radial-gradient(ellipse at 50% 110%, rgba(107,29,41,0.35), transparent 60%),
+      radial-gradient(ellipse at 50% 110%, rgba(30,58,95,0.45), transparent 60%),
       var(--scene);
     color:var(--papier);
     font-family:var(--sans);
@@ -106,14 +108,14 @@
   }
   .btn:active{ transform:scale(0.97); }
   .btn:disabled{ opacity:0.35; cursor:default; }
-  .btn-primaire{ background:var(--projecteur); color:#2a1c05; }
+  .btn-primaire{ background:var(--projecteur); color:#0b1a2b; }
   .btn-fantome{
     background:transparent; color:var(--papier);
-    border:1px solid rgba(243,234,217,0.28);
+    border:1px solid rgba(230,237,243,0.28);
   }
   .btn-danger{
     background:transparent; color:var(--alerte);
-    border:1px solid rgba(193,84,58,0.5);
+    border:1px solid rgba(229,83,75,0.5);
   }
   .btn-mini{ min-height:36px; padding:7px 14px; font-size:0.85rem; }
 
@@ -123,13 +125,13 @@
   .pastille{
     display:inline-flex; align-items:center; gap:7px;
     min-height:44px; padding:9px 16px; border-radius:999px;
-    border:1px solid rgba(243,234,217,0.25);
-    background:rgba(243,234,217,0.04);
+    border:1px solid rgba(230,237,243,0.25);
+    background:rgba(230,237,243,0.04);
     color:var(--papier); font-weight:500; cursor:pointer;
     transition:all .12s ease;
   }
   .pastille[aria-pressed="true"]{
-    background:var(--projecteur); color:#2a1c05;
+    background:var(--projecteur); color:#0b1a2b;
     border-color:var(--projecteur); font-weight:700;
   }
   .pastille .compte{ font-size:0.78rem; opacity:0.7; }
@@ -158,7 +160,7 @@
   .sommaire{ list-style:none; padding:0; margin:0; }
   .sommaire li{
     display:flex; justify-content:space-between; gap:10px;
-    padding:11px 2px; border-bottom:1px solid rgba(243,234,217,0.08);
+    padding:11px 2px; border-bottom:1px solid rgba(230,237,243,0.08);
   }
   .sommaire .absent{ color:var(--estompe); }
   .sommaire .compte{ color:var(--projecteur); font-size:0.8rem; }
@@ -170,8 +172,8 @@
   }
   .message[hidden]{ display:none; }
   .message.erreur{
-    background:rgba(193,84,58,0.14); border-color:rgba(193,84,58,0.5);
-    color:#f0b8aa;
+    background:rgba(229,83,75,0.14); border-color:rgba(229,83,75,0.5);
+    color:#f5b3ae;
   }
   .message.avertissement{
     background:var(--projecteur-doux); border-color:var(--trait);
@@ -191,12 +193,37 @@
 
   /* ================= ÉCRAN DE RÉPÉTITION ================= */
 
+  /* La barre était en dégradé transparent : le texte de la pièce défilait
+     dessous, lisible à travers. Elle est maintenant **opaque** et bornée par un
+     filet. Elle occupe une place franche, et rien ne passe derrière. */
   .barre{
-    position:sticky; top:calc(env(safe-area-inset-top) * -1);
-    z-index:5; padding:10px 0 12px;
-    background:linear-gradient(var(--scene) 78%, transparent);
+    position:sticky;
+    /* Compense le padding de #app, pour que le fond couvre toute la largeur et
+       remonte jusque sous l'encoche. */
+    top:0;
+    margin:calc((env(safe-area-inset-top) + 18px) * -1) -18px 14px;
+    padding:calc(env(safe-area-inset-top) + 10px) 18px 12px;
+    z-index:5;
+    background:var(--scene-2);
+    border-bottom:1px solid var(--trait);
+    box-shadow:0 6px 18px rgba(0,0,0,0.45);
   }
   .barre .rangee{ gap:7px; }
+
+  /* Ligne toujours visible : le mode courant, et le bouton qui déplie le reste.
+     Replié, le bandeau tient sur une seule ligne et laisse l'écran au texte. */
+  .barre-tete{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+  }
+  .barre-tete .surtitre{
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  #barre-contenu{ margin-top:12px; }
+  .barre[data-ouverte="0"] #barre-contenu{ display:none; }
+  #btn-barre{
+    flex:0 0 auto; min-height:38px; padding:7px 14px;
+    font-size:0.8rem; letter-spacing:0.04em;
+  }
   .pastille-mode{ min-height:38px; padding:7px 13px; font-size:0.82rem; }
 
   #curseur-difficulte{ width:100%; accent-color:var(--projecteur); min-height:44px; }
@@ -220,7 +247,7 @@
   }
   .element.texte_sans_personnage{
     margin:12px 0; padding-left:10px;
-    border-left:2px solid rgba(193,84,58,0.6);
+    border-left:2px solid rgba(229,83,75,0.6);
   }
 
   .replique{ margin:14px 0; }
@@ -284,7 +311,7 @@
 
   /* Mots à trous, révélables un à un au doigt. */
   [data-mode="trous"] .replique.actif:not(.revelee) .mot[data-trou="1"]{
-    color:transparent; background:rgba(240,192,90,0.16);
+    color:transparent; background:rgba(109,179,242,0.16);
     border-radius:3px; box-shadow:inset 0 -1px 0 var(--trait);
     cursor:pointer;
   }
@@ -293,7 +320,7 @@
      compte pas pour lui-même, mais son argument compte, et `.revelee` suffisait
      à faire pencher la balance du côté du masquage. */
   [data-mode="trous"] .replique.actif:not(.revelee) .mot[data-trou="1"].devoile{
-    color:var(--papier); background:rgba(240,192,90,0.08);
+    color:var(--papier); background:rgba(109,179,242,0.08);
   }
 
   /* Acronyme géant : les deux formes sont montées, on échange laquelle sort. */
@@ -339,7 +366,7 @@
     [data-mode="acronyme"] .replique.actif:hover .acronyme{ display:none; }
 
     [data-mode="trous"] .replique.actif:hover .mot[data-trou="1"]{
-      color:var(--papier); background:rgba(240,192,90,0.08);
+      color:var(--papier); background:rgba(109,179,242,0.08);
     }
   }
 
@@ -464,8 +491,19 @@
 
   <!-- ================= RÉPÉTITION ================= -->
   <section id="ecran-repetition">
-    <div class="barre">
-      <p class="surtitre" id="repetition-surtitre">Répétition</p>
+    <!-- Repliée par défaut : ouverte, la barre occupe 298 px, soit un tiers
+           d'écran de téléphone. On arrive donc sur le texte, et l'on déplie les
+           réglages « au besoin ». -->
+      <div class="barre" id="barre" data-ouverte="0">
+      <!-- Ligne toujours visible : où l'on est, et de quoi déplier le reste.
+           Repliée, la barre laisse tout l'écran au texte. -->
+      <div class="barre-tete">
+        <p class="surtitre" id="repetition-surtitre">Répétition</p>
+        <button type="button" id="btn-barre" class="btn btn-fantome"
+                aria-expanded="false" aria-controls="barre-contenu">Réglages</button>
+      </div>
+
+      <div id="barre-contenu">
       <div class="rangee" id="choix-mode" role="group" aria-label="Mode de masquage">
         <button type="button" class="pastille pastille-mode" data-mode="lecture">Lecture</button>
         <button type="button" class="pastille pastille-mode" data-mode="masquage">Rideau</button>
@@ -499,6 +537,15 @@
         </button>
         <button id="btn-tout-remasquer" class="btn btn-fantome btn-mini">Remasquer</button>
         <button id="btn-retour-roles" class="btn btn-fantome btn-mini">Rôles</button>
+      </div>
+
+      <!-- Enregistrement audio. Le bloc est retiré du DOM si l'appareil ne sait
+           pas enregistrer : un bouton inerte est pire que pas de bouton (P3). -->
+      <div class="rangee" id="bloc-micro" style="margin-top:10px" hidden>
+        <button id="btn-micro" class="btn btn-fantome btn-mini">● M’enregistrer</button>
+        <audio id="lecteur-micro" controls hidden style="max-width:100%"></audio>
+      </div>
+      <p class="aide" id="message-micro" hidden></p>
       </div>
     </div>
 

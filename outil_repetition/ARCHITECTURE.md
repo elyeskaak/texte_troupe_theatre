@@ -515,6 +515,31 @@ Cinq règles, toutes issues des limites réelles d'iOS (§4.3 du cahier) :
 `navigator.onLine` à `false` est fiable ; à `true` il ne prouve rien. Il sert
 donc à **éviter une tentative vouée à l'échec**, pas à garantir un succès.
 
+### 8.3 Enregistrement audio — retiré, puis remis
+
+Retiré au §15 décision 4, remis le 2026-08-03 après usage. Le raisonnement du
+retrait et son erreur sont consignés en §15.
+
+Deux décisions de conception, toutes deux dictées par le contexte d'emploi :
+
+**Rien n'est conservé.** L'enregistrement vit en mémoire, le temps de se
+réécouter, et disparaît au changement de réplique. Une minute d'audio pèse plus
+lourd que la pièce entière : le stocker saturerait le quota que §7.3 protège, et
+pour un usage qui se joue dans les secondes qui suivent.
+
+**Le type MIME est négocié, jamais supposé.** Safari ne produit pas de WebM, et
+coder `audio/webm` en dur — l'erreur la plus commune avec `MediaRecorder` — ferait
+échouer l'enregistrement sur le seul appareil qui compte ici. `voix.js` essaie
+`audio/mp4` d'abord, puis les variantes WebM, puis laisse le navigateur choisir.
+
+**Le flux micro est conservé entre deux enregistrements.** Safari affiche sa
+demande d'autorisation à chaque `getUserMedia` : la redemander à chaque réplique
+rendrait la récitation à l'aveugle impraticable.
+
+Les échecs suivent §8.2 : le bloc entier est retiré du DOM si l'appareil ne sait
+pas enregistrer, et un refus d'autorisation affiche le chemin dans les Réglages
+iOS plutôt qu'un code d'erreur.
+
 **Le repli est unique, et c'est le chemin normal de l'outil** : je récite, puis je
 touche « su » ou « à revoir ». Aucune de ces cinq situations ne demande donc de
 code supplémentaire — elles ramènent toutes à ce que P2 impose déjà de savoir
@@ -817,7 +842,7 @@ peut commencer à l'étape 3 du [plan de livraison](#14-plan-de-livraison).
 | 1 | Découpage en fichiers | **12 fichiers**, modules ES natifs, aucune étape de build | §3.1, §3.2 |
 | 2 | Exécution des tests | **`node --test`** sur les 7 modules purs, `tests.html` en complément pour le rendu | §13 |
 | 3 | Montage du DOM | ~~paresseux par unité~~ → **révisé le 2026-08-03 : montage complet**, mesures à l'appui | §6.4 |
-| 4 | Repli enregistrement audio | **retiré du périmètre** | §8.2, étape 10 |
+| 4 | Repli enregistrement audio | ~~retiré~~ → **remis le 2026-08-03**, à l'usage | §8.3 |
 
 Deux remarques sur la portée de ces choix.
 
@@ -826,13 +851,14 @@ Deux remarques sur la portée de ces choix.
 de fidélité produit par `comparaison.js`. Les décisions 1 et 2 forment un seul
 choix vu de deux côtés.
 
-**La décision 4 ne laisse aucun trou.** Le repli audio ne comblait rien : les
-cinq situations d'échec du micro (§8.2) ramènent toutes au chemin principal de
-l'outil — je récite, je touche « su » ou « à revoir » — que P2 impose de savoir
-faire sans micro de toute façon. Ce qui disparaît, c'est `MediaRecorder`, une
-gestion de blobs, un lecteur audio et leur part de quota `localStorage` ; ce qui
-reste, c'est l'app Dictaphone de l'iPhone, qui le fait mieux. À reconsidérer si
-le besoin se manifeste à l'usage, et pas avant.
+**La décision 4 a été renversée par l'usage, et mon argument était faux.**
+J'avais écrit que l'app Dictaphone de l'iPhone faisait cela mieux. C'est vrai
+pour enregistrer, et hors de propos pour répéter : en récitation à l'aveugle,
+quitter l'outil, viser un autre bouton, revenir, puis recommencer à la réplique
+suivante casse l'exercice. Ce qui compte n'est pas d'enregistrer, c'est
+d'enregistrer **sans quitter la réplique**. Le module est donc revenu (§8.3), et
+la leçon est que « une autre application le fait » n'est pas un argument quand
+c'est le passage d'une application à l'autre qui coûte.
 
 **La prochaine étape est l'étape 3 du plan** : `repet_export.py` dans
 `outil_edition`, avec ses tests — le premier maillon, et celui dont tout le reste

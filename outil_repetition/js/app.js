@@ -15,6 +15,7 @@ import * as schema from './schema.js';
 import * as modele from './modele.js';
 import * as etatSession from './etat.js';
 import * as rendu from './rendu.js';
+import * as voix from './voix.js';
 import { creerStockage, ErreurStockage, idDePiece } from './stockage.js';
 
 const $ = (id) => document.getElementById(id);
@@ -598,6 +599,10 @@ function allerAReplique(sens) {
 
   etat = etatSession.allerA(etat, { replique: cible });
 
+  // L'enregistrement appartient à la réplique qu'on vient de quitter : le garder
+  // ferait réécouter la précédente en croyant s'écouter sur la nouvelle.
+  enregistreur.oublier();
+
   document
     .querySelector(`.replique[data-id="${cible}"]`)
     ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -752,6 +757,74 @@ $('btn-tout-remasquer').addEventListener('click', () => {
 
 $('btn-top-suivant').addEventListener('click', () => allerAReplique(1));
 $('btn-top-precedent').addEventListener('click', () => allerAReplique(-1));
+
+// --- bandeau repliable ---------------------------------------
+// Replié, il tient sur une ligne et laisse tout l'écran au texte. L'état n'est
+// pas persisté : on le replie pour une session de récitation, pas pour toujours.
+$('btn-barre').addEventListener('click', () => {
+  const barre = $('barre');
+  const ouverte = barre.dataset.ouverte === '1';
+
+  barre.dataset.ouverte = ouverte ? '0' : '1';
+  $('btn-barre').textContent = ouverte ? 'Réglages' : 'Réduire';
+  $('btn-barre').setAttribute('aria-expanded', String(!ouverte));
+});
+
+// --- enregistrement audio ------------------------------------
+
+/**
+ * Enregistreur unique pour la session.
+ *
+ * Le flux micro est conservé entre deux enregistrements : Safari redemande
+ * l'autorisation à chaque `getUserMedia`, et la redemander à chaque réplique
+ * rendrait la récitation à l'aveugle impraticable.
+ */
+const enregistreur = voix.creerEnregistreur((etatMicro, details) => {
+  const bouton = $('btn-micro');
+  const lecteur = $('lecteur-micro');
+
+  if (etatMicro === 'enregistre') {
+    bouton.textContent = '■ Arrêter';
+    bouton.classList.add('btn-danger');
+    lecteur.hidden = true;
+    effacerMessageMicro();
+    return;
+  }
+
+  bouton.textContent = '● M’enregistrer';
+  bouton.classList.remove('btn-danger');
+
+  if (etatMicro === 'pret') {
+    lecteur.src = details.url;
+    lecteur.hidden = false;
+    return;
+  }
+
+  if (etatMicro !== 'inactif') {
+    afficherMessageMicro(voix.MESSAGES[etatMicro] ?? 'Le micro a échoué.');
+  }
+});
+
+function afficherMessageMicro(texte) {
+  $('message-micro').textContent = texte;
+  $('message-micro').hidden = false;
+}
+
+function effacerMessageMicro() {
+  $('message-micro').hidden = true;
+}
+
+$('btn-micro').addEventListener('click', async () => {
+  if (enregistreur.actif()) {
+    await enregistreur.arreter();
+    return;
+  }
+
+  await enregistreur.demarrer();
+});
+
+// Le micro ne s'affiche que si l'appareil sait enregistrer.
+$('bloc-micro').hidden = !voix.disponible();
 
 /**
  * Journal des erreurs inattendues.

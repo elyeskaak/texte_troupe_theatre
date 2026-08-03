@@ -385,11 +385,13 @@ Replis, dans l'ordre :
 Dans tous ces cas, le repli est **le même et il suffit** : je récite, puis je
 touche « su » ou « à revoir ». C'est déjà le chemin principal de §8.
 
-**Pas de repli par enregistrement audio** (retiré du périmètre le 2026-08-03).
-Le prompt initial en prévoyait un « pour réécoute ». Il aurait coûté
-`MediaRecorder`, une gestion de blobs, un lecteur et un quota de stockage — pour
-un usage que l'app Dictaphone de l'iPhone rend déjà, mieux, et sans rien à écrire.
-À reconsidérer seulement si le besoin se manifeste à l'usage.
+**Enregistrement audio : retiré, puis remis le 2026-08-03.** L'argument du
+retrait — « l'app Dictaphone de l'iPhone le fait mieux » — était faux. Il est
+vrai pour enregistrer, et hors de propos pour répéter : en récitation à
+l'aveugle, quitter l'outil, viser un autre bouton, revenir, puis recommencer à
+la réplique suivante casse l'exercice. Ce qui compte n'est pas d'enregistrer,
+c'est d'enregistrer **sans quitter la réplique**. Rien n'est conservé : une
+minute d'audio pèse plus lourd que la pièce entière.
 
 ---
 
