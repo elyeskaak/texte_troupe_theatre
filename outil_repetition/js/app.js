@@ -17,6 +17,7 @@ import * as etatSession from './etat.js';
 import * as rendu from './rendu.js';
 import * as voix from './voix.js';
 import { comparer } from './comparaison.js';
+import { graineDepuis, tirerPondere } from './tirage.js';
 import { creerStockage, ErreurStockage, idDePiece } from './stockage.js';
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +28,16 @@ const stockage = creerStockage();
 let piece = null;
 let index = null;
 let etat = etatSession.etatInitial();
+
+/**
+ * Progression et annotations de la session.
+ *
+ * La progression est indexée **par personnage actif** : le cahier exige que rien
+ * ne soit partagé entre deux de mes rôles. Elle est donc rechargée quand le rôle
+ * actif change (`chargerProgression`).
+ */
+let progres = {};
+let annotations = {};
 
 // ============================================================
 // MESSAGES — P3 : rien n'échoue en silence
@@ -70,7 +81,7 @@ function avecStockage(action, idMessage) {
 // NAVIGATION ENTRE ÉCRANS
 // ============================================================
 
-const ECRANS = ['ecran-accueil', 'ecran-roles', 'ecran-repetition'];
+const ECRANS = ['ecran-accueil', 'ecran-roles', 'ecran-repetition', 'ecran-bilan'];
 
 function montrer(idEcran) {
   for (const id of ECRANS) {
@@ -406,8 +417,10 @@ function commencer() {
   // aucune unité ne se monte jamais. Le texte restait vide.
   montrer('ecran-repetition');
 
+  chargerProgression();
   monterToutLeTexte();
   rendu.declarerRoleActif(etat.roleActif);
+  rendu.appliquerProgression($('app'), index, progres, annotations);
   appliquer();
   synchroniserCommandes();
 
@@ -481,11 +494,30 @@ function cablerInteractions(bloc) {
       return;
     }
 
-    // Le bouton de récitation est capté d'abord : sans cela, le clic remonterait
-    // et révélerait la réplique qu'on s'apprête justement à réciter de mémoire.
+    // Les outils sont captés d'abord : sans cela le clic remonterait et
+    // révélerait la réplique qu'on s'apprête justement à réciter de mémoire, ou
+    // dont on voulait seulement cocher le statut.
     if (evenement.target.closest('.reciter')) {
       evenement.stopPropagation();
       basculerRecitation(replique);
+      return;
+    }
+
+    if (evenement.target.closest('.statut')) {
+      evenement.stopPropagation();
+      cyclerStatut(replique.dataset.id);
+      return;
+    }
+
+    if (evenement.target.closest('.marque-page')) {
+      evenement.stopPropagation();
+      basculerMarque(replique.dataset.id);
+      return;
+    }
+
+    if (evenement.target.closest('.noter')) {
+      evenement.stopPropagation();
+      annoter(replique.dataset.id);
       return;
     }
 
@@ -656,13 +688,22 @@ function importerProgression(texte) {
 
   const resultat = avecStockage(() => stockage.importer(donnees), 'message-accueil');
 
-  if (resultat.ok) {
-    afficherMessage(
-      'message-accueil',
-      `Progression fusionnée : ${resultat.valeur.repliques} réplique(s) connues. ` +
-        'Rien n’a été écrasé.',
-      'succes',
-    );
+  if (!resultat.ok) {
+    return;
+  }
+
+  afficherMessage(
+    'message-accueil',
+    `Progression fusionnée : ${resultat.valeur.repliques} réplique(s) connues. ` +
+      'Rien n’a été écrasé.',
+    'succes',
+  );
+
+  // L'import a modifié le stockage : sans rechargement, l'écran continuerait
+  // d'afficher les statuts d'avant, et l'import paraîtrait sans effet.
+  if (index !== null) {
+    chargerProgression();
+    rendu.appliquerProgression($('app'), index, progres, annotations);
   }
 }
 
@@ -875,3 +916,402 @@ rafraichirListePieces();
 // dernière ligne du démarrage, et non la première — une erreur survenue
 // entre-temps doit le laisser affiché.
 $('bandeau-inerte').hidden = true;
+
+// ============================================================
+// PROGRESSION — étape 8
+// ============================================================
+
+/**
+ * Personnage sous lequel la progression est rangée.
+ *
+ * Le cahier exige que rien ne soit partagé entre deux de mes rôles. Quand je
+ * répète plusieurs personnages ensemble, la progression est rangée sous une clé
+ * composée : c'est ce couple-là que je travaille, et le mélanger avec les
+ * sessions à un seul rôle brouillerait les deux.
+ */
+function clePersonnage() {
+  return [...etat.roleActif].sort().join('+');
+}
+
+function chargerProgression() {
+  progres = stockage.lireProgres(etat.pieceId, clePersonnage());
+  annotations = stockage.lireAnnotations(etat.pieceId);
+}
+
+let ecritureDifferee = null;
+
+/**
+ * Écriture différée.
+ *
+ * Cocher trois statuts d'affilée ne doit pas provoquer trois écritures. Le délai
+ * vient de `CONFIG.DELAI_ECRITURE_MS`.
+ */
+function enregistrerProgression() {
+  clearTimeout(ecritureDifferee);
+
+  ecritureDifferee = setTimeout(() => {
+    avecStockage(
+      () => stockage.ecrireProgres(etat.pieceId, clePersonnage(), progres),
+      'bandeau-stockage',
+    );
+    avecStockage(
+      () => stockage.ecrireAnnotations(etat.pieceId, annotations),
+      'bandeau-stockage',
+    );
+  }, CONFIG.DELAI_ECRITURE_MS);
+}
+
+/**
+ * Écriture forcée au passage en arrière-plan.
+ *
+ * Sur iOS, `beforeunload` n'est pas fiable : c'est `visibilitychange` qui
+ * attrape la fermeture réelle, et une progression cochée dans les dernières
+ * secondes serait sinon perdue.
+ */
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'hidden' || !etat.pieceId) {
+    return;
+  }
+
+  clearTimeout(ecritureDifferee);
+
+  try {
+    stockage.ecrireProgres(etat.pieceId, clePersonnage(), progres);
+    stockage.ecrireAnnotations(etat.pieceId, annotations);
+  } catch (erreur) {
+    // Plus rien ne peut être affiché à ce stade. L'échec se verra au retour,
+    // par le bandeau de stockage.
+    console.warn('écriture en arrière-plan impossible', erreur);
+  }
+});
+
+const SUIVANT_STATUT = {
+  a_apprendre: 'en_cours',
+  en_cours: 'maitrisee',
+  maitrisee: 'a_apprendre',
+};
+
+function cyclerStatut(id, maintenant = Date.now()) {
+  const actuel = progres[id]?.statut ?? 'a_apprendre';
+  const suivant = SUIVANT_STATUT[actuel];
+
+  progres[id] = { ...progres[id], statut: suivant };
+
+  // La date de vérification n'est posée qu'en passant à « su » : c'est elle qui
+  // pondère le spot check, et la rafraîchir à chaque clic ferait remonter en tête
+  // ce qu'on vient de cocher sans l'avoir revérifié.
+  if (suivant === 'maitrisee') {
+    progres[id].verifiee_le = maintenant;
+  }
+
+  rendu.appliquerProgression($('app'), index, progres, annotations);
+  enregistrerProgression();
+}
+
+function basculerMarque(id) {
+  const note = annotations[id] ?? {};
+
+  annotations[id] = { ...note, marque: !note.marque };
+  rendu.appliquerProgression($('app'), index, progres, annotations);
+  enregistrerProgression();
+}
+
+function annoter(id) {
+  // `window.prompt` plutôt qu'un champ dans la page : c'est fruste, mais cela
+  // fonctionne au doigt sur iOS sans réclamer un clavier à positionner sous une
+  // réplique déjà masquée. À remplacer si l'usage le demande.
+  const actuel = annotations[id]?.texte ?? '';
+  const saisi = window.prompt('Note de jeu (respiration, déplacement…)', actuel);
+
+  if (saisi === null) {
+    return;
+  }
+
+  annotations[id] = { ...annotations[id], texte: saisi.trim() };
+  rendu.appliquerProgression($('app'), index, progres, annotations);
+  enregistrerProgression();
+}
+
+// ============================================================
+// BILAN ET SPOT CHECK
+// ============================================================
+
+function ouvrirBilan() {
+  const compte = modele.bilan(index, progres);
+
+  $('bilan-titre').textContent = piece.piece;
+  $('bilan-resume').textContent =
+    `${compte.maitrisee} sue(s), ${compte.en_cours} en cours, ` +
+    `${compte.a_apprendre} à apprendre — sur ${compte.total}, ` +
+    `pour ${etat.roleActif.join(' & ')}.`;
+
+  const liste = $('bilan-scenes');
+  liste.innerHTML = '';
+
+  for (const entree of index.sommaire) {
+    if (!entree.mienne) {
+      continue;
+    }
+
+    const statut = modele.statutDUnite(index, entree.unite, progres);
+    const ligne = document.createElement('li');
+
+    const gauche = document.createElement('span');
+    const puce = document.createElement('span');
+    puce.className = 'puce-statut';
+    puce.dataset.statut = statut ?? 'a_apprendre';
+    gauche.append(puce, document.createTextNode(entree.titre ?? 'Suite'));
+
+    const droite = document.createElement('span');
+    droite.className = 'compte';
+    droite.textContent = `${entree.nbMesRepliques} répl.`;
+
+    ligne.append(gauche, droite);
+    ligne.style.cursor = 'pointer';
+    ligne.addEventListener('click', () => allerAUnite(entree.unite));
+    liste.appendChild(ligne);
+  }
+
+  montrer('ecran-bilan');
+}
+
+/**
+ * Pioche une réplique parmi celles que je sais.
+ *
+ * Le tirage est **pondéré par l'ancienneté** (§10.7) : un tirage uniforme
+ * redemanderait souvent celle qu'on vient de vérifier. La graine dérive de
+ * l'horloge, parce qu'ici on veut précisément que deux spot checks diffèrent —
+ * c'est le seul endroit du projet où la reproductibilité n'est pas souhaitable.
+ */
+function spotCheck() {
+  const candidats = modele.candidatsSpotCheck(index, progres, Date.now());
+
+  if (candidats.length === 0) {
+    afficherMessage(
+      'message-bilan',
+      'Aucune réplique marquée « su » pour l’instant : le spot check n’a rien à ' +
+        'piocher. Cochez d’abord ce que vous savez.',
+      'avertissement',
+    );
+    return;
+  }
+
+  const choisie = tirerPondere(candidats, graineDepuis(String(Date.now())));
+
+  effacerMessage('message-bilan');
+  etat = etatSession.changerMode(etat, etatSession.MODE.AVEUGLE);
+  etat = etatSession.allerA(etat, { replique: choisie });
+
+  appliquer();
+  synchroniserCommandes();
+  montrer('ecran-repetition');
+
+  document
+    .querySelector(`.replique[data-id="${choisie}"]`)
+    ?.scrollIntoView({ block: 'center' });
+}
+
+// ============================================================
+// SOMMAIRE, RECHERCHE, DÉFILEMENT — étape 9
+// ============================================================
+
+function allerAUnite(idUnite) {
+  montrer('ecran-repetition');
+  etat = etatSession.allerA(etat, { unite: idUnite });
+
+  document
+    .querySelector(`.unite[data-id="${idUnite}"]`)
+    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function rechercher(fragment) {
+  const zone = $('resultats-recherche');
+  zone.innerHTML = '';
+
+  if (fragment.trim().length < 2) {
+    return;
+  }
+
+  // La recherche porte sur l'index, jamais sur le DOM : elle couvre donc la pièce
+  // entière, y compris ce que le mode courant masque.
+  const trouves = modele.chercher(index, fragment).slice(0, 30);
+
+  if (trouves.length === 0) {
+    const rien = document.createElement('p');
+    rien.className = 'aide';
+    rien.textContent = 'Rien trouvé.';
+    zone.appendChild(rien);
+    return;
+  }
+
+  for (const trouve of trouves) {
+    const carte = document.createElement('div');
+    carte.className = 'resultat';
+
+    const qui = document.createElement('div');
+    qui.className = 'qui';
+    qui.textContent = trouve.personnage;
+
+    const extrait = document.createElement('div');
+    extrait.textContent =
+      trouve.texte.length > 90 ? `${trouve.texte.slice(0, 89)}…` : trouve.texte;
+
+    carte.append(qui, extrait);
+    carte.addEventListener('click', () => {
+      document
+        .querySelector(`.replique[data-id="${trouve.id}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+
+    zone.appendChild(carte);
+  }
+}
+
+/** Défilement automatique, à vitesse réglable. */
+let defilement = null;
+
+function arreterDefilement() {
+  if (defilement !== null) {
+    cancelAnimationFrame(defilement);
+    defilement = null;
+  }
+
+  $('btn-defilement').textContent = '▶ Défiler';
+}
+
+function basculerDefilement() {
+  if (defilement !== null) {
+    arreterDefilement();
+    return;
+  }
+
+  $('btn-defilement').textContent = '■ Arrêter';
+
+  let precedent = performance.now();
+
+  const avancer = (maintenant) => {
+    const ecoule = maintenant - precedent;
+    precedent = maintenant;
+
+    // Vitesse en pixels **par seconde**, et non par cadre : sans cela le
+    // défilement irait deux fois plus vite sur un écran à 120 Hz — ce qui est
+    // exactement le cas de l'iPhone 15.
+    window.scrollBy({
+      top: (etat.reglages.vitesseDefilement * 22 * ecoule) / 1000,
+      behavior: 'instant',
+    });
+
+    const fin =
+      window.scrollY + window.innerHeight >=
+      document.documentElement.scrollHeight - 2;
+
+    if (fin) {
+      arreterDefilement();
+      return;
+    }
+
+    defilement = requestAnimationFrame(avancer);
+  };
+
+  defilement = requestAnimationFrame(avancer);
+}
+
+// ============================================================
+// ÉCRAN ALLUMÉ — Screen Wake Lock
+// ============================================================
+
+let verrouEcran = null;
+
+async function basculerVeille() {
+  if (verrouEcran !== null) {
+    await verrouEcran.release().catch(() => {});
+    verrouEcran = null;
+    $('btn-veille').setAttribute('aria-pressed', 'false');
+    return;
+  }
+
+  try {
+    verrouEcran = await navigator.wakeLock.request('screen');
+    $('btn-veille').setAttribute('aria-pressed', 'true');
+
+    // Le verrou est perdu quand l'onglet passe en arrière-plan : le bouton doit
+    // le refléter, sinon il prétendrait tenir un verrou qui n'existe plus.
+    verrouEcran.addEventListener('release', () => {
+      verrouEcran = null;
+      $('btn-veille').setAttribute('aria-pressed', 'false');
+    });
+  } catch (erreur) {
+    verrouEcran = null;
+    afficherMessage(
+      'bandeau-stockage',
+      `L’écran n’a pas pu être maintenu allumé (${erreur.message}).`,
+      'avertissement',
+    );
+  }
+}
+
+// ============================================================
+// ÉCOUTEURS DES ÉTAPES 8 ET 9
+// ============================================================
+
+// Le bouton de veille n'apparaît que si l'API existe : un bouton inerte est pire
+// que pas de bouton (P3). Safari le prend en charge depuis 16.4.
+$('btn-veille').hidden = !('wakeLock' in navigator);
+
+$('btn-sommaire').addEventListener('click', ouvrirBilan);
+$('btn-bilan').addEventListener('click', ouvrirBilan);
+$('btn-spot-check').addEventListener('click', spotCheck);
+$('btn-retour-texte').addEventListener('click', () => montrer('ecran-repetition'));
+$('btn-defilement').addEventListener('click', basculerDefilement);
+$('btn-veille').addEventListener('click', basculerVeille);
+
+$('recherche').addEventListener('input', (evenement) => {
+  rechercher(evenement.target.value);
+});
+
+$('curseur-police').addEventListener('input', (evenement) => {
+  etat = etatSession.changerReglage(
+    etat,
+    'taillePolice',
+    Number(evenement.target.value) / 100,
+  );
+  rendu.appliquerPresentation($('app'), etat);
+});
+
+$('curseur-police').addEventListener('change', enregistrerReglages);
+
+$('curseur-vitesse').addEventListener('change', (evenement) => {
+  etat = etatSession.changerReglage(
+    etat,
+    'vitesseDefilement',
+    Number(evenement.target.value),
+  );
+  enregistrerReglages();
+});
+
+$('btn-exporter-2').addEventListener('click', exporterProgression);
+$('fichier-sauvegarde-2').addEventListener('change', (evenement) =>
+  lireFichier(evenement.target, importerProgression),
+);
+
+// ============================================================
+// SERVICE WORKER
+// ============================================================
+
+/**
+ * Enregistrement du service worker.
+ *
+ * Différé après le chargement : sur une première visite, l'installation
+ * précharge quinze fichiers, et le faire pendant l'affichage retarderait
+ * l'apparition de la page.
+ *
+ * L'échec est consigné, jamais affiché : sans service worker, l'outil fonctionne
+ * exactement pareil — il exige simplement le réseau à l'ouverture.
+ */
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('./sw.js')
+      .catch((erreur) => console.warn('service worker non enregistré', erreur));
+  });
+}

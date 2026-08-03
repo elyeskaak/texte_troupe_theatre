@@ -414,6 +414,62 @@
   }
   .mot-ajoute{ color:#f0c05a; font-style:italic; opacity:0.8; }
 
+  /* ---- Progression par réplique ----
+   *
+   * Un seul bouton qui cycle, et non trois pastilles : sur 72 répliques, trois
+   * boutons chacune feraient 216 cibles à l'écran pour une information qui tient
+   * dans un symbole.
+   */
+  .statut{
+    margin-top:7px; min-height:36px; padding:5px 12px; border-radius:999px;
+    border:1px solid var(--trait); background:transparent;
+    color:var(--estompe); font:inherit; font-size:0.76rem; cursor:pointer;
+  }
+  .statut[data-statut="en_cours"]{ color:var(--projecteur); border-color:var(--projecteur); }
+  .statut[data-statut="maitrisee"]{
+    color:#a8dca8; border-color:rgba(120,180,120,0.55);
+    background:rgba(120,180,120,0.10);
+  }
+
+  /* Bandeau de couleur en tête d'unité, selon le statut le plus faible. */
+  .unite[data-statut="en_cours"] .entete-unite{ border-bottom-color:var(--projecteur); }
+  .unite[data-statut="maitrisee"] .entete-unite{ border-bottom-color:rgba(120,180,120,0.6); }
+
+  .annotation{
+    margin-top:6px; padding:6px 10px; border-left:2px solid var(--trait);
+    color:var(--projecteur); font-size:0.82rem; font-style:italic;
+  }
+  .annotation:empty{ display:none; }
+  .marque{ color:var(--projecteur); }
+  .replique.marquee{ background:rgba(109,179,242,0.06); border-radius:8px; }
+
+  .outils-replique{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .outils-replique button{
+    min-height:32px; padding:3px 9px; border-radius:999px;
+    border:1px solid rgba(230,237,243,0.2); background:transparent;
+    color:var(--estompe); font:inherit; font-size:0.72rem; cursor:pointer;
+  }
+
+  #recherche, #curseur-police, #curseur-vitesse{
+    width:100%; min-height:44px; accent-color:var(--projecteur);
+  }
+  #recherche{
+    padding:10px 13px; border:none; border-radius:10px;
+    background:var(--papier); color:var(--encre); font:inherit; font-size:0.9rem;
+  }
+  .resultat{
+    padding:9px 11px; border-radius:9px; border:1px solid var(--trait);
+    background:var(--scene); cursor:pointer; font-size:0.84rem;
+  }
+  .resultat .qui{ color:var(--projecteur); font-weight:700; font-size:0.74rem; }
+
+  .puce-statut{
+    display:inline-block; width:9px; height:9px; border-radius:50%;
+    margin-right:7px; background:var(--estompe);
+  }
+  .puce-statut[data-statut="en_cours"]{ background:var(--projecteur); }
+  .puce-statut[data-statut="maitrisee"]{ background:#a8dca8; }
+
   /* Mes scènes uniquement : les autres se replient, dépliables au doigt. */
   [data-mes-scenes="1"] .unite:not(.mienne):not(.depliee) .elements{ display:none; }
 
@@ -581,6 +637,24 @@
         <button id="btn-retour-roles" class="btn btn-fantome btn-mini">Rôles</button>
       </div>
 
+      <div class="rangee" style="margin-top:10px">
+        <button id="btn-sommaire" class="btn btn-fantome btn-mini">Sommaire</button>
+        <button id="btn-bilan" class="btn btn-fantome btn-mini">Bilan</button>
+        <button id="btn-defilement" class="btn btn-fantome btn-mini">▶ Défiler</button>
+        <button id="btn-veille" class="pastille pastille-mode" aria-pressed="false"
+                hidden>Écran allumé</button>
+      </div>
+
+      <label class="champ" for="recherche">Chercher dans la pièce</label>
+      <input id="recherche" type="search" placeholder="un mot, un fragment…"
+             autocomplete="off">
+      <div id="resultats-recherche" class="pile" style="margin-top:10px"></div>
+
+      <label class="champ" for="curseur-police">Taille du texte</label>
+      <input id="curseur-police" type="range" min="85" max="160" step="5" value="100">
+      <label class="champ" for="curseur-vitesse">Vitesse de défilement</label>
+      <input id="curseur-vitesse" type="range" min="1" max="4" step="1" value="1">
+
       <p class="aide" id="message-micro" hidden></p>
       </div>
     </div>
@@ -592,6 +666,35 @@
       <button id="btn-top-precedent" class="btn btn-fantome">← Réplique</button>
       <button id="btn-top-suivant" class="btn btn-fantome">Réplique →</button>
     </div>
+  </section>
+
+  <!-- ================= BILAN ================= -->
+  <section id="ecran-bilan">
+    <p class="surtitre">Progression</p>
+    <h1 id="bilan-titre">Bilan</h1>
+    <p class="aide" id="bilan-resume"></p>
+
+    <div class="rangee" style="margin-top:16px">
+      <button id="btn-spot-check" class="btn btn-primaire">Spot check</button>
+      <button id="btn-retour-texte" class="btn btn-fantome">Retour au texte</button>
+    </div>
+    <p class="aide">
+      Le spot check pioche une réplique parmi celles que vous savez, en
+      privilégiant celles vues le plus anciennement.
+    </p>
+
+    <label class="champ">Scène par scène</label>
+    <ul id="bilan-scenes" class="sommaire"></ul>
+
+    <label class="champ">Ma progression sur cet appareil</label>
+    <div class="rangee">
+      <button id="btn-exporter-2" class="btn btn-fantome btn-mini">Exporter</button>
+      <label class="btn btn-fantome btn-mini" for="fichier-sauvegarde-2"
+             style="display:inline-flex;align-items:center">Importer</label>
+      <input id="fichier-sauvegarde-2" type="file" accept=".json,application/json"
+             class="invisible">
+    </div>
+    <div id="message-bilan" class="message" hidden></div>
   </section>
 
 </div>

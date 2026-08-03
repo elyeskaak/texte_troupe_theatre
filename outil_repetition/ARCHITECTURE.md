@@ -818,10 +818,10 @@ Un commit par étape. Reprend le §13 du cahier, en le précisant.
 | 5 | ✅ *fait* — `modele.js`, `etat.js` + tests | 219 tests Node verts, les trois cas de top couverts |
 | 6 | ✅ *fait* — coque : `index.html`, `stockage.js`, `app.js`, manifeste, icône | 285 tests Node ; pièce vérifiée survivante au rechargement |
 | 7 | ✅ *fait* — `rendu.js` : les 7 modes en CSS, le top, le repli de scènes | éprouvé sur *La toile d'araignée*, 1196 répliques |
-| 8 | Progression, bilan, spot check, export / import | export puis import restitue à l'identique ; fusion vérifiée |
-| 9 | Confort : sommaire, recherche, marque-pages, annotations, défilement, Wake Lock | — |
-| 10 | `voix.js` et ses replis (Web Speech seul) | testé sur iPhone 15 en HTTPS **et en mode avion** |
-| 11 | `manifest`, `sw.js`, activation de GitHub Pages | ouverture hors ligne depuis l'écran d'accueil |
+| 8 | ✅ *fait* — progression, bilan, spot check, export / import | statuts vérifiés survivants au rechargement |
+| 9 | ✅ *fait* — sommaire, recherche, marque-pages, annotations, défilement, Wake Lock | éprouvé sur 1206 répliques |
+| 10 | ✅ *fait* — `voix.js`, récitation contrôlée | **reste à éprouver sur iPhone**, micro compris |
+| 11 | `manifest` ✅, `sw.js` ✅ — **activation de GitHub Pages à faire à la main** | ouverture hors ligne depuis l'écran d'accueil |
 | 12 | `README.md` du sous-projet | — |
 
 L'ordre 4 → 5 → 6 → 7 n'est pas négociable : le pur avant l'impur, la logique

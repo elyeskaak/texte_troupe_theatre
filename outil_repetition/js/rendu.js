@@ -216,8 +216,127 @@ function _monterReplique(replique, { index, etat }) {
   // comparaison. Montée d'emblée mais masquée par le CSS hors de ce mode — même
   // principe que l'acronyme, pour qu'un changement de mode ne re-rende rien.
   bloc.appendChild(_zoneControle());
+  bloc.appendChild(_outilsReplique());
 
   return bloc;
+}
+
+/**
+ * Statut d'apprentissage, marque-page et annotation.
+ *
+ * Le statut est **un seul bouton qui cycle**, et non trois pastilles : sur 72
+ * répliques, trois boutons chacune feraient 216 cibles à l'écran pour une
+ * information qui tient dans un symbole.
+ */
+function _outilsReplique() {
+  const zone = document.createElement('div');
+  zone.className = 'outils-replique';
+
+  const statut = document.createElement('button');
+  statut.type = 'button';
+  statut.className = 'statut';
+  statut.dataset.statut = 'a_apprendre';
+  statut.textContent = '○ à apprendre';
+
+  const marque = document.createElement('button');
+  marque.type = 'button';
+  marque.className = 'marque-page';
+  marque.textContent = '☆';
+  marque.title = 'Marque-page';
+
+  const note = document.createElement('button');
+  note.type = 'button';
+  note.className = 'noter';
+  note.textContent = '✎ note';
+
+  zone.append(statut, marque, note);
+
+  const annotation = document.createElement('div');
+  annotation.className = 'annotation';
+  zone.appendChild(annotation);
+
+  return zone;
+}
+
+/** Libellés des trois statuts, du moins au mieux su. */
+export const LIBELLES_STATUT = Object.freeze({
+  a_apprendre: '○ à apprendre',
+  en_cours: '◐ en cours',
+  maitrisee: '● su',
+});
+
+/**
+ * Reflète progression et annotations sur les répliques montées.
+ *
+ * Appelée après un changement de statut ou un import : elle ne reconstruit rien,
+ * elle met à jour des attributs et des textes.
+ *
+ * @param {HTMLElement} racine
+ * @param {object} index
+ * @param {Record<string, object>} progres
+ * @param {Record<string, object>} annotations
+ */
+export function appliquerProgression(racine, index, progres, annotations) {
+  for (const replique of racine.querySelectorAll('.replique.mienne')) {
+    const id = replique.dataset.id;
+    const statut = progres[id]?.statut ?? 'a_apprendre';
+    const bouton = replique.querySelector('.statut');
+
+    if (bouton) {
+      bouton.dataset.statut = statut;
+      bouton.textContent = LIBELLES_STATUT[statut] ?? LIBELLES_STATUT.a_apprendre;
+    }
+
+    const note = annotations[id];
+    const marquee = note?.marque === true;
+
+    replique.classList.toggle('marquee', marquee);
+
+    const boutonMarque = replique.querySelector('.marque-page');
+
+    if (boutonMarque) {
+      boutonMarque.textContent = marquee ? '★' : '☆';
+      boutonMarque.classList.toggle('marque', marquee);
+    }
+
+    const zone = replique.querySelector('.annotation');
+
+    if (zone) {
+      zone.textContent = note?.texte ?? '';
+    }
+  }
+
+  // Bandeau de couleur en tête d'unité : le statut le plus faible de ses
+  // répliques. Déduit, jamais stocké (§ statutDUnite dans modele.js).
+  for (const unite of racine.querySelectorAll('.unite')) {
+    const statut = _statutDeLUnite(unite, index, progres);
+
+    if (statut === null) {
+      delete unite.dataset.statut;
+    } else {
+      unite.dataset.statut = statut;
+    }
+  }
+}
+
+const ORDRE = ['a_apprendre', 'en_cours', 'maitrisee'];
+
+function _statutDeLUnite(unite, index, progres) {
+  const miennes = [...unite.querySelectorAll('.replique.mienne')];
+
+  if (miennes.length === 0) {
+    return null;
+  }
+
+  let pire = ORDRE.length - 1;
+
+  for (const replique of miennes) {
+    const rang = ORDRE.indexOf(progres[replique.dataset.id]?.statut ?? 'a_apprendre');
+
+    pire = Math.min(pire, rang === -1 ? 0 : rang);
+  }
+
+  return ORDRE[pire];
 }
 
 function _zoneControle() {
