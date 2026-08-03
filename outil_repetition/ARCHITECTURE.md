@@ -585,6 +585,31 @@ Score = `correct / mots attendus`, arrondi. Les mots en trop pèsent sur le
 détail affiché, pas sur le score : réciter juste en ajoutant un « eh bien » n'est
 pas une faute de mémoire.
 
+### 9.1 Trois retraits décidés à l'usage
+
+Le **défilement automatique** et le **Wake Lock** étaient au cahier des charges,
+ont été implémentés, puis retirés après essai sur iPhone.
+
+Le défilement ne servait pas : on répète en s'arrêtant, en revenant, en butant.
+Un texte qui avance seul convient à un prompteur, pas à un travail de mémoire.
+Quant au Wake Lock, son bouton n'expliquait rien de ce qu'il faisait, et son effet
+ne se remarque que par son absence — un réglage dont personne ne comprend
+l'utilité est à supprimer, non à documenter.
+
+Le réglage `vitesseDefilement` est parti avec eux, de l'état comme de
+`config.js` : une constante sans emploi finit par être reprise par erreur.
+
+Les **descriptions de mode** sont parties pour une autre raison. Elles répondaient
+à une vraie question — « je ne comprends pas le test du top » — mais une phrase
+sous les pastilles coûtait plus de place qu'elle n'apportait, sur le seul écran
+qui compte. Des **en-têtes de groupe** les remplacent : « Modes de répétition »,
+« Affichage », « Progression ». Nommer une catégorie situe un bouton ; expliquer
+chaque bouton encombre. La barre dépliée passe de 600 à 510 px.
+
+Les mentions du Wake Lock subsistant en §1 (P3) et §11 restent justes : elles
+énoncent la règle « une capacité absente retire son bouton », dont il était
+l'exemple.
+
 ---
 
 ## 10. Problèmes délicats et leur résolution
