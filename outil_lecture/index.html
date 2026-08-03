@@ -57,9 +57,13 @@
   }
 
   /* ------------------------------------------------------------
-     Rendu projeté (§8 de ARCHITECTURE.md). Une diapo par élément de
-     la liste plate, montées une fois, une seule visible à la fois
-     via .actif (§8.1) — jamais de re-rendu au changement de position.
+     Rendu projeté (§8 de ARCHITECTURE.md, révisé à l'usage). Une diapo par
+     élément de la liste plate, montées une fois dans le flux normal (pas de
+     positionnement absolu) : plusieurs répliques restent visibles à la fois
+     — celle en cours en grand, les voisines réduites et atténuées — pour
+     que le lecteur suivant se prépare et que le sens général reste lisible.
+     Changer de position reste une écriture de classe (.actif / .suivant),
+     complétée d'un défilement vers l'élément courant : jamais de re-rendu.
      ------------------------------------------------------------ */
   :root {
     --fond-projection: #0b0b0e;
@@ -79,42 +83,60 @@
 
   #ecran-projection.visible { display: flex; }
 
-  #contenu-projection { flex: 1; position: relative; }
+  #contenu-projection {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 8vh 0;
+    scroll-behavior: smooth;
+  }
 
   .diapo {
-    display: none;
-    position: absolute;
-    inset: 0;
+    flex: none;
+    width: 100%;
+    display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    padding: 4vw 8vw;
+    padding: 1.4vw 8vw;
     text-align: center;
+    opacity: 0.35;
+    transform: scale(0.88);
+    transition: opacity 0.2s ease, transform 0.2s ease;
   }
 
-  .diapo.actif { display: flex; }
+  .diapo.suivant { opacity: 0.65; transform: scale(0.94); }
+
+  .diapo.actif { opacity: 1; transform: scale(1); }
 
   .diapo.kind-scene {
-    font-size: 3.6vw;
+    font-size: 2.2vw;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--attenue);
   }
 
+  .diapo.actif.kind-scene { font-size: 3vw; }
+
   .diapo.kind-lieu,
   .diapo.kind-didascalie {
     font-style: italic;
     color: var(--attenue);
-    font-size: 2.6vw;
+    font-size: 1.6vw;
     max-width: 80%;
   }
 
+  .diapo.actif.kind-lieu,
+  .diapo.actif.kind-didascalie { font-size: 2.2vw; }
+
   .diapo.kind-texte-sans-personnage {
-    font-size: 2.4vw;
+    font-size: 1.6vw;
     color: #e0c341;
     border: 0.15vw dashed #e0c341;
-    padding: 2vw 4vw;
+    padding: 1.2vw 4vw;
     border-radius: 0.6vw;
     max-width: 80%;
   }
@@ -129,28 +151,34 @@
   }
 
   .diapo.kind-replique .qui {
-    font-size: 1.8vw;
+    font-size: 1vw;
     font-weight: bold;
     padding: 0.3em 0.9em;
     border-radius: 999px;
-    margin-bottom: 0.6em;
+    margin-bottom: 0.5em;
   }
 
+  .diapo.actif.kind-replique .qui { font-size: 1.8vw; }
+
   .diapo.kind-replique .personnage {
-    font-size: 1.3vw;
+    font-size: 0.8vw;
     color: var(--attenue);
-    margin-bottom: 0.8em;
+    margin-bottom: 0.5em;
     text-transform: uppercase;
     letter-spacing: 0.06em;
   }
 
+  .diapo.actif.kind-replique .personnage { font-size: 1.3vw; margin-bottom: 0.8em; }
+
   .diapo.kind-replique .texte {
-    font-size: 4.2vw;
+    font-size: 1.8vw;
     line-height: 1.35;
     max-width: 90%;
     border-left: 0.4vw solid var(--couleur, #555);
     padding-left: 1.2vw;
   }
+
+  .diapo.actif.kind-replique .texte { font-size: 4vw; }
 
   .didascalie-interne {
     font-style: italic;
@@ -772,11 +800,24 @@ function mettreAJourPrenoms(container, prenoms) {
   }
 }
 
-/** Change l'élément visible par une seule écriture de classe (§8.1). */
+/**
+ * Change l'élément mis en avant par une écriture de classe (§8.1) : toutes
+ * les diapos restent montées et visibles (défilement continu), seules
+ * `.actif` (courante) et `.suivant` (pour se préparer) se distinguent par
+ * l'opacité et la taille (§8, révisé pour garder plusieurs répliques à
+ * l'écran à la fois). Un défilement doux recentre la diapo courante.
+ */
 function afficherPosition(diapos, position) {
   diapos.forEach((diapo, index) => {
     diapo.classList.toggle('actif', index === position);
+    diapo.classList.toggle('suivant', index === position + 1);
   });
+
+  const actif = diapos[position];
+
+  if (actif && actif.scrollIntoView) {
+    actif.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
 }
 
 function texteProgressionScene(sommaire, position) {
@@ -978,6 +1019,12 @@ function lire(cle) {
 // ============================================================
 
 function demarrerFenetreControle() {
+  // Bug corrigé : le HTML porte `hidden` sur #ecran-controle pour que la
+  // fenêtre de projection (chargée sans `?fenetre=controle`) ne l'affiche
+  // jamais. Sans cette ligne, l'attribut reste posé pour toujours et
+  // l'écran de contrôle apparaît vide, même en mode contrôle.
+  document.getElementById('ecran-controle').hidden = false;
+
   const champs = document.getElementById('controle-champs');
   const rappel = document.getElementById('controle-rappel');
   const erreurControle = document.getElementById('controle-erreur');

@@ -282,13 +282,31 @@ d'un nom.
 ### 8.1 Montage
 
 La liste plate (§5) est longue mais une pièce de théâtre reste de l'ordre de
-quelques centaines d'éléments, pas des dizaines de milliers de répliques
-individuelles comme dans `outil_repetition` (qui gère aussi les mots à trous,
-mot par mot). **Pas de montage paresseux ici** : le DOM entier est monté une
-fois à l'import, cohérent avec P3 (zéro complexité qui n'est pas déjà exigée
-par l'usage réel). Seul l'élément courant reçoit une classe `.actif` qui
-pilote sa mise en évidence — changer de réplique est une écriture de classe,
-jamais un re-rendu, même principe que §6 de `outil_repetition/ARCHITECTURE.md`.
+quelques centaines à quelques milliers d'éléments, pas des dizaines de
+milliers de répliques individuelles comme dans `outil_repetition` (qui gère
+aussi les mots à trous, mot par mot). **Pas de montage paresseux ici** : le
+DOM entier est monté une fois à l'import, cohérent avec P3 (zéro complexité
+qui n'est pas déjà exigée par l'usage réel).
+
+**Révision à l'usage (première pièce réelle projetée) :** la version initiale
+n'affichait qu'une diapo à la fois (`display: none` sauf `.actif`, positionnée
+en plein écran). À l'essai, ça isole trop la réplique courante : le lecteur
+suivant ne voit pas venir son tour, et le fil de la scène disparaît entre deux
+répliques. Toutes les diapos restent donc **montées dans le flux normal**
+(`#contenu-projection` défile, `overflow-y: auto`), en permanence visibles.
+Deux classes distinguent ce qui mérite l'attention :
+
+- `.actif` — la réplique courante, opacité et taille pleines ;
+- `.suivant` — la suivante, opacité et taille intermédiaires, pour que son
+  lecteur se prépare ;
+- toutes les autres restent affichées mais réduites et atténuées (opacité
+  ~0.35), pour le contexte, sans distraire de la réplique en cours.
+
+Changer de réplique reste une écriture de classe (deux `classList.toggle`),
+jamais un re-rendu — le principe de §6 de `outil_repetition/ARCHITECTURE.md`
+tient toujours, seule la présentation CSS change. Un seul ajout : un
+défilement doux (`scrollIntoView({block: 'center'})`) recentre la diapo
+courante à chaque navigation.
 
 ### 8.2 Couleur et étiquette
 
