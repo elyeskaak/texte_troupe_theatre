@@ -524,7 +524,29 @@ didascalie, ou une réplique en tête de scène, n'ont pas de top : afficher un
 encadré vide, ou le top d'avant, induirait en erreur en répétition. L'outil
 affiche `enchaînement — pas de top`, ce qui est une information utile.
 
-`modele.tops` est calculé une fois à l'indexation, en même temps que le reste.
+Les deux premières lignes du tableau se contredisent en apparence avec la
+troisième — une didascalie *peut* être un top, mais deux de mes répliques
+séparées par une didascalie n'en ont pas. Une règle unique les réconcilie, et
+c'est celle qu'implémente `modele.js` :
+
+1. chercher la dernière **réplique** avant la mienne, en traversant les
+   didascalies ;
+2. si c'est une des miennes → `ENCHAINEMENT`. C'est moi qui parlais juste
+   avant : il n'y a pas de signal à attendre ;
+3. sinon, le top est le premier élément **signalant** rencontré en remontant ;
+4. s'il n'y a rien de signalant avant → `DEBUT`.
+
+**Un `lieu` n'est jamais un top.** C'est la seule subtilité de la règle, et elle
+a été trouvée en indexant une pièce réelle : `*Un salon. Le soir tombe.*` se
+retrouvait top de la première réplique de la scène. Or un lieu est un décor, pas
+un événement — on ne peut pas attendre qu'il se produise pour parler. Le
+`REPET.json` en fait justement un type distinct de `didascalie`, et l'exclure ici
+rend cette distinction utile. Une réplique ouvrant une scène derrière une
+indication de lieu relève donc du cas 4 : elle ouvre la scène, ce qui est la
+vérité.
+
+`modele.tops` est calculé une fois à l'indexation, en même temps que le reste, et
+seulement pour **mes** répliques : celles des autres n'ont pas de top à afficher.
 
 ### 10.2 Identité d'une réplique à travers une réédition
 
@@ -712,7 +734,7 @@ Un commit par étape. Reprend le §13 du cahier, en le précisant.
 | 2 | ✅ *fait* — ce document, validé | relecture |
 | 3 | ✅ *fait* — `repet_export.py` dans `outil_edition` + tests | 610 tests Python verts |
 | 4 | ✅ *fait* — `config.js`, `schema.js`, `texte.js`, `comparaison.js`, `tirage.js` | 119 tests Node verts, pureté et contrat compris |
-| 5 | `modele.js`, `etat.js` + tests | les trois cas de top couverts |
+| 5 | ✅ *fait* — `modele.js`, `etat.js` + tests | 219 tests Node verts, les trois cas de top couverts |
 | 6 | Coque : `index.html`, chargement d'une pièce, `stockage.js`, choix des rôles | une pièce chargée survit à la fermeture de Safari |
 | 7 | `rendu.js` : les 6 modes en CSS, le top, le repli de scènes, montage paresseux | usage réel sur iPhone 15 |
 | 8 | Progression, bilan, spot check, export / import | export puis import restitue à l'identique ; fusion vérifiée |

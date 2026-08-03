@@ -24,6 +24,7 @@ import { repliques, valider } from '../js/schema.js';
 import { CONFIG } from '../js/config.js';
 import { comparer } from '../js/comparaison.js';
 import { mots } from '../js/texte.js';
+import { indexer, MOTIF_SANS_TOP, TOP } from '../js/modele.js';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 
@@ -124,6 +125,62 @@ describe('les didascalies internes désignent le bon mot', () => {
     assert.ok(!avecJeu.texte.includes('se lève'));
     assert.equal(avecJeu.didascalies_internes[0].texte, 'il se lève');
     assert.equal(avecJeu.didascalies_internes[0].avant_mot, 4);
+  });
+});
+
+describe('indexer une vraie pièce', () => {
+  const index = indexer(EXEMPLE, ['CLARISSA']);
+
+  test('mes unités sont reconnues', () => {
+    // CLARISSA parle dans les trois unités de la pièce d'essai.
+    assert.equal(index.unites.filter((u) => u.mienne).length, 3);
+    assert.equal(index.mesRepliques.length, 3);
+  });
+
+  test('le sommaire couvre toute la pièce', () => {
+    assert.equal(index.sommaire.length, EXEMPLE.unites.length);
+    assert.equal(index.sommaire[0].titre, 'SCÈNE 1');
+    // L'unité ouverte par un `***` n'a pas de titre à afficher.
+    assert.equal(index.sommaire[1].titre, null);
+  });
+
+  test('chaque réplique à moi a un top calculé', () => {
+    for (const id of index.mesRepliques) {
+      assert.ok(index.tops.has(id), `pas de top pour ${id}`);
+    }
+  });
+
+  test('CLARISSA ouvre les trois unités : aucun top nulle part', () => {
+    // Y compris la première, dont la scène ouvre sur une indication de lieu :
+    // un décor n'est pas un signal, elle ouvre bien la scène.
+    for (const id of index.mesRepliques) {
+      const top = index.tops.get(id);
+
+      assert.equal(top.type, TOP.AUCUN, id);
+      assert.equal(top.motif, MOTIF_SANS_TOP.DEBUT, id);
+    }
+  });
+
+  test('en jouant SIR ROWLAND, le top est la réplique de CLARISSA', () => {
+    const autre = indexer(EXEMPLE, ['SIR ROWLAND']);
+    const premiere = autre.mesRepliques[0];
+    const top = autre.tops.get(premiere);
+
+    assert.equal(top.type, TOP.REPLIQUE);
+    assert.equal(top.personnage, 'CLARISSA');
+  });
+
+  test('en jouant les deux rôles, plus aucun top ne subsiste', () => {
+    // La pièce d'essai n'a que deux personnages : si je les joue tous les deux,
+    // il n'y a plus personne pour me donner la réplique.
+    const deux = indexer(EXEMPLE, ['CLARISSA', 'SIR ROWLAND']);
+    const motifs = deux.mesRepliques.map((id) => deux.tops.get(id).motif);
+
+    assert.ok(motifs.includes(MOTIF_SANS_TOP.ENCHAINEMENT), motifs.join(', '));
+    assert.ok(
+      deux.mesRepliques.every((id) => deux.tops.get(id).type === TOP.AUCUN),
+      'un top subsiste alors que je joue tous les rôles',
+    );
   });
 });
 

@@ -29,6 +29,8 @@ const MODULES_PURS = [
   'texte.js',
   'comparaison.js',
   'tirage.js',
+  'modele.js',
+  'etat.js',
 ];
 
 /**
