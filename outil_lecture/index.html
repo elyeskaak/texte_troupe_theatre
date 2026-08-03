@@ -378,10 +378,19 @@ const CONFIG = Object.freeze({
 
   /**
    * Mots par page avant qu'une réplique trop longue soit coupée en
-   * plusieurs (§8.5 de ARCHITECTURE.md, pagination). Choisi pour qu'une
-   * page tienne confortablement à l'écran à la taille active habituelle.
+   * plusieurs (§8.5 de ARCHITECTURE.md, pagination). Depuis la fusion des
+   * pages en un seul bloc continu (§8.5) et la taille de police désormais
+   * fixe (§8.1), une réplique n'a plus besoin de tenir seule sur l'écran
+   * pour rester confortable — seules les tirades vraiment longues
+   * bénéficient d'un arrêt intermédiaire. Retour d'usage : 45 (coupure
+   * forcée à 63, §8.5) coupait des répliques d'une soixantaine de mots qui
+   * tenaient pourtant très bien à l'écran, voisines comprises. Relevé à
+   * 100 (coupure forcée à 140). Approximation par nombre de mots, pas par
+   * hauteur réellement mesurée (aucune mesure de layout n'est faite avant
+   * montage, §8.1) : à retoucher si l'usage réel montre encore des coupures
+   * inutiles, ou à l'inverse des tirades qui débordent avant ce seuil.
    */
-  MOTS_PAR_PAGE: 45,
+  MOTS_PAR_PAGE: 100,
 
   /**
    * Nombre de diapos avant/après la position courante affectées par le

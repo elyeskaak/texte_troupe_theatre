@@ -425,6 +425,18 @@ aucune raison d'influencer sa taille. `tailleActiveReplique` est supprimée ;
 la taille de la réplique active est désormais **fixe** (`clamp(1.2rem,
 2.4vw, 2.2rem)`), qu'elle fasse 3 mots ou 300.
 
+**Quatrième révision, sur le seuil de pagination lui-même :** avec la
+fusion des pages et la taille fixe ci-dessus, une réplique n'a plus besoin
+de tenir seule sur l'écran pour rester confortable — seule une tirade
+*vraiment* longue justifie encore un arrêt intermédiaire. Retour d'usage :
+`MOTS_PAR_PAGE` à 45 (coupure forcée à 63, voir plus haut) coupait des
+répliques d'une soixantaine de mots qui tenaient pourtant très bien à
+l'écran, voisines comprises. Relevé à 100 (coupure forcée à 140). Reste
+une approximation par nombre de mots, pas par hauteur réellement mesurée
+— aucune mesure de layout n'est faite avant montage (§8.1) — à retoucher
+si l'usage réel montre encore des coupures inutiles, ou à l'inverse des
+tirades qui débordent avant ce seuil.
+
 ### 8.6 Sommaire cliquable
 
 **Révision à l'usage :** avancer réplique par réplique jusqu'à un point
@@ -517,7 +529,7 @@ const CONFIG = Object.freeze({
   PREFIXE_STOCKAGE: 'lecture:v1',
   DELAI_ECRITURE_MS: 500,
   CANAL_SYNCHRO: 'lecture:v1',
-  MOTS_PAR_PAGE: 45, // §8.5, ajouté après retour d'usage sur les tirades longues
+  MOTS_PAR_PAGE: 100, // §8.5, relevé de 45 après retour d'usage (coupures inutiles)
   PORTEE_GRADIENT: 6, // §8.1, portée du dégradé continu autour de la position
 });
 ```
