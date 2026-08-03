@@ -311,9 +311,17 @@ courante à chaque navigation.
 ### 8.2 Couleur et étiquette
 
 Palette fixe de 10 couleurs (§12), indexée par slot, jamais par prénom : une
-règle CSS `[data-slot="H1"] { --couleur: … }` habille la réplique. Le prénom
-(ou le nom brut du slot) est injecté dans un `<span class="qui">`, mis à jour
-par la synchro de contrôle (§7.2) sans toucher au reste du DOM.
+règle CSS `[data-slot="H1"] { --couleur: … }` habille la réplique. L'étiquette
+(`etiquetteSlot(slot, prenoms)`, fonction pure) est injectée dans un
+`<span class="qui">`, mis à jour par la synchro de contrôle (§7.2) sans
+toucher au reste du DOM.
+
+**Révision à l'usage :** l'étiquette affichait le prénom *à la place* du
+slot une fois saisi (« Émile » seul). Un lecteur qui ne joue le rôle actif
+qu'occasionnellement perdait alors le repère fixe (couleur + H1-H5/F1-F5)
+qui lui permet de reconnaître ses répliques d'un coup d'œil. L'étiquette
+affiche désormais toujours les deux : « H1 » sans prénom, « H1 — Émile »
+avec.
 
 ### 8.3 Didascalies internes
 
@@ -328,17 +336,75 @@ l'absence de suite de tests formelle (§2.2).
 de `calculerSommaire` (§5). Discrète, en pied de fenêtre, jamais superposée au
 texte en cours.
 
+### 8.5 Pagination des longues tirades
+
+**Révision à l'usage :** une tirade longue, même réduite en taille (§8.1),
+pouvait encore déborder du bas de l'écran, et la seule parade (`scrollIntoView`
+aligné en haut) laissait le lecteur devoir faire défiler manuellement — la
+pire des solutions pour un outil pensé « aucune souris nécessaire ».
+
+`paginerElements(elements, motsParPage)` s'insère entre l'aplatissement (§5)
+et le calcul du sommaire : toute réplique de plus de `CONFIG.MOTS_PAR_PAGE`
+mots est coupée en plusieurs éléments `kind: 'replique'` indépendants, chacun
+devenant sa propre diapo navigable (page 1/4, 2/4, …), affichée en
+complément du nom du personnage. La coupe préfère un saut de ligne (un vers)
+une fois 60 % du quota atteint — pour ne jamais trancher un vers en deux —
+et se force à 140 % du quota sinon, pour qu'une tirade en prose sans retour
+à la ligne ne parte pas en une seule page démesurée (`paginerSegments`,
+fonction pure, testée).
+
+**Point d'ordre critique :** la pagination doit s'exécuter *avant*
+`calculerSommaire` et le montage, jamais après — sans quoi les positions du
+sommaire (§8.6) et les indices `data-index` des diapos ne correspondraient
+plus à la même liste, et cliquer une scène sauterait au mauvais endroit dès
+qu'une réplique précédente aurait été coupée en plusieurs pages. Le pipeline
+est donc figé dans cet ordre : `aplatirEnElements` → `paginerElements` →
+`calculerSommaire` → `monterProjection`.
+
+Avec la pagination en place, `tailleActiveReplique` n'a plus besoin de
+couvrir des tirades de plusieurs centaines de mots : son écart a été resserré
+(2vw → 1.3vw selon le nombre de mots **de la page**, plafonné à 1.9rem en
+CSS) pour que la réplique en cours reste nettement lisible sans dominer
+l'écran — deuxième retour d'usage après un premier resserrement (4vw → 3vw
+en §8.1, puis celui-ci). L'effet d'échelle (`transform: scale()`) entre
+diapos a été réduit pour la même raison : il se cumulait avec l'écart de
+taille de police et exagérait la différence.
+
+### 8.6 Sommaire cliquable
+
+**Révision à l'usage :** avancer réplique par réplique jusqu'à un point
+lointain de la pièce était trop lent en répétition. Deux ajouts, tous deux
+en complément du clavier, jamais en remplacement (§9) :
+
+- cliquer n'importe quelle diapo y saute directement (délégation d'un seul
+  écouteur sur `#contenu-projection`, pas un écouteur par diapo) ;
+- un panneau plein écran (`#panneau-sommaire`, touche `S` ou bouton dédié)
+  liste les entrées de `calculerSommaire` sous forme de boutons cliquables,
+  chacun portant sa position en `data-position` ; un clic y saute et referme
+  le panneau.
+
+Ceci relâche le principe initial « aucune interface de contrôle sur la
+fenêtre de projection » (voir le prompt d'origine) : en usage réel, la
+personne qui navigue regarde cet écran, pas un deuxième — lui refuser une
+aide à la navigation directement là où elle regarde n'aurait servi qu'une
+pureté de principe, pas l'usage.
+
 ---
 
 ## 9. Navigation
 
-Clavier uniquement sur la fenêtre de projection, aucune souris nécessaire :
+Clavier en usage principal sur la fenêtre de projection, complété par la
+souris pour les sauts longs (§8.6, révision à l'usage) :
 
-| Touche | Effet |
+| Entrée | Effet |
 |---|---|
 | `→` | élément suivant dans la liste plate |
 | `←` | élément précédent |
 | `F` | plein écran (`requestFullscreen`), utile si le clic initial est requis par le navigateur |
+| `S` | ouvre/ferme le panneau de sommaire (§8.6) |
+| `Échap` | ferme le panneau de sommaire |
+| clic sur une diapo | saute directement à cette diapo (§8.6) |
+| clic sur une entrée du sommaire | saute à cette scène, referme le panneau |
 
 Les éléments `kind: 'scene'` sont traversés comme les autres (ils s'affichent
 brièvement en en-tête, §5) : la navigation reste un simple décalage d'index,
@@ -396,6 +462,7 @@ const CONFIG = Object.freeze({
   PREFIXE_STOCKAGE: 'lecture:v1',
   DELAI_ECRITURE_MS: 500,
   CANAL_SYNCHRO: 'lecture:v1',
+  MOTS_PAR_PAGE: 45, // §8.5, ajouté après retour d'usage sur les tirades longues
 });
 ```
 

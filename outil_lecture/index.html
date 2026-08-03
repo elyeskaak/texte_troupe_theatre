@@ -104,11 +104,18 @@
     padding: 1.4vw 8vw;
     text-align: center;
     opacity: 0.35;
-    transform: scale(0.88);
+    /* Écart de taille volontairement discret (retour d'usage) : la
+       différence entre répliques vient surtout des clamp() de font-size
+       ci-dessous, pas de cet effet d'échelle — sinon les deux se
+       cumulaient et la réplique active paraissait démesurée. */
+    transform: scale(0.96);
     transition: opacity 0.2s ease, transform 0.2s ease;
+    cursor: pointer;
   }
 
-  .diapo.suivant { opacity: 0.65; transform: scale(0.94); }
+  .diapo:hover:not(.actif) { opacity: 0.55; }
+
+  .diapo.suivant { opacity: 0.65; transform: scale(0.98); }
 
   .diapo.actif { opacity: 1; transform: scale(1); }
 
@@ -182,11 +189,13 @@
    * Taille de la réplique en cours : bornée en pixels réels (clamp) pour ne
    * jamais devenir démesurée sur un grand écran, et pilotée par
    * `--taille-active` — calculée une fois au montage selon le nombre de
-   * mots (§8.1) — pour qu'une longue tirade se réduise automatiquement au
-   * lieu de déborder de l'écran.
+   * mots de la page (§8.1, §8.5) — pour qu'une page plus dense se réduise
+   * légèrement. Écart resserré avec le texte non actif (1.6rem max ci-
+   * dessus, 1.9rem ici) : la pagination (§8.5) évite déjà les tirades
+   * démesurées, la taille n'a donc plus besoin de compenser à elle seule.
    */
   .diapo.actif.kind-replique .texte {
-    font-size: clamp(1.1rem, var(--taille-active, 3vw), 2.6rem);
+    font-size: clamp(1.1rem, var(--taille-active, 2vw), 1.9rem);
   }
 
   .didascalie-interne {
@@ -203,8 +212,54 @@
     color: var(--attenue);
     border-top: 1px solid #222;
     display: flex;
+    align-items: center;
+    gap: 0.6em;
     justify-content: space-between;
   }
+
+  #bouton-sommaire {
+    background: none;
+    border: 1px solid #333;
+    color: var(--attenue);
+    border-radius: 0.3vw;
+    cursor: pointer;
+    font-size: 0.9vw;
+    line-height: 1;
+    padding: 0.2em 0.5em;
+  }
+
+  /* Sommaire cliquable des actes/scènes (§9, retour d'usage) : recouvre la
+     projection en overlay, jamais monté par défaut pour ne pas distraire
+     pendant la lecture. */
+  #panneau-sommaire {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 8, 11, 0.97);
+    overflow-y: auto;
+    padding: 3vh 4vw;
+    z-index: 5;
+  }
+
+  #panneau-sommaire.visible { display: block; }
+
+  .item-sommaire {
+    display: block;
+    width: 100%;
+    max-width: 40rem;
+    margin: 0 auto;
+    text-align: left;
+    background: none;
+    border: none;
+    border-bottom: 1px solid #222;
+    color: var(--texte-clair);
+    font-family: Georgia, 'Times New Roman', serif;
+    padding: 0.9rem 0.4rem;
+    font-size: 1.2rem;
+    cursor: pointer;
+  }
+
+  .item-sommaire:hover { background: rgba(255, 255, 255, 0.08); }
 </style>
 </head>
 <body>
@@ -258,9 +313,11 @@
 
 <div id="ecran-projection">
   <div id="contenu-projection"></div>
+  <div id="panneau-sommaire"></div>
   <div id="barre-progression">
     <span id="progression-scene"></span>
     <span id="progression-position"></span>
+    <button id="bouton-sommaire" type="button" title="Aller à une scène (touche S)">☰</button>
     <button id="bouton-reouvrir-controle" type="button" title="Ouvrir/rouvrir la fenêtre de contrôle">⛭</button>
   </div>
 </div>
@@ -312,6 +369,13 @@ const CONFIG = Object.freeze({
 
   /** Nom du canal BroadcastChannel entre projection et contrôle. */
   CANAL_SYNCHRO: 'lecture:v1',
+
+  /**
+   * Mots par page avant qu'une réplique trop longue soit coupée en
+   * plusieurs (§8.5 de ARCHITECTURE.md, pagination). Choisi pour qu'une
+   * page tienne confortablement à l'écran à la taille active habituelle.
+   */
+  MOTS_PAR_PAGE: 45,
 });
 
 // ============================================================
@@ -648,17 +712,39 @@ function couleurTexteContrastee(hex) {
 
 /**
  * Taille (en vw) de la réplique en cours, décroissante avec le nombre de
- * mots. Calculée une fois au montage (§8.1, révisé à l'usage) : une réplique
- * courte reste grande et lisible à distance, une longue tirade se réduit
- * pour tenir dans l'écran plutôt que d'en déborder silencieusement. La
- * valeur reste de toute façon bornée en pixels réels côté CSS (`clamp()`),
- * ceci ne fait que choisir où, dans cette borne, le curseur se place.
+ * mots **de sa page** (§8.5 : la pagination empêche déjà qu'une page dépasse
+ * `CONFIG.MOTS_PAR_PAGE` mots, donc l'écart à couvrir ici est volontairement
+ * resserré). Calculée une fois au montage. Retour d'usage : 4vw puis 3vw
+ * étaient disproportionnés par rapport aux répliques voisines — la réplique
+ * en cours doit rester nettement lisible, pas dominer l'écran. Bornée de
+ * toute façon en pixels réels côté CSS (`clamp()`) ; ceci ne fait que
+ * choisir où, dans cette borne, le curseur se place.
+ *
+ * @param {number} nombreDeMots
  */
-function tailleActiveReplique(texte) {
-  const mots = texte.split(/\s+/).filter(Boolean).length;
-  const taille = 3 - Math.max(0, mots - 8) * 0.02;
+function tailleActiveReplique(nombreDeMots) {
+  const taille = 2 - Math.max(0, nombreDeMots - 10) * 0.02;
 
-  return Math.max(1.3, Math.min(3, taille));
+  return Math.max(1.3, Math.min(2, taille));
+}
+
+/**
+ * Étiquette d'un slot : « H1 » seul si aucun prénom n'est attribué,
+ * « H1 — Émile » sinon. Le slot reste toujours visible, même une fois le
+ * prénom saisi (retour d'usage) : c'est le repère fixe (couleur + H1-H5/
+ * F1-F5) qui permet à un lecteur de reconnaître ses répliques même s'il
+ * change de personnage, le prénom est un complément, pas un remplacement.
+ *
+ * @param {string|null} slot
+ * @param {Record<string,string>} prenoms
+ */
+function etiquetteSlot(slot, prenoms) {
+  if (!slot) {
+    return '?';
+  }
+
+  const prenom = prenoms && prenoms[slot];
+  return prenom ? `${slot} — ${prenom}` : slot;
 }
 
 /**
@@ -714,6 +800,81 @@ function segmenterAvecDidascalies(texte, didascaliesInternes) {
   return segments;
 }
 
+/**
+ * Découpe des segments déjà produits par `segmenterAvecDidascalies` en
+ * pages d'au plus `motsParPage` mots environ (§8.5, pagination). Coupe de
+ * préférence à un saut de ligne (`saut`, un vers) une fois 60 % du quota
+ * atteint — pour ne pas trancher un vers en deux — sinon force une coupe à
+ * 140 % du quota, pour qu'une tirade en prose sans saut de ligne ne parte
+ * pas en une seule page démesurée.
+ *
+ * @param {{type: string, texte?: string}[]} segments
+ * @param {number} motsParPage
+ * @returns {{type: string, texte?: string}[][]} une liste de pages de segments
+ */
+function paginerSegments(segments, motsParPage) {
+  const pages = [[]];
+  let motsPage = 0;
+
+  for (const segment of segments) {
+    pages[pages.length - 1].push(segment);
+
+    if (segment.type === 'mot') {
+      motsPage += 1;
+    }
+
+    const coupureALaLigne = segment.type === 'saut' && motsPage >= motsParPage * 0.6;
+    const coupureForcee = motsPage >= motsParPage * 1.4;
+
+    if (coupureALaLigne || coupureForcee) {
+      pages.push([]);
+      motsPage = 0;
+    }
+  }
+
+  if (pages[pages.length - 1].length === 0) {
+    pages.pop();
+  }
+
+  return pages;
+}
+
+/**
+ * Découpe les répliques trop longues en plusieurs éléments « page » (§8.5).
+ * Opère sur la liste déjà aplatie (§5) : le sommaire et le montage
+ * travaillent ensuite sur son résultat, jamais sur la liste d'origine, pour
+ * que les positions de navigation restent cohérentes partout — sans quoi le
+ * sommaire pointerait vers de mauvaises diapos dès qu'une réplique est
+ * coupée en plusieurs pages.
+ *
+ * @param {object[]} elements résultat de `aplatirEnElements`
+ * @param {number} motsParPage
+ */
+function paginerElements(elements, motsParPage) {
+  const resultat = [];
+
+  for (const el of elements) {
+    if (el.kind !== 'replique') {
+      resultat.push(el);
+      continue;
+    }
+
+    const segments = segmenterAvecDidascalies(el.texte, el.didascaliesInternes);
+    const pages = paginerSegments(segments, motsParPage);
+
+    pages.forEach((segmentsPage, index) => {
+      resultat.push({
+        ...el,
+        id: pages.length > 1 ? `${el.id}:${index + 1}` : el.id,
+        segments: segmentsPage,
+        page: pages.length > 1 ? { numero: index + 1, total: pages.length } : null,
+      });
+    });
+  }
+
+  return resultat;
+}
+
 function _construireDiapoScene(el) {
   const diapo = document.createElement('div');
   diapo.className = 'diapo kind-scene';
@@ -732,30 +893,38 @@ function _construireDiapoReplique(el, cast, prenoms) {
   const slot = cast[el.personnage] || null;
   const couleur = slot ? CONFIG.COULEURS_SLOT[slot] : '#555555';
 
+  // `el.segments` est précalculé par `paginerElements` (§8.5). Repli sur un
+  // calcul direct si absent, pour que cette fonction reste utilisable seule
+  // (tests, ou un futur appelant qui ne paginerait pas).
+  const segments = el.segments || segmenterAvecDidascalies(el.texte, el.didascaliesInternes);
+  const nombreDeMots = segments.filter((s) => s.type === 'mot').length;
+
   const diapo = document.createElement('div');
   diapo.className = 'diapo kind-replique';
   diapo.dataset.slot = slot || '';
   diapo.style.setProperty('--couleur', couleur);
-  diapo.style.setProperty('--taille-active', `${tailleActiveReplique(el.texte)}vw`);
+  diapo.style.setProperty('--taille-active', `${tailleActiveReplique(nombreDeMots)}vw`);
 
   const qui = document.createElement('div');
   qui.className = 'qui';
-  // Un champ prénom vide retombe sur le nom brut du slot (§7.3) — jamais
-  // une chaîne vide affichée à la place d'un nom.
-  qui.textContent = (slot && prenoms[slot]) || slot || '?';
+  qui.textContent = etiquetteSlot(slot, prenoms);
   qui.style.background = couleur;
   qui.style.color = couleurTexteContrastee(couleur);
   diapo.appendChild(qui);
 
   const perso = document.createElement('div');
   perso.className = 'personnage';
-  perso.textContent = el.personnage;
+  // Indicateur de page (§8.5) : une réplique coupée en plusieurs écrans
+  // l'affiche, pour que le lecteur sache qu'il y a une suite.
+  perso.textContent = el.page
+    ? `${el.personnage} — page ${el.page.numero}/${el.page.total}`
+    : el.personnage;
   diapo.appendChild(perso);
 
   const texte = document.createElement('div');
   texte.className = el.vers ? 'texte vers' : 'texte';
 
-  for (const segment of segmenterAvecDidascalies(el.texte, el.didascaliesInternes)) {
+  for (const segment of segments) {
     if (segment.type === 'saut') {
       texte.appendChild(document.createElement('br'));
       continue;
@@ -817,7 +986,7 @@ function monterProjection(container, elements, cast, prenoms) {
  */
 function mettreAJourPrenoms(container, prenoms) {
   for (const slot of CONFIG.SLOTS) {
-    const label = (prenoms && prenoms[slot]) || slot;
+    const label = etiquetteSlot(slot, prenoms);
 
     container.querySelectorAll(`[data-slot="${slot}"] .qui`).forEach((qui) => {
       qui.textContent = label;
@@ -862,6 +1031,31 @@ function texteProgressionScene(sommaire, position) {
 
   const rang = sommaire.indexOf(entree) + 1;
   return `${libelleScene(entree.acte, entree.scene)}  ·  scène ${rang}/${sommaire.length}`;
+}
+
+/**
+ * Sommaire cliquable des actes/scènes, pour sauter directement à l'une
+ * d'elles (retour d'usage : naviguer réplique par réplique jusqu'à une
+ * scène lointaine était trop lent). Chaque bouton porte sa position dans
+ * `data-position` ; le clic est délégué depuis le panneau (§10b), pas géré
+ * ici — cette fonction ne fait que construire le contenu, une fois par
+ * pièce chargée.
+ */
+function construireItemSommaire(entree) {
+  const bouton = document.createElement('button');
+  bouton.type = 'button';
+  bouton.className = 'item-sommaire';
+  bouton.textContent = libelleScene(entree.acte, entree.scene);
+  bouton.dataset.position = String(entree.position);
+  return bouton;
+}
+
+function construirePanneauSommaire(container, sommaire) {
+  container.innerHTML = '';
+
+  for (const entree of sommaire) {
+    container.appendChild(construireItemSommaire(entree));
+  }
 }
 
 // ============================================================
@@ -1145,6 +1339,8 @@ if (MODE_FENETRE === 'projection') (() => {
   const boutonOuvrirControle = document.getElementById('bouton-ouvrir-controle');
   const erreurOuvertureControle = document.getElementById('erreur-ouverture-controle');
   const boutonReouvrirControle = document.getElementById('bouton-reouvrir-controle');
+  const boutonSommaire = document.getElementById('bouton-sommaire');
+  const panneauSommaire = document.getElementById('panneau-sommaire');
 
   prenoms = lire(cleStockage('prenoms')) || {};
 
@@ -1201,6 +1397,32 @@ if (MODE_FENETRE === 'projection') (() => {
   boutonOuvrirControle.addEventListener('click', ouvrirFenetreControle);
   boutonReouvrirControle.addEventListener('click', ouvrirFenetreControle);
 
+  // --- navigation à la souris : clic sur une diapo, sommaire cliquable ----
+  // (retour d'usage : avancer réplique par réplique jusqu'à un point
+  // lointain de la pièce était trop lent.) Vient s'ajouter au clavier, ne
+  // le remplace pas — la navigation reste possible sans souris (§9).
+
+  contenu.addEventListener('click', (evenement) => {
+    const diapo = evenement.target.closest('.diapo');
+
+    if (diapo) {
+      allerA(Number(diapo.dataset.index));
+    }
+  });
+
+  boutonSommaire.addEventListener('click', () => {
+    panneauSommaire.classList.toggle('visible');
+  });
+
+  panneauSommaire.addEventListener('click', (evenement) => {
+    const bouton = evenement.target.closest('.item-sommaire');
+
+    if (bouton) {
+      allerA(Number(bouton.dataset.position));
+      panneauSommaire.classList.remove('visible');
+    }
+  });
+
   // --- projection ----------------------------------------------------------
 
   function rafraichirProgression() {
@@ -1231,9 +1453,15 @@ if (MODE_FENETRE === 'projection') (() => {
     piece = piecePreparee;
     slug = pieceSlug(piece.piece);
 
-    const elements = aplatirEnElements(piece);
+    // aplatir → paginer → sommaire → montage, dans cet ordre : le sommaire
+    // et le montage doivent travailler sur la liste *après* pagination
+    // (§8.5), sinon leurs positions ne correspondraient plus aux diapos
+    // réellement montées dès qu'une réplique est coupée en plusieurs pages.
+    const elementsBruts = aplatirEnElements(piece);
+    const elements = paginerElements(elementsBruts, CONFIG.MOTS_PAR_PAGE);
     sommaire = calculerSommaire(elements);
     diapos = monterProjection(contenu, elements, cast, prenoms);
+    construirePanneauSommaire(panneauSommaire, sommaire);
 
     const bornee = typeof positionDepart === 'number' ? positionDepart : 0;
     position = irA({ position: 0 }, bornee, diapos.length).position;
@@ -1257,6 +1485,10 @@ if (MODE_FENETRE === 'projection') (() => {
       allerA(position - 1);
     } else if (evenement.key === 'f' || evenement.key === 'F') {
       document.documentElement.requestFullscreen?.();
+    } else if (evenement.key === 's' || evenement.key === 'S') {
+      panneauSommaire.classList.toggle('visible');
+    } else if (evenement.key === 'Escape') {
+      panneauSommaire.classList.remove('visible');
     }
   });
 
