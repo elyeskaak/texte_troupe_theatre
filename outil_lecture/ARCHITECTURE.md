@@ -1,9 +1,9 @@
 # ARCHITECTURE — outil de lecture interactive projetée
 
-> **Statut : brouillon, en attente de validation.** Deux points du prompt
-> initial ont déjà été tranchés en échangeant avec l'utilisateur (§2) ; les
-> points encore ouverts sont listés en [§13](#13-décisions-à-valider) et ne
-> doivent pas être tranchés silencieusement.
+> **Statut : validé le 2026-08-03.** Les deux décisions structurantes (§2) et
+> les quatre décisions secondaires (§13) ont toutes été tranchées par
+> l'utilisateur. L'implémentation peut commencer à l'étape 2 du
+> [plan de livraison](#14-plan-de-livraison).
 
 Ce document répond au prompt `prompt-outil-lecture-projetee.md`, en le révisant
 sur son point le plus structurant : le format d'entrée.
@@ -24,7 +24,7 @@ sur son point le plus structurant : le format d'entrée.
 10. [Persistance](#10-persistance)
 11. [Gestion des erreurs](#11-gestion-des-erreurs)
 12. [Configuration](#12-configuration)
-13. [Décisions à valider](#13-décisions-à-valider)
+13. [Décisions validées](#13-décisions-validées)
 14. [Plan de livraison](#14-plan-de-livraison)
 
 ---
@@ -383,23 +383,26 @@ const CONFIG = Object.freeze({
 
 ---
 
-## 13. Décisions à valider
+## 13. Décisions validées
 
-Contrairement à `outil_repetition`, dont les quatre décisions ouvertes ont
-toutes été tranchées avant implémentation, celles-ci n'ont **pas** encore été
-posées à l'utilisateur — ce document s'arrête ici pour recueillir sa réponse
-avant d'écrire la moindre ligne de `index.html`.
+Tranchées le **2026-08-03**. Aucune ne change la structure du fichier — elles
+portent sur quelques clés de stockage et une fonctionnalité optionnelle
+(point 2).
 
-| # | Question | Options |
+| # | Question | Retenu |
 |---|---|---|
-| 1 | Collision de `pieceSlug` (deux pièces au même nom) | (a) accepter le risque, négligeable en usage réel ; (b) ajouter un court suffixe dérivé de `genere_le` |
-| 2 | Écran-titre avant la scène 1, à partir de `piece.liminaires` | (a) l'ajouter (nom de la pièce, distribution) ; (b) l'omettre, hors périmètre du prompt initial |
-| 3 | Reprise de position à la réouverture de la fenêtre de projection (`lecture:v1:session`) | (a) l'implémenter (§10) ; (b) s'en tenir au prompt initial, qui ne demande pas de survie au rechargement |
-| 4 | Portée de `lecture:v1:prenoms` | (a) globale, comme rédigé en §10.1 (les prénoms des lecteurs du jour, indépendants de la pièce) ; (b) par pièce, si une même troupe assigne des prénoms différents selon la pièce lue |
+| 1 | Collision de `pieceSlug` (deux pièces au même nom) | **Risque accepté** : pas de suffixe dérivé de `genere_le`. `pieceSlug` reste le nom de la pièce, mis en minuscules et sans accents (§10.1 inchangé) |
+| 2 | Écran-titre avant la scène 1, à partir de `piece.liminaires` | **Omis.** Hors périmètre du prompt initial ; `piece.liminaires` n'est lu par aucune partie de l'outil. À reconsidérer si le besoin se manifeste à l'usage |
+| 3 | Reprise de position à la réouverture de la fenêtre de projection | **Implémentée**, comme rédigé en §10 : `lecture:v1:session` écrit après chaque navigation, relu à l'ouverture pour reprendre à la bonne réplique |
+| 4 | Portée de `lecture:v1:prenoms` | **Globale**, comme rédigé en §10.1 : indépendante de la pièce, ce sont les lecteurs présents ce jour-là |
 
-Aucune de ces quatre décisions ne change la structure du fichier — seulement
-quelques clés de stockage et une fonctionnalité optionnelle (point 2). Elles
-peuvent donc être tranchées rapidement, mais pas silencieusement.
+Un seul point à noter sur la portée de ces choix : le point 2 est celui qui
+retire le plus de surface — `piece.liminaires` est validé par aucune fonction
+de §11 et n'a donc pas besoin d'être mentionné dans le modèle de §5.
+
+**La prochaine étape est l'étape 2 du plan de livraison** (§14) : les sections
+pures de `index.html` (config, validation, modèle, état, stockage), avant tout
+DOM.
 
 ---
 
@@ -407,7 +410,7 @@ peuvent donc être tranchées rapidement, mais pas silencieusement.
 
 | # | Livrable | Vérifiable par |
 |---|---|---|
-| 1 | Ce document, validé, décisions de §13 tranchées | relecture |
+| 1 | ✅ *fait* — ce document, validé, décisions de §13 tranchées | relecture |
 | 2 | Sections 1-6 de §4.2 (config, validation, modèle, état, stockage) | ouverture dans la console, appels manuels |
 | 3 | Rendu projection (§8) sans synchro ni contrôle | pièce d'essai affichée, navigation clavier |
 | 4 | Écran de préparation + attribution personnage → slot (§6) | import → attribution → démarrage |
