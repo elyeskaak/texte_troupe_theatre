@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<!--
+  Pas de `maximum-scale` ni de `user-scalable=no` : bloquer le pinch-zoom sur un
+  outil de lecture de texte est un contresens, et le réglage de taille de police
+  ne le remplace pas (§4.4 de ARCHITECTURE.md).
+  `viewport-fit=cover` permet d'aller sous l'encoche, à condition d'utiliser
+  ensuite `env(safe-area-inset-*)`.
+-->
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#161011">
+<meta name="color-scheme" content="dark">
+<title>En Scène — répétition</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icone.svg">
+<style>
+  :root{
+    /* Palette reprise du prototype : ocre de projecteur sur bordeaux de rideau. */
+    --scene:#161011;
+    --scene-2:#1d1516;
+    --rideau:#6b1d29;
+    --projecteur:#f0c05a;
+    --projecteur-doux:rgba(240,192,90,0.16);
+    --papier:#f3ead9;
+    --encre:#241c1a;
+    --estompe:#a4907d;
+    --trait:rgba(240,192,90,0.22);
+    --alerte:#c1543a;
+    --rayon:14px;
+
+    /* Réglable depuis les préférences, en rem pour que tout suive. */
+    --taille-texte:1rem;
+
+    /*
+      Polices système uniquement. Une feuille Google Fonts serait une dépendance
+      réseau bloquante, et cet outil doit s'ouvrir en coulisses sans réseau
+      (§4.4). Le webfont pourra s'ajouter plus tard en amélioration progressive.
+    */
+    --serif:ui-serif, Georgia, 'Times New Roman', serif;
+    --sans:-apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html,body{ margin:0; padding:0; }
+
+  body{
+    /* 100dvh et non 100vh : la barre de Safari se replie au défilement. */
+    min-height:100dvh;
+    background:
+      radial-gradient(ellipse at 50% -10%, var(--projecteur-doux), transparent 55%),
+      radial-gradient(ellipse at 50% 110%, rgba(107,29,41,0.35), transparent 60%),
+      var(--scene);
+    color:var(--papier);
+    font-family:var(--sans);
+    font-size:var(--taille-texte);
+    line-height:1.5;
+    display:flex;
+    justify-content:center;
+  }
+
+  #app{
+    width:100%;
+    max-width:560px;
+    min-height:100dvh;
+    display:flex;
+    flex-direction:column;
+    /* Encoche en haut, barre d'accueil en bas. */
+    padding:calc(env(safe-area-inset-top) + 18px)
+            calc(env(safe-area-inset-right) + 18px)
+            calc(env(safe-area-inset-bottom) + 24px)
+            calc(env(safe-area-inset-left) + 18px);
+  }
+
+  h1,h2,h3{ font-family:var(--serif); font-weight:600; margin:0; }
+  h1{ font-size:1.9rem; letter-spacing:0.01em; }
+  h2{ font-size:1.3rem; margin-top:8px; }
+
+  .surtitre{
+    font-size:0.7rem; letter-spacing:0.18em; text-transform:uppercase;
+    color:var(--projecteur); font-weight:700;
+  }
+  .aide{ color:var(--estompe); font-size:0.85rem; margin:6px 0 0; }
+
+  section{ display:none; flex:1; flex-direction:column; }
+  section.active{ display:flex; }
+
+  /* --- commandes ------------------------------------------------- */
+  /* 44 px de haut au minimum : atteignable au pouce, une main occupée. */
+  .btn{
+    min-height:44px; border:none; border-radius:999px;
+    padding:12px 22px; font:inherit; font-weight:600;
+    cursor:pointer; transition:transform .12s ease, filter .12s ease;
+  }
+  .btn:active{ transform:scale(0.97); }
+  .btn:disabled{ opacity:0.35; cursor:default; }
+  .btn-primaire{ background:var(--projecteur); color:#2a1c05; }
+  .btn-fantome{
+    background:transparent; color:var(--papier);
+    border:1px solid rgba(243,234,217,0.28);
+  }
+  .btn-danger{
+    background:transparent; color:var(--alerte);
+    border:1px solid rgba(193,84,58,0.5);
+  }
+  .btn-mini{ min-height:36px; padding:7px 14px; font-size:0.85rem; }
+
+  .rangee{ display:flex; flex-wrap:wrap; gap:10px; align-items:center; }
+  .pile{ display:flex; flex-direction:column; gap:14px; }
+
+  .pastille{
+    display:inline-flex; align-items:center; gap:7px;
+    min-height:44px; padding:9px 16px; border-radius:999px;
+    border:1px solid rgba(243,234,217,0.25);
+    background:rgba(243,234,217,0.04);
+    color:var(--papier); font-weight:500; cursor:pointer;
+    transition:all .12s ease;
+  }
+  .pastille[aria-pressed="true"]{
+    background:var(--projecteur); color:#2a1c05;
+    border-color:var(--projecteur); font-weight:700;
+  }
+  .pastille .compte{ font-size:0.78rem; opacity:0.7; }
+
+  textarea{
+    width:100%; min-height:130px; padding:13px; border:none;
+    border-radius:10px; background:var(--papier); color:var(--encre);
+    font:inherit; font-size:0.9rem; resize:vertical;
+  }
+
+  label.champ{
+    display:block; margin:22px 0 8px; font-size:0.72rem;
+    letter-spacing:0.08em; text-transform:uppercase;
+    color:var(--estompe); font-weight:700;
+  }
+
+  /* --- listes ---------------------------------------------------- */
+  .carte{
+    display:flex; justify-content:space-between; align-items:center; gap:12px;
+    padding:14px; border-radius:var(--rayon);
+    border:1px solid var(--trait); background:var(--scene-2);
+  }
+  .carte .titre{ font-family:var(--serif); font-size:1.1rem; }
+  .carte .meta{ color:var(--estompe); font-size:0.78rem; }
+
+  .sommaire{ list-style:none; padding:0; margin:0; }
+  .sommaire li{
+    display:flex; justify-content:space-between; gap:10px;
+    padding:11px 2px; border-bottom:1px solid rgba(243,234,217,0.08);
+  }
+  .sommaire .absent{ color:var(--estompe); }
+  .sommaire .compte{ color:var(--projecteur); font-size:0.8rem; }
+
+  /* --- messages -------------------------------------------------- */
+  .message{
+    padding:12px 14px; border-radius:10px; margin:14px 0;
+    font-size:0.88rem; border:1px solid transparent;
+  }
+  .message[hidden]{ display:none; }
+  .message.erreur{
+    background:rgba(193,84,58,0.14); border-color:rgba(193,84,58,0.5);
+    color:#f0b8aa;
+  }
+  .message.avertissement{
+    background:var(--projecteur-doux); border-color:var(--trait);
+    color:var(--projecteur);
+  }
+  .message.succes{
+    background:rgba(120,180,120,0.12); border-color:rgba(120,180,120,0.4);
+    color:#bfe0bf;
+  }
+
+  .provisoire{
+    margin-top:auto; padding:14px; border-radius:var(--rayon);
+    border:1px dashed var(--trait); color:var(--estompe); font-size:0.82rem;
+  }
+
+  .invisible{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Bandeaux d'état, visibles sur tous les écrans. -->
+  <div id="bandeau-stockage" class="message avertissement" hidden></div>
+  <div id="bandeau-export" class="message avertissement" hidden></div>
+
+  <!-- ================= ACCUEIL ================= -->
+  <section id="ecran-accueil" class="active">
+    <p class="surtitre">Troupe 122</p>
+    <h1>En Scène</h1>
+    <p class="aide">
+      Apprendre et répéter son texte. Les pièces restent sur cet appareil.
+    </p>
+
+    <div id="bloc-pieces">
+      <label class="champ" for="liste-pieces">Mes pièces</label>
+      <div id="liste-pieces" class="pile"></div>
+    </div>
+
+    <label class="champ" for="saisie-piece">Charger une pièce</label>
+    <p class="aide" style="margin-bottom:8px">
+      Le fichier <code>_REPET.json</code> produit par l'outil d'édition.
+      Collez-le, ou importez-le depuis Fichiers.
+    </p>
+    <textarea id="saisie-piece" spellcheck="false"
+      placeholder='{ "schema": "repetition/1", … }'></textarea>
+
+    <div class="rangee" style="margin-top:12px">
+      <button id="btn-charger" class="btn btn-primaire">Charger</button>
+      <label class="btn btn-fantome" for="fichier-piece" style="display:inline-flex;align-items:center">
+        Importer un fichier
+      </label>
+      <input id="fichier-piece" type="file" accept=".json,application/json" class="invisible">
+    </div>
+
+    <div id="message-accueil" class="message" hidden></div>
+
+    <label class="champ">Ma progression</label>
+    <div class="rangee">
+      <button id="btn-exporter" class="btn btn-fantome btn-mini">Exporter</button>
+      <label class="btn btn-fantome btn-mini" for="fichier-sauvegarde"
+        style="display:inline-flex;align-items:center">Importer</label>
+      <input id="fichier-sauvegarde" type="file" accept=".json,application/json" class="invisible">
+    </div>
+    <p class="aide">
+      Safari efface les données d'un site après sept jours sans visite.
+      Un export vous protège de cet oubli.
+    </p>
+  </section>
+
+  <!-- ================= CHOIX DES RÔLES ================= -->
+  <section id="ecran-roles">
+    <p class="surtitre">Distribution</p>
+    <h1 id="titre-piece">—</h1>
+    <p class="aide" id="resume-piece"></p>
+
+    <label class="champ">Quels rôles jouez-vous&nbsp;?</label>
+    <p class="aide" style="margin-bottom:10px">
+      Ce choix décide de ce qui compte comme « mes scènes ».
+    </p>
+    <div id="choix-mes-roles" class="rangee"></div>
+
+    <div id="bloc-role-actif" hidden>
+      <label class="champ">Que répétez-vous maintenant&nbsp;?</label>
+      <p class="aide" style="margin-bottom:10px">
+        Seules les répliques du rôle actif seront masquées.
+      </p>
+      <div id="choix-role-actif" class="rangee"></div>
+    </div>
+
+    <div id="message-roles" class="message" hidden></div>
+
+    <div class="rangee" style="margin-top:24px">
+      <button id="btn-commencer" class="btn btn-primaire" disabled>Commencer</button>
+      <button id="btn-retour-accueil" class="btn btn-fantome">Retour</button>
+    </div>
+  </section>
+
+  <!-- ================= RÉPÉTITION (coque) ================= -->
+  <section id="ecran-repetition">
+    <p class="surtitre" id="repetition-surtitre">Répétition</p>
+    <h1 id="repetition-titre">—</h1>
+    <p class="aide" id="repetition-resume"></p>
+
+    <label class="champ">Sommaire</label>
+    <ul id="sommaire" class="sommaire"></ul>
+
+    <div class="provisoire">
+      L'écran de répétition — les sept modes de masquage, la mise en valeur du top
+      et le défilement — arrive à l'étape 7 du plan de livraison. Ce que vous
+      voyez ici confirme que la pièce est chargée, indexée et conservée sur
+      l'appareil.
+    </div>
+
+    <div class="rangee" style="margin-top:18px">
+      <button id="btn-retour-roles" class="btn btn-fantome">Changer de rôle</button>
+    </div>
+  </section>
+
+</div>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

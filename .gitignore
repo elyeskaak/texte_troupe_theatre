@@ -58,6 +58,15 @@ gap_1789.txt
 outil_repetition/pieces/
 
 # ============================================================
+# Outillage local
+# ------------------------------------------------------------
+# Configuration de l'assistant et du serveur de prévisualisation. Peut
+# accueillir des réglages personnels : le README documente la commande
+# équivalente (python -m http.server).
+# ============================================================
+.claude/
+
+# ============================================================
 # Système
 # ============================================================
 .DS_Store

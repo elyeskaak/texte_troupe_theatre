@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img"
+     aria-label="En Scène">
+  <!--
+    Icône d'écran d'accueil. Un rideau de scène qui s'ouvre sur un projecteur.
+    Marge de 12 % conservée sur tout le pourtour : iOS recadre les icônes
+    « maskable » en cercle, et un motif jusqu'au bord se ferait rogner.
+  -->
+  <rect width="512" height="512" fill="#161011"/>
+
+  <!-- Halo de projecteur -->
+  <defs>
+    <radialGradient id="halo" cx="50%" cy="18%" r="62%">
+      <stop offset="0%" stop-color="#f0c05a" stop-opacity="0.42"/>
+      <stop offset="100%" stop-color="#f0c05a" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#halo)"/>
+
+  <!-- Rideaux, gauche et droite -->
+  <path d="M62 62 h96 c-26 96 -30 224 0 388 h-96 z" fill="#6b1d29"/>
+  <path d="M450 62 h-96 c26 96 30 224 0 388 h96 z" fill="#6b1d29"/>
+  <path d="M158 62 c-26 96 -30 224 0 388 h34 c-24 -168 -20 -292 4 -388 z"
+        fill="#3d0f18"/>
+  <path d="M354 62 c26 96 30 224 0 388 h-34 c24 -168 20 -292 -4 -388 z"
+        fill="#3d0f18"/>
+
+  <!-- Planches -->
+  <rect x="62" y="418" width="388" height="32" fill="#241c1a"/>
+
+  <!-- Le E de « En Scène », posé sur les planches -->
+  <g fill="#f0c05a">
+    <rect x="222" y="168" width="26" height="230"/>
+    <rect x="222" y="168" width="104" height="26"/>
+    <rect x="222" y="270" width="82" height="26"/>
+    <rect x="222" y="372" width="104" height="26"/>
+  </g>
+</svg>

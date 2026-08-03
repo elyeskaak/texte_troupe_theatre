@@ -135,19 +135,30 @@ export function changerRoleActif(etat, roles) {
 /**
  * Change les personnages que je joue dans la pièce.
  *
- * Réduit le rôle actif à l'intersection : c'est ici, et seulement ici, que la
- * correction est légitime, puisque c'est `mesRoles` qui vient de changer. Si
- * l'intersection est vide, le rôle actif repart de l'ensemble de mes rôles.
+ * C'est ici, et seulement ici, que corriger le rôle actif est légitime, puisque
+ * c'est `mesRoles` qui vient de changer. Deux mouvements, et ils ne se traitent
+ * pas de la même façon :
+ *
+ * - un rôle **retiré** de mes rôles quitte le rôle actif — l'invariant l'exige ;
+ * - un rôle **ajouté** à mes rôles **rejoint** le rôle actif. Déclarer qu'on joue
+ *   un personnage, c'est dire qu'on veut le répéter. Se contenter de conserver
+ *   l'intersection le laisserait déclaré mais inactif, donc affiché en clair : on
+ *   croirait l'outil cassé, alors qu'il aurait suivi la lettre d'une règle faite
+ *   pour le retrait.
+ *
+ * Si le résultat est vide, le rôle actif repart de l'ensemble de mes rôles.
  *
  * Change aussi l'index (`modele.indexer`) : l'appelant doit réindexer.
  */
 export function changerMesRoles(etat, roles) {
   const miens = _uniques(roles);
   const conserves = etat.roleActif.filter((role) => miens.includes(role));
+  const ajoutes = miens.filter((role) => !etat.mesRoles.includes(role));
+  const actif = [...new Set([...conserves, ...ajoutes])];
 
   return _avec(etat, {
     mesRoles: miens,
-    roleActif: conserves.length > 0 ? conserves : miens,
+    roleActif: actif.length > 0 ? actif : miens,
     revelees: [],
   });
 }

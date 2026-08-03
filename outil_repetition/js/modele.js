@@ -396,6 +396,82 @@ export function candidatsSpotCheck(index, progres, maintenant) {
 }
 
 /**
+ * Fusionne deux progressions — jamais d'écrasement.
+ *
+ * Appelée à l'import d'une sauvegarde. **L'import fusionne, il n'écrase pas** :
+ * un import écrasant détruirait le travail fait sur l'appareil depuis l'export,
+ * ce qui est exactement le geste qu'on ferait en croyant se protéger.
+ *
+ * Trois règles, une par champ :
+ *
+ * - `statut` : le **plus avancé** des deux l'emporte. Une réplique maîtrisée d'un
+ *   côté et à apprendre de l'autre a bien été apprise une fois ;
+ * - `scores` : **union** des deux historiques, dédoublonnée par date. Le cahier
+ *   disait « l'historique le plus long gagne » ; l'union tient la même promesse
+ *   et perd strictement moins ;
+ * - `verifiee_le` : la date **la plus récente**.
+ *
+ * @param {Record<string, object>} local
+ * @param {Record<string, object>} importe
+ * @param {number} plafondScores - entrées d'historique conservées par réplique
+ */
+export function fusionnerProgres(local = {}, importe = {}, plafondScores = 10) {
+  const resultat = {};
+
+  for (const id of new Set([...Object.keys(local), ...Object.keys(importe)])) {
+    resultat[id] = _fusionnerUne(local[id], importe[id], plafondScores);
+  }
+
+  return resultat;
+}
+
+function _fusionnerUne(a = {}, b = {}, plafondScores) {
+  const fusion = {
+    statut: _statutLePlusAvance(a.statut, b.statut),
+    scores: _fusionnerScores(a.scores, b.scores, plafondScores),
+  };
+
+  const verifiee = Math.max(
+    typeof a.verifiee_le === 'number' ? a.verifiee_le : -Infinity,
+    typeof b.verifiee_le === 'number' ? b.verifiee_le : -Infinity,
+  );
+
+  if (Number.isFinite(verifiee)) {
+    fusion.verifiee_le = verifiee;
+  }
+
+  return fusion;
+}
+
+function _statutLePlusAvance(...statuts) {
+  let meilleur = 0;
+
+  for (const statut of statuts) {
+    const rang = ORDRE_STATUTS.indexOf(statut);
+
+    if (rang > meilleur) {
+      meilleur = rang;
+    }
+  }
+
+  return ORDRE_STATUTS[meilleur];
+}
+
+function _fusionnerScores(a, b, plafond) {
+  const parDate = new Map();
+
+  for (const entree of [...(a ?? []), ...(b ?? [])]) {
+    if (entree && typeof entree.le === 'number' && typeof entree.score === 'number') {
+      parDate.set(entree.le, entree);
+    }
+  }
+
+  // Les plus récents d'abord, puis on coupe : c'est l'historique ancien qu'on
+  // sacrifie au plafond, jamais le dernier score obtenu.
+  return [...parDate.values()].sort((x, y) => y.le - x.le).slice(0, plafond);
+}
+
+/**
  * Bilan chiffré, pour l'écran de progression.
  *
  * @param {object} index

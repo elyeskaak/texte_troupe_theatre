@@ -13,6 +13,7 @@ import {
   bilan,
   candidatsSpotCheck,
   chercher,
+  fusionnerProgres,
   indexer,
   MOTIF_SANS_TOP,
   repliqueVoisine,
@@ -508,6 +509,103 @@ describe('spot check', () => {
 
   test('aucune réplique maîtrisée : aucun candidat', () => {
     assert.deepEqual(candidatsSpotCheck(index, {}, MAINTENANT), []);
+  });
+});
+
+describe('fusionner deux progressions', () => {
+  test('le statut le plus avancé gagne, dans les deux sens', () => {
+    const a = { r_1: { statut: STATUT.MAITRISEE } };
+    const b = { r_1: { statut: STATUT.A_APPRENDRE } };
+
+    assert.equal(fusionnerProgres(a, b).r_1.statut, STATUT.MAITRISEE);
+    assert.equal(fusionnerProgres(b, a).r_1.statut, STATUT.MAITRISEE);
+  });
+
+  test('rien ne disparaît', () => {
+    const fusion = fusionnerProgres(
+      { r_local: { statut: STATUT.EN_COURS } },
+      { r_importe: { statut: STATUT.MAITRISEE } },
+    );
+
+    assert.deepEqual(Object.keys(fusion).sort(), ['r_importe', 'r_local']);
+  });
+
+  test('les historiques sont réunis, pas remplacés', () => {
+    // Le cahier disait « le plus long gagne » ; l'union tient la même promesse
+    // et perd strictement moins.
+    const fusion = fusionnerProgres(
+      { r_1: { scores: [{ le: 100, score: 60 }] } },
+      { r_1: { scores: [{ le: 200, score: 90 }] } },
+    );
+
+    assert.equal(fusion.r_1.scores.length, 2);
+  });
+
+  test('les doublons de date sont écartés', () => {
+    const fusion = fusionnerProgres(
+      { r_1: { scores: [{ le: 100, score: 60 }] } },
+      { r_1: { scores: [{ le: 100, score: 60 }] } },
+    );
+
+    assert.equal(fusion.r_1.scores.length, 1);
+  });
+
+  test('l’historique est trié du plus récent au plus ancien', () => {
+    const fusion = fusionnerProgres(
+      { r_1: { scores: [{ le: 100, score: 60 }] } },
+      { r_1: { scores: [{ le: 300, score: 90 }, { le: 200, score: 70 }] } },
+    );
+
+    assert.deepEqual(
+      fusion.r_1.scores.map((s) => s.le),
+      [300, 200, 100],
+    );
+  });
+
+  test('le plafond sacrifie l’ancien, jamais le dernier score', () => {
+    const scores = [1, 2, 3, 4, 5].map((n) => ({ le: n * 100, score: n }));
+    const fusion = fusionnerProgres({ r_1: { scores } }, {}, 2);
+
+    assert.deepEqual(
+      fusion.r_1.scores.map((s) => s.le),
+      [500, 400],
+    );
+  });
+
+  test('la date de vérification la plus récente gagne', () => {
+    const fusion = fusionnerProgres(
+      { r_1: { verifiee_le: 100 } },
+      { r_1: { verifiee_le: 500 } },
+    );
+
+    assert.equal(fusion.r_1.verifiee_le, 500);
+  });
+
+  test('sans date de vérification, le champ est absent', () => {
+    // Plutôt qu'un -Infinity qui ne survivrait pas à JSON.stringify.
+    const fusion = fusionnerProgres({ r_1: { statut: STATUT.EN_COURS } }, {});
+
+    assert.ok(!('verifiee_le' in fusion.r_1));
+  });
+
+  test('une entrée de score mal formée est écartée', () => {
+    const fusion = fusionnerProgres(
+      { r_1: { scores: [null, { le: 'hier' }, { score: 90 }, { le: 1, score: 50 }] } },
+      {},
+    );
+
+    assert.deepEqual(fusion.r_1.scores, [{ le: 1, score: 50 }]);
+  });
+
+  test('fusionner avec rien rend une progression normalisée', () => {
+    const fusion = fusionnerProgres({ r_1: { statut: STATUT.MAITRISEE } });
+
+    assert.equal(fusion.r_1.statut, STATUT.MAITRISEE);
+    assert.deepEqual(fusion.r_1.scores, []);
+  });
+
+  test('deux vides donnent un vide', () => {
+    assert.deepEqual(fusionnerProgres(), {});
   });
 });
 

@@ -1,0 +1,20 @@
+{
+  "name": "En Scène — répétition",
+  "short_name": "En Scène",
+  "description": "Apprendre et répéter son texte de théâtre. Les pièces restent sur l'appareil.",
+  "lang": "fr",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#161011",
+  "theme_color": "#161011",
+  "icons": [
+    {
+      "src": "icone.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

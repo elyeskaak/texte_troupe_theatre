@@ -4,8 +4,10 @@ Page web pour apprendre et répéter son texte de théâtre, **utilisable sur
 iPhone**. Lit le `<Livre>_REPET.json` produit par
 [`outil_edition`](../outil_edition/README.md).
 
-> **En cours de construction.** Les modules purs et leurs tests existent ; il n'y
-> a pas encore d'interface. Le périmètre est fixé par le
+> **En cours de construction.** La coque fonctionne : on charge une pièce, on
+> choisit ses rôles, et la pièce est conservée sur l'appareil. L'écran de
+> répétition proprement dit — les sept modes de masquage, le top, le défilement —
+> arrive à l'étape 7. Le périmètre est fixé par le
 > [cahier des charges](CAHIER_DES_CHARGES.md), la conception par
 > [`ARCHITECTURE.md`](ARCHITECTURE.md).
 

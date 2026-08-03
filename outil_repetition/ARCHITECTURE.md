@@ -759,7 +759,7 @@ Un commit par étape. Reprend le §13 du cahier, en le précisant.
 | 3 | ✅ *fait* — `repet_export.py` dans `outil_edition` + tests | 610 tests Python verts |
 | 4 | ✅ *fait* — `config.js`, `schema.js`, `texte.js`, `comparaison.js`, `tirage.js` | 119 tests Node verts, pureté et contrat compris |
 | 5 | ✅ *fait* — `modele.js`, `etat.js` + tests | 219 tests Node verts, les trois cas de top couverts |
-| 6 | Coque : `index.html`, chargement d'une pièce, `stockage.js`, choix des rôles | une pièce chargée survit à la fermeture de Safari |
+| 6 | ✅ *fait* — coque : `index.html`, `stockage.js`, `app.js`, manifeste, icône | 285 tests Node ; pièce vérifiée survivante au rechargement |
 | 7 | `rendu.js` : les 7 modes en CSS, le top, le repli de scènes, montage paresseux | usage réel sur iPhone 15 |
 | 8 | Progression, bilan, spot check, export / import | export puis import restitue à l'identique ; fusion vérifiée |
 | 9 | Confort : sommaire, recherche, marque-pages, annotations, défilement, Wake Lock | — |

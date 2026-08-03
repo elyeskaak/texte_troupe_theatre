@@ -199,6 +199,24 @@ describe('rôle actif', () => {
 });
 
 describe('mes rôles', () => {
+  test('un rôle ajouté devient actif', () => {
+    // Trouvé en pilotant l'interface : déclarer qu'on joue un personnage sans
+    // qu'il devienne actif laisse ses répliques en clair, et on croit l'outil
+    // cassé.
+    let etat = changerMesRoles(etatInitial({ pieceId: 'p' }), ['HENRY']);
+    etat = changerMesRoles(etat, ['HENRY', 'OLIVER']);
+
+    assert.deepEqual(etat.roleActif, ['HENRY', 'OLIVER']);
+  });
+
+  test('un rôle ajouté rejoint un rôle actif restreint', () => {
+    let etat = changerMesRoles(etatInitial(DEPART), ['HENRY', 'OLIVER']);
+    etat = changerRoleActif(etat, ['HENRY']);
+    etat = changerMesRoles(etat, ['HENRY', 'OLIVER', 'CLARISSA']);
+
+    assert.deepEqual(etat.roleActif, ['HENRY', 'CLARISSA']);
+  });
+
   test('le rôle actif est réduit à l’intersection', () => {
     let etat = changerRoleActif(etatInitial(DEPART), ['HENRY', 'OLIVER']);
     etat = changerMesRoles(etat, ['OLIVER']);
