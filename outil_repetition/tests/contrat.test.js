@@ -1,0 +1,155 @@
+/**
+ * Le contrat entre `outil_edition` et `outil_repetition`.
+ *
+ * `tests/exemple-repet.json` est un vrai fichier, produit par
+ * `repet_export.py` sur une pièce d'essai de quelques répliques. Ce test le
+ * valide avec `schema.js`.
+ *
+ * C'est le seul test qui éprouve les **deux outils ensemble**, et il attrape la
+ * classe de défauts la plus coûteuse : une divergence silencieuse entre ce que
+ * Python écrit et ce que le navigateur attend. Sans lui, un champ renommé d'un
+ * côté ne se découvrirait qu'en chargeant une pièce sur le téléphone.
+ *
+ * Pour régénérer la référence après un changement de schéma volontaire, voir le
+ * README du sous-projet.
+ */
+
+import { test, describe } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+import { repliques, valider } from '../js/schema.js';
+import { CONFIG } from '../js/config.js';
+import { comparer } from '../js/comparaison.js';
+import { mots } from '../js/texte.js';
+
+const ICI = dirname(fileURLToPath(import.meta.url));
+
+const BRUT = readFileSync(join(ICI, 'exemple-repet.json'), 'utf8');
+const EXEMPLE = JSON.parse(BRUT);
+
+describe('un REPET.json réel est accepté', () => {
+  test('la validation passe', () => {
+    const resultat = valider(EXEMPLE);
+
+    assert.ok(resultat.valide, resultat.erreur);
+  });
+
+  test('la version de schéma est celle qu’attend la page', () => {
+    // Si ce test tombe, c'est config.SCHEMA_REPET (Python) et
+    // CONFIG.SCHEMA_ACCEPTE (JS) qui ont divergé.
+    assert.equal(EXEMPLE.schema, CONFIG.SCHEMA_ACCEPTE);
+  });
+
+  test('le fichier est lisible à l’œil : accents non échappés', () => {
+    assert.ok(BRUT.includes('SCÈNE'), 'les accents sont échappés');
+  });
+});
+
+describe('la structure attendue est bien là', () => {
+  test('les unités portent acte, scène et personnages', () => {
+    const premiere = EXEMPLE.unites[0];
+
+    assert.equal(premiere.acte, 'ACTE PREMIER');
+    assert.equal(premiere.scene, 'SCÈNE 1');
+    assert.deepEqual(premiere.personnages, ['CLARISSA', 'SIR ROWLAND']);
+  });
+
+  test('un séparateur produit une unité implicite qui hérite', () => {
+    const implicites = EXEMPLE.unites.filter((u) => u.implicite);
+
+    assert.equal(implicites.length, 1);
+    assert.equal(implicites[0].acte, 'ACTE PREMIER');
+  });
+
+  test('les noms de personnages n’ont pas de point final', () => {
+    // « **JAN.** » est une convention d'imprimerie : « JAN. » dans un sélecteur
+    // de rôles serait un défaut visible.
+    for (const personnage of EXEMPLE.personnages) {
+      assert.ok(!personnage.nom.endsWith('.'), personnage.nom);
+    }
+  });
+
+  test('tous les identifiants de réplique sont distincts', () => {
+    const identifiants = repliques(EXEMPLE).map((r) => r.id);
+
+    assert.equal(new Set(identifiants).size, identifiants.length);
+  });
+
+  test('deux « Oui. » de personnages différents coexistent', () => {
+    const ouis = repliques(EXEMPLE).filter((r) => r.texte === 'Oui.');
+
+    assert.equal(ouis.length, 2);
+    assert.notEqual(ouis[0].id, ouis[1].id);
+  });
+});
+
+describe('les vers survivent au transport', () => {
+  test('une réplique en vers garde ses retours à la ligne', () => {
+    const vers = repliques(EXEMPLE).find((r) => r.vers);
+
+    assert.ok(vers, 'aucune réplique en vers dans l’exemple');
+    assert.ok(vers.texte.includes('\n'), 'les vers ont été recollés');
+  });
+
+  test('la prose n’est pas marquée en vers', () => {
+    const prose = repliques(EXEMPLE).find((r) => r.texte === 'Oui.');
+
+    assert.equal(prose.vers, false);
+  });
+});
+
+describe('les didascalies internes désignent le bon mot', () => {
+  test('avant_mot est un index valide dans le texte parlé', () => {
+    // C'est le point de jonction le plus fragile : Python compte les mots avec
+    // un découpage sur les espaces, et `texte.mots()` doit compter pareil.
+    // Un décalage afficherait la didascalie au milieu du mauvais mot.
+    for (const replique of repliques(EXEMPLE)) {
+      for (const didascalie of replique.didascalies_internes ?? []) {
+        assert.ok(
+          didascalie.avant_mot <= mots(replique.texte).length,
+          `${replique.id} : avant_mot=${didascalie.avant_mot} ` +
+            `pour ${mots(replique.texte).length} mots`,
+        );
+      }
+    }
+  });
+
+  test('la didascalie n’est pas restée dans le texte parlé', () => {
+    const avecJeu = repliques(EXEMPLE).find((r) => r.didascalies_internes);
+
+    assert.ok(avecJeu, 'aucune didascalie interne dans l’exemple');
+    assert.ok(!avecJeu.texte.includes('se lève'));
+    assert.equal(avecJeu.didascalies_internes[0].texte, 'il se lève');
+    assert.equal(avecJeu.didascalies_internes[0].avant_mot, 4);
+  });
+});
+
+describe('bout en bout : réciter une réplique du fichier', () => {
+  test('une récitation exacte obtient 100', () => {
+    const replique = repliques(EXEMPLE)[0];
+
+    assert.equal(comparer(replique.texte, replique.texte).score, 100);
+  });
+
+  test('une récitation sans ponctuation ni accents obtient 100', () => {
+    // Le cas réel : c'est ce que rend la transcription vocale d'iOS.
+    const avecJeu = repliques(EXEMPLE).find((r) => r.didascalies_internes);
+    const commeDitParIOS = 'je ne crois pas quelle reponde';
+
+    const resultat = comparer(avecJeu.texte, commeDitParIOS);
+
+    // « qu'elle » sans apostrophe reste un mot différent de « quelle » : c'est
+    // une limite honnête de la normalisation, pas un défaut à masquer.
+    assert.ok(resultat.score >= 80, `score ${resultat.score}`);
+  });
+
+  test('un vers récité d’un trait obtient 100', () => {
+    const vers = repliques(EXEMPLE).find((r) => r.vers);
+    const dUnTrait = vers.texte.replace('\n', ' ');
+
+    assert.equal(comparer(vers.texte, dUnTrait).score, 100);
+  });
+});

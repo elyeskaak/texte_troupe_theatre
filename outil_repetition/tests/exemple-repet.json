@@ -1,0 +1,119 @@
+{
+  "schema": "repetition/1",
+  "piece": "Pièce d'essai",
+  "outil": "outil_edition 1.0.0 — étape 4",
+  "avertissements": [],
+  "liminaires": [
+    {
+      "type": "distribution",
+      "texte": "PERSONNAGES"
+    },
+    {
+      "type": "entree_distribution",
+      "texte": "CLARISSA, la maîtresse de maison"
+    },
+    {
+      "type": "entree_distribution",
+      "texte": "SIR ROWLAND, son tuteur"
+    }
+  ],
+  "personnages": [
+    {
+      "nom": "CLARISSA",
+      "repliques": 3,
+      "mots": 21
+    },
+    {
+      "nom": "SIR ROWLAND",
+      "repliques": 2,
+      "mots": 7
+    }
+  ],
+  "unites": [
+    {
+      "id": "u001",
+      "acte": "ACTE PREMIER",
+      "scene": "SCÈNE 1",
+      "implicite": false,
+      "personnages": [
+        "CLARISSA",
+        "SIR ROWLAND"
+      ],
+      "elements": [
+        {
+          "type": "lieu",
+          "texte": "Un salon. Le soir tombe."
+        },
+        {
+          "type": "replique",
+          "id": "r_64cc8d4c7567",
+          "personnage": "CLARISSA",
+          "texte": "Vous ne savez pas ce que vous dites.",
+          "vers": false
+        },
+        {
+          "type": "replique",
+          "id": "r_672228572172",
+          "personnage": "SIR ROWLAND",
+          "texte": "Je ne crois pas qu'elle réponde.",
+          "vers": false,
+          "didascalies_internes": [
+            {
+              "avant_mot": 4,
+              "texte": "il se lève"
+            }
+          ]
+        },
+        {
+          "type": "didascalie",
+          "texte": "Pause."
+        }
+      ]
+    },
+    {
+      "id": "u002",
+      "acte": "ACTE PREMIER",
+      "scene": "SCÈNE 1",
+      "implicite": true,
+      "personnages": [
+        "CLARISSA"
+      ],
+      "elements": [
+        {
+          "type": "replique",
+          "id": "r_ff6d8ebb9c56",
+          "personnage": "CLARISSA",
+          "texte": "Je vous ai vu venir de loin,\nEt je n'ai pas bougé.",
+          "vers": true
+        }
+      ]
+    },
+    {
+      "id": "u003",
+      "acte": "ACTE PREMIER",
+      "scene": "SCÈNE 2",
+      "implicite": false,
+      "personnages": [
+        "CLARISSA",
+        "SIR ROWLAND"
+      ],
+      "elements": [
+        {
+          "type": "replique",
+          "id": "r_abf669b491bf",
+          "personnage": "CLARISSA",
+          "texte": "Oui.",
+          "vers": false
+        },
+        {
+          "type": "replique",
+          "id": "r_e92a0ccf1d3d",
+          "personnage": "SIR ROWLAND",
+          "texte": "Oui.",
+          "vers": false
+        }
+      ]
+    }
+  ],
+  "genere_le": "2026-08-03T12:00:00"
+}

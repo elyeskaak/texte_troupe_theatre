@@ -1,0 +1,10 @@
+{
+  "name": "outil-repetition",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Outil de répétition de texte de théâtre. Aucune dépendance : ce fichier ne sert qu'à déclarer les .js comme modules ES pour node --test.",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

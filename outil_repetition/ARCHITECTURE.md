@@ -136,32 +136,44 @@ statuts par réplique.
 ```
 outil_repetition/
 ├── index.html               coque HTML + tout le CSS. Aucune logique métier.
-├── tests.html               lanceur de tests dans le navigateur
 ├── manifest.webmanifest     nom, icône, plein écran à l'écran d'accueil
 ├── sw.js                    service worker — ouverture hors ligne
 ├── icone.svg                icône d'écran d'accueil
+├── package.json             AUCUNE dépendance — voir plus bas
 │
 ├── js/
-│   ├── config.js            toutes les constantes. Aucune logique.
+│   ├── config.js       PUR  toutes les constantes. Aucune logique.
 │   ├── schema.js       PUR  validation du REPET.json
 │   ├── texte.js        PUR  normalisation, amorces, découpage en mots
 │   ├── comparaison.js  PUR  alignement mot à mot, score
 │   ├── modele.js       PUR  index dérivé : tops, mes scènes, spot check
-│   ├── tirage.js       PUR  générateur pseudo-aléatoire graine (§10.4)
+│   ├── tirage.js       PUR  générateur pseudo-aléatoire à graine (§10.4)
 │   ├── etat.js         PUR  état + transitions
 │   ├── stockage.js          localStorage, export / import
 │   ├── voix.js              Web Speech uniquement
 │   ├── rendu.js             DOM
 │   └── app.js               câblage, écouteurs, orchestration
 │
+├── tests/
+│   ├── purete.test.js       contrôle mécanique de la pureté (§13)
+│   ├── contrat.test.js      le contrat avec outil_edition (§13.1)
+│   ├── exemple-repet.json   REPET.json réel, produit par repet_export.py
+│   └── <module>.test.js     un fichier par module pur
+│
 └── pieces/                  JAMAIS versionné (.gitignore) — usage local
 ```
+
+**`package.json` ne déclare aucune dépendance.** Il existe pour une seule
+raison : sans `"type": "module"`, Node traite les `.js` comme du CommonJS et
+refuse leurs `export`. Le navigateur, lui, n'en a pas besoin —
+`<script type="module">` suffit. `npm install` n'a jamais à être lancé, et
+`node_modules/` n'existera pas.
 
 ### 3.2 Révision du §11.1 du cahier des charges
 
 Le cahier annonçait 4 fichiers, toute la logique dans `index.html`. **Je propose
-d'en faire 12**, pour une raison qui pèse plus que le compte de fichiers :
-**sans découpage, rien n'est testable.**
+d'en faire une quinzaine**, pour une raison qui pèse plus que le compte de
+fichiers : **sans découpage, rien n'est testable.**
 
 `outil_edition` compte 551 tests, et sa logique la plus délicate est isolée dans
 un module pur dont l'absence d'I/O est vérifiée par analyse AST. Le même souci
@@ -634,25 +646,47 @@ alerter trop tard.
 
 ## 13. Tests
 
-Deux exécutions, un seul corpus de tests, **aucune dépendance** — dans l'esprit
-des 551 tests d'`outil_edition`, qui tournent sans clé API ni réseau.
+**Aucune dépendance**, dans l'esprit des tests d'`outil_edition` qui tournent
+sans clé API ni réseau.
 
 ```bash
-node --test outil_repetition/tests/     # les 7 modules purs, sans navigateur
-```
-
-```
-tests.html                              # les mêmes, plus le rendu, dans Safari
+cd outil_repetition
+node --test tests/*.test.js       # ou : npm test
 ```
 
 Les modules purs n'important ni DOM ni API navigateur, Node les charge tels
 quels. C'est précisément ce que le découpage de §3.2 achète.
+
+Le glob est explicite et non `node --test tests/` : sous Windows, la forme
+« dossier » se fait interpréter comme un module à charger et échoue avec un
+`MODULE_NOT_FOUND` déroutant.
 
 **La pureté est vérifiée mécaniquement.** Un test lit la source des sept modules
 purs et échoue s'il y trouve `document`, `window`, `localStorage`, `fetch`,
 `Math.random` ou `Date.now`. C'est la transposition du contrôle AST qui garde
 `utils/blocks.py` pur dans `outil_edition` — sans ce test, la pureté se dégrade au
 premier correctif pressé.
+
+### 13.1 Le contrat avec `outil_edition`
+
+`tests/exemple-repet.json` est un **vrai `REPET.json`**, produit par
+`repet_export.py` sur une pièce d'essai de quelques répliques, et versionné.
+`contrat.test.js` le valide avec `schema.js`.
+
+C'est le seul test qui éprouve les deux outils ensemble, et il attrape la classe
+de défauts la plus coûteuse : une divergence silencieuse entre ce que Python écrit
+et ce que le navigateur attend. Un champ renommé d'un côté se découvrirait sinon
+en chargeant une pièce sur le téléphone.
+
+Il vérifie en particulier le point de jonction le plus fragile : `avant_mot` est
+calculé en Python par un découpage sur les espaces, et `texte.mots()` doit compter
+**exactement pareil**. Un décalage d'une unité afficherait chaque didascalie au
+mauvais endroit, sans qu'aucun test de module ne s'en aperçoive.
+
+La pièce d'essai est écrite pour ce test, donc libre de droits — contrairement
+aux pièces réelles, que `.gitignore` écarte.
+
+### 13.2 Priorités de couverture
 
 Cas de test à couvrir en priorité, parce que ce sont les endroits où un bug est
 invisible à l'œil :
@@ -674,10 +708,10 @@ Un commit par étape. Reprend le §13 du cahier, en le précisant.
 
 | # | Livrable | Vérifiable par |
 |---|---|---|
-| 1 | Purge de l'historique (procédure déjà rédigée) | `git log -p` ne montre plus le blob |
-| 2 | **Ce document, validé** | relecture |
-| 3 | `repet_export.py` dans `outil_edition` + tests du schéma | un `REPET.json` produit depuis une pièce réelle |
-| 4 | `config.js`, `schema.js`, `texte.js`, `comparaison.js`, `tirage.js` + `node --test` | tests verts, y compris le test de pureté |
+| 1 | ✅ *fait* — purge de l'historique | `git log -p` ne montre plus le blob |
+| 2 | ✅ *fait* — ce document, validé | relecture |
+| 3 | ✅ *fait* — `repet_export.py` dans `outil_edition` + tests | 610 tests Python verts |
+| 4 | ✅ *fait* — `config.js`, `schema.js`, `texte.js`, `comparaison.js`, `tirage.js` | 119 tests Node verts, pureté et contrat compris |
 | 5 | `modele.js`, `etat.js` + tests | les trois cas de top couverts |
 | 6 | Coque : `index.html`, chargement d'une pièce, `stockage.js`, choix des rôles | une pièce chargée survit à la fermeture de Safari |
 | 7 | `rendu.js` : les 6 modes en CSS, le top, le repli de scènes, montage paresseux | usage réel sur iPhone 15 |
