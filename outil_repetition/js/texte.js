@@ -113,7 +113,11 @@ export function positionsDesMots(texte) {
  * @param {string} texte
  */
 export function normaliser(texte) {
-  let resultat = texte.replace(APOSTROPHES, "'");
+  // NFKD, et non NFD : la décomposition **de compatibilité** déplie les lettres
+  // en exposant, dont les éditions françaises usent pour les abréviations —
+  // « Mᵐᵉ » devient « Mme », que la table ci-dessous sait ensuite étendre. NFD
+  // les laissait intactes, et « Mᵐᵉ » ne ressemblait à rien de prononçable.
+  let resultat = texte.normalize('NFKD').replace(APOSTROPHES, "'");
 
   resultat = sansAccents(resultat).toLowerCase();
   resultat = resultat.replace(PONCTUATION, ' ');
@@ -121,10 +125,18 @@ export function normaliser(texte) {
 
   return resultat
     .split(' ')
-    .map((mot) => (/^\d+$/.test(mot) ? nombreEnMots(mot) : mot))
+    .map(_normaliserJeton)
     .join(' ')
     .replace(ESPACES, ' ')
     .trim();
+}
+
+function _normaliserJeton(mot) {
+  if (/^\d+$/.test(mot)) {
+    return nombreEnMots(mot);
+  }
+
+  return ABREVIATIONS.get(mot) ?? mot;
 }
 
 /**
@@ -137,6 +149,41 @@ export function motsNormalises(texte) {
 
   return normalise.length === 0 ? [] : normalise.split(' ');
 }
+
+// ============================================================
+// ABRÉVIATIONS
+// ============================================================
+
+/**
+ * Abréviations écrites, ramenées à leur forme prononcée.
+ *
+ * Même principe que les nombres : l'édition imprimée écrit « Mme Brown », le
+ * comédien dit « madame Brown », et la transcription rend ce qu'elle entend.
+ * Sans cette table, l'outil comptait une faute là où il n'y en avait aucune — il
+ * mesurait la typographie de l'édition, non la mémoire.
+ *
+ * **Toutes les correspondances sont d'un mot vers un mot**, et c'est une
+ * contrainte, non une coïncidence. `comparaison.comparer` aligne la forme
+ * affichée sur la forme normalisée pour surligner le bon mot ; une abréviation qui
+ * se déplierait en deux mots romprait cet alignement et ferait perdre le
+ * surlignage sur toute la réplique. D'où « etcetera » en un seul mot.
+ */
+const ABREVIATIONS = new Map([
+  ['mme', 'madame'],
+  ['mmes', 'mesdames'],
+  ['m', 'monsieur'],
+  ['mr', 'monsieur'],
+  ['mm', 'messieurs'],
+  ['mlle', 'mademoiselle'],
+  ['mlles', 'mesdemoiselles'],
+  ['dr', 'docteur'],
+  ['pr', 'professeur'],
+  ['st', 'saint'],
+  ['ste', 'sainte'],
+  ['sts', 'saints'],
+  ['no', 'numero'],
+  ['etc', 'etcetera'],
+]);
 
 // ============================================================
 // NOMBRES

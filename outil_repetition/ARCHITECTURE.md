@@ -565,13 +565,55 @@ mots.
 Un seul chemin de normalisation pour les deux côtés : deux fonctions
 divergeraient au premier correctif.
 
+### 9.1 bis Abréviations et exposants
+
+L'édition imprimée écrit « Mme Brown », le comédien dit « madame Brown », et la
+transcription rend ce qu'elle entend. Sans table d'équivalence, l'outil comptait
+une faute là où il n'y en avait aucune : il mesurait la **typographie de
+l'édition**, non la mémoire.
+
+Même principe que les nombres, et même endroit — un chemin de normalisation
+unique. `M.`, `Mme`, `Mlle`, `MM.`, `Dr`, `St` et leurs pluriels sont ramenés à
+leur forme prononcée.
+
+**La décomposition est NFKD, non NFD.** Le document de travail écrit `Mᵐᵉ` avec
+des lettres modificatives en exposant — 80 occurrences dans la pièce d'essai. NFD
+les laisse intactes et le mot ne ressemble à rien de prononçable ; NFKD les déplie
+en `Mme`, que la table sait alors étendre.
+
+Toutes les correspondances vont d'un mot vers un mot, et c'est une contrainte :
+voir §9.3.
+
 ### 9.2 Ne pas comparer ce qui n'est pas dit
 
 Le texte attendu exclut les `didascalies_internes` : *elle se lève* ne se
 prononce pas. Les compter en mots oubliés ferait chuter le score de chaque
 réplique qui porte un jeu de scène — c'est-à-dire les plus travaillées.
 
-### 9.3 Aligner, puis classer
+### 9.3 Aligner, puis classer — et retrouver la forme de l'auteur
+
+Le détail affiché doit montrer le texte de l'auteur, pas sa forme normalisée. Cela
+suppose de savoir, pour chaque mot normalisé, quel jeton du texte l'a produit — et
+la correspondance n'est **pas** de un pour un, trois fois :
+
+- la ponctuation détachée (« ? » précédé d'une espace) est un jeton affiché qui ne
+  donne aucun mot normalisé ;
+- un mot composé en donne plusieurs : « Hailsham-Brown » → « hailsham brown » ;
+- un nombre en chiffres aussi : « 203 » → « deux cent trois ».
+
+> **Défaut corrigé le 2026-08-03.** La version précédente comparait les deux
+> longueurs et, en cas d'écart, renonçait à afficher le texte de l'auteur au
+> profit de sa forme normalisée — en minuscules et sans accents. Comme l'écart
+> survenait sur la **plupart** des répliques françaises, le détail était presque
+> toujours dégradé. Le défaut était invisible parce que le résultat restait
+> plausible : on lisait un diff, simplement pas celui de l'auteur. Vérifié après
+> correction sur les 1206 répliques de la pièce d'essai : aucune ne perd sa forme.
+
+La correspondance est donc établie **jeton par jeton**. Un mot composé
+partiellement oublié montre sa forme d'origine deux fois, ce qui est exact :
+chaque moitié a son propre verdict.
+
+### 9.3 bis Le classement
 
 Alignement mot à mot par plus longue sous-séquence commune (programmation
 dynamique). Les longueurs en jeu — quelques dizaines de mots, `MOTS_MAX_ALIGNEMENT`

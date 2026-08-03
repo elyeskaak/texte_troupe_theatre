@@ -21,7 +21,7 @@
  */
 
 import { CONFIG } from './config.js';
-import { motsNormalises, mots as decouperMots } from './texte.js';
+import { estMot, motsNormalises, mots as decouperMots } from './texte.js';
 
 /** États possibles d'un mot dans le résultat d'une comparaison. */
 export const ETAT = Object.freeze({
@@ -45,14 +45,11 @@ export const ETAT = Object.freeze({
  * }}
  */
 export function comparer(attendu, recite) {
-  const attendusAffiches = decouperMots(attendu);
   const attendusNormalises = motsNormalises(attendu);
   const recitesNormalises = motsNormalises(recite);
 
-  // Un désalignement entre forme affichée et forme normalisée rendrait le
-  // surlignage faux. Il ne peut venir que d'une divergence de découpage dans
-  // `texte.js`, et mieux vaut alors renoncer au détail que le fausser.
-  const alignable = attendusAffiches.length === attendusNormalises.length;
+  // Correspondance mot normalisé → forme affichée, établie jeton par jeton.
+  const formes = _formesAffichees(attendu, attendusNormalises.length);
 
   const limite = CONFIG.MOTS_MAX_ALIGNEMENT;
   const tronque =
@@ -80,7 +77,7 @@ export function comparer(attendu, recite) {
       continue;
     }
 
-    const affiche = alignable ? attendusAffiches[index] : gauche[index];
+    const affiche = formes[index] ?? gauche[index];
     index += 1;
 
     if (operation.etat === ETAT.CORRECT) {
@@ -100,6 +97,48 @@ export function comparer(attendu, recite) {
     tronque,
     details,
   };
+}
+
+/**
+ * Pour chaque mot normalisé, la forme du texte de l'auteur qui l'a produit.
+ *
+ * Une comparaison naïve suppose autant de mots des deux côtés, et cette
+ * supposition est fausse trois fois :
+ *
+ * - la ponctuation détachée — le « ? » que le français fait précéder d'une
+ *   espace — est un jeton affiché qui ne donne aucun mot normalisé ;
+ * - un mot composé en donne **plusieurs** : « Hailsham-Brown » devient
+ *   « hailsham brown » ;
+ * - un nombre en chiffres aussi : « 203 » devient « deux cent trois ».
+ *
+ * La version précédente comparait les deux longueurs et, en cas d'écart,
+ * renonçait à afficher le texte de l'auteur pour montrer sa forme normalisée —
+ * en minuscules et sans accents. Comme l'écart survenait sur la plupart des
+ * répliques françaises, le détail était presque toujours dégradé, et personne ne
+ * pouvait le voir puisque le résultat restait plausible.
+ *
+ * Établir la correspondance jeton par jeton supprime le cas particulier : un mot
+ * composé partiellement oublié montre alors sa forme d'origine deux fois, ce qui
+ * est exact — chaque moitié a son propre verdict.
+ *
+ * @param {string} attendu
+ * @param {number} attendus - nombre de mots normalisés, pour contrôle
+ * @returns {string[]}
+ */
+function _formesAffichees(attendu, attendus) {
+  const formes = [];
+
+  for (const jeton of decouperMots(attendu).filter(estMot)) {
+    const parts = Math.max(1, motsNormalises(jeton).length);
+
+    for (let k = 0; k < parts; k += 1) {
+      formes.push(jeton);
+    }
+  }
+
+  // Un désaccord signifierait que la normalisation d'un jeton isolé diffère de
+  // celle du texte entier. On renonce alors, plutôt que de surligner de travers.
+  return formes.length === attendus ? formes : [];
 }
 
 /**

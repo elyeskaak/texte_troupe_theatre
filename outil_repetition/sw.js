@@ -24,7 +24,7 @@
  * invisible sur le téléphone, indéfiniment. C'est le piège classique du service
  * worker, et la seule protection est de ne pas oublier cette ligne.
  */
-const VERSION = 'repetition-v7';
+const VERSION = 'repetition-v8';
 
 const FICHIERS = [
   './',

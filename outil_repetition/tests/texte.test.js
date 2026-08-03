@@ -358,3 +358,64 @@ describe('contient', () => {
     assert.ok(!contient('Un texte', '   '));
   });
 });
+
+
+describe('abréviations et exposants', () => {
+  test('« Mme » et « Madame » sont la même chose', () => {
+    // C'est le cas signalé à l'usage : l'édition écrit l'abréviation, le
+    // comédien dit le mot, et la transcription rend ce qu'elle entend.
+    assert.equal(normaliser('Mme Brown'), normaliser('Madame Brown'));
+  });
+
+  test('les lettres en exposant sont dépliées', () => {
+    // Le document de travail écrit « Mᵐᵉ » avec des lettres modificatives. NFD
+    // les laissait intactes ; NFKD les déplie.
+    assert.equal(normaliser('Mᵐᵉ Brown'), normaliser('Madame Brown'));
+  });
+
+  test('les autres abréviations courantes du théâtre', () => {
+    const paires = [
+      ['M. Costello', 'Monsieur Costello'],
+      ['MM. Costello', 'Messieurs Costello'],
+      ['Mlle Peake', 'Mademoiselle Peake'],
+      ['Mmes Brown', 'Mesdames Brown'],
+      ['Dr Brown', 'Docteur Brown'],
+      ['St Pierre', 'Saint Pierre'],
+    ];
+
+    for (const [ecrit, dit] of paires) {
+      assert.equal(normaliser(ecrit), normaliser(dit), `${ecrit} ≠ ${dit}`);
+    }
+  });
+
+  test('un mot ordinaire n’est pas confondu avec une abréviation', () => {
+    // « me », « ma », « mon » ne doivent pas devenir « madame ».
+    assert.equal(normaliser('me voici'), 'me voici');
+    assert.equal(normaliser('ma maison'), 'ma maison');
+    assert.equal(normaliser('sti'), 'sti');
+  });
+
+  test('toutes les correspondances sont d’un mot vers un mot', () => {
+    // Contrainte, non coïncidence : `comparaison.comparer` aligne la forme
+    // affichée sur la forme normalisée pour surligner le bon mot. Une abréviation
+    // qui se déplierait en deux mots romprait cet alignement.
+    for (const abrege of ['Mme', 'MM', 'Mlle', 'Mmes', 'Dr', 'Pr', 'St', 'etc']) {
+      assert.equal(
+        motsNormalises(abrege).length,
+        1,
+        `${abrege} se déplie en plusieurs mots`,
+      );
+    }
+  });
+
+  test('autant de mots significatifs que de mots normalisés', () => {
+    // C'est la condition de l'alignement du surlignage dans `comparer` : la
+    // ponctuation détachée ne compte d'aucun côté.
+    const replique = 'J’y vais. Allô… oui… Copplestone Court… Mme Brown ?';
+
+    assert.equal(
+      mots(replique).filter(estMot).length,
+      motsNormalises(replique).length,
+    );
+  });
+});
