@@ -262,7 +262,15 @@ def convertir(paragraphes: list[Paragraphe]) -> tuple[str, Rapport]:
     # `lignes` — pour pouvoir y raccorder un paragraphe de continuation.
     personnage_ouvert: str | None = None
     rang_replique: int | None = None
+    # Acte et scène sont suivis séparément, et les messages citent les deux :
+    # le préfixe « Acte III - » est retiré des titres de scène (voir
+    # `_titre_scene`), si bien que « Séquence 4 » existe une fois par acte. Le
+    # citer seul renverrait à quatre endroits du document.
+    acte_courant = "(avant tout acte)"
     scene_courante = "(avant toute scène)"
+
+    def ou() -> str:
+        return f"{acte_courant} / {scene_courante}"
 
     def poser(ligne: str) -> int:
         # Une ligne vide sépare chaque élément : la convention de §8 s'appuie
@@ -278,8 +286,12 @@ def convertir(paragraphes: list[Paragraphe]) -> tuple[str, Rapport]:
         nonlocal personnage_ouvert, rang_replique
 
         if personnage_ouvert is not None and rang_replique is None:
+            # La scène est nommée dans le message : sans elle, l'avertissement
+            # oblige à parcourir un document de 2 500 paragraphes pour retrouver
+            # le passage. Il devient alors plus simple de l'ignorer.
             rapport.avertissements.append(
-                f"« {personnage_ouvert} » annoncé sans réplique {motif}"
+                f"« {personnage_ouvert} » annoncé sans réplique "
+                f"dans {ou()} {motif}"
             )
 
         personnage_ouvert = None
@@ -288,6 +300,8 @@ def convertir(paragraphes: list[Paragraphe]) -> tuple[str, Rapport]:
     for paragraphe in corps:
         if paragraphe.titre_acte:
             fermer(f"avant « {paragraphe.texte[:40]} »")
+            acte_courant = paragraphe.texte
+            scene_courante = "(sans titre de scène)"
             rapport.actes += 1
             poser(f"**{paragraphe.texte}**")
             continue
@@ -313,7 +327,7 @@ def convertir(paragraphes: list[Paragraphe]) -> tuple[str, Rapport]:
             # Aucun personnage ouvert : la ligne est conservée, jamais jetée, et
             # signalée. `repet_export` la marquera « texte_sans_personnage ».
             rapport.avertissements.append(
-                f"texte sans personnage annoncé dans {scene_courante} : "
+                f"texte sans personnage annoncé dans {ou()} : "
                 f"« {paragraphe.texte[:50]} »"
             )
             poser(paragraphe.texte)
@@ -339,7 +353,7 @@ def convertir(paragraphes: list[Paragraphe]) -> tuple[str, Rapport]:
         # Le cas est consigné dans un rapport à relire : c'est un doute sur la
         # source, pas une décision à cacher.
         rapport.continuations.append(
-            (scene_courante, lignes[rang_replique][-50:], paragraphe.texte[:50])
+            (ou(), lignes[rang_replique][-50:], paragraphe.texte[:50])
         )
         lignes[rang_replique] = f"{lignes[rang_replique]} {paragraphe.texte}"
 
