@@ -1,10 +1,14 @@
 # ARCHITECTURE — outil de répétition
 
-> **Statut : à valider.** Aucun code ne doit être écrit avant validation.
+> **Statut : validé le 2026-08-03.** Les quatre décisions ouvertes ont été
+> tranchées ; le relevé figure en [§15](#15-décisions-validées). L'implémentation
+> peut commencer à l'étape 3 du [plan de livraison](#14-plan-de-livraison).
+>
 > Ce document réalise le [cahier des charges](CAHIER_DES_CHARGES.md) et en révise
 > un point : le découpage en fichiers (§3.2, révision du §11.1 du cahier).
 >
-> Les décisions ouvertes sont en [§15](#15-décisions-à-valider).
+> Révision notable depuis la première rédaction : le **repli par enregistrement
+> audio est retiré du périmètre**, `voix.js` ne porte plus que Web Speech.
 
 ---
 
@@ -24,7 +28,7 @@
 12. [Configuration](#12-configuration)
 13. [Tests](#13-tests)
 14. [Plan de livraison](#14-plan-de-livraison)
-15. [Décisions à valider](#15-décisions-à-valider)
+15. [Décisions validées](#15-décisions-validées)
 
 ---
 
@@ -146,7 +150,7 @@ outil_repetition/
 │   ├── tirage.js       PUR  générateur pseudo-aléatoire graine (§10.4)
 │   ├── etat.js         PUR  état + transitions
 │   ├── stockage.js          localStorage, export / import
-│   ├── voix.js              Web Speech + MediaRecorder
+│   ├── voix.js              Web Speech uniquement
 │   ├── rendu.js             DOM
 │   └── app.js               câblage, écouteurs, orchestration
 │
@@ -179,7 +183,7 @@ Ce que la révision coûte : les modules ES n'étant pas chargeables depuis
 `index.html`. Il faut l'URL HTTPS, ou `python -m http.server` en local. C'est
 sans conséquence : le micro imposait déjà HTTPS (§4.1 du cahier).
 
-À valider en [§15](#15-décisions-à-valider), décision 1.
+Validé en [§15](#15-décisions-validées), décision 1.
 
 ---
 
@@ -195,7 +199,7 @@ sans conséquence : le micro imposait déjà HTTPS (§4.1 du cahier).
 | `tirage.js` | aléatoire reproductible à partir d'une graine | **oui** | non |
 | `etat.js` | l'état de session et ses transitions | **oui** | non |
 | `stockage.js` | `localStorage`, export / import, quota | non | non |
-| `voix.js` | Web Speech, MediaRecorder, permissions | non | non |
+| `voix.js` | Web Speech et permission micro | non | non |
 | `rendu.js` | montage et mise à jour du DOM | non | **oui** |
 | `app.js` | câblage, écouteurs, cycle de vie | non | oui |
 
@@ -436,13 +440,19 @@ Cinq règles, toutes issues des limites réelles d'iOS (§4.3 du cahier) :
 | Situation | Comportement |
 |---|---|
 | API absente | le bouton micro n'est pas monté ; mention une fois dans les réglages |
-| permission refusée | marche à suivre dans Réglages iOS, et proposition d'enregistrement |
-| hors ligne (`navigator.onLine === false`) | « la reconnaissance vocale a besoin du réseau », repli enregistrement |
+| permission refusée | marche à suivre dans Réglages iOS |
+| hors ligne (`navigator.onLine === false`) | « la reconnaissance vocale a besoin du réseau » |
 | silence ou interruption | abandon après le délai de garde, sans trace |
-| repli enregistrement | `MediaRecorder`, type négocié par `isTypeSupported` — **jamais `audio/webm` codé en dur**, Safari produit de l'AAC/MP4 |
 
 `navigator.onLine` à `false` est fiable ; à `true` il ne prouve rien. Il sert
 donc à **éviter une tentative vouée à l'échec**, pas à garantir un succès.
+
+**Le repli est unique, et c'est le chemin normal de l'outil** : je récite, puis je
+touche « su » ou « à revoir ». Aucune de ces cinq situations ne demande donc de
+code supplémentaire — elles ramènent toutes à ce que P2 impose déjà de savoir
+faire sans micro. C'est ce qui a permis de retirer `MediaRecorder` du périmètre
+(§15, décision 4) sans rien laisser d'inachevé : il n'y avait pas de trou à
+combler sous le repli audio.
 
 ---
 
@@ -587,7 +597,7 @@ P3 en pratique. Quatre familles, quatre traitements, aucun `catch` vide.
 |---|---|
 | `REPET.json` non conforme | refus **avant** tout chargement, message nommant le champ fautif. Un `schema` de version supérieure est refusé, jamais interprété au mieux |
 | `localStorage` indisponible ou saturé | bandeau persistant « la progression ne sera pas conservée », et l'outil continue de fonctionner (P4) |
-| capacité absente (micro, Wake Lock, `MediaRecorder`) | la commande n'est pas montée. Un bouton inerte est pire que pas de bouton |
+| capacité absente (micro, Wake Lock) | la commande n'est pas montée. Un bouton inerte est pire que pas de bouton |
 | erreur inattendue | `window.onerror` et `unhandledrejection` consignent dans un journal en mémoire, consultable depuis les réglages et exportable |
 
 Ce dernier point est ce qui aurait révélé le bug `window.storage` en dix
@@ -673,7 +683,7 @@ Un commit par étape. Reprend le §13 du cahier, en le précisant.
 | 7 | `rendu.js` : les 6 modes en CSS, le top, le repli de scènes, montage paresseux | usage réel sur iPhone 15 |
 | 8 | Progression, bilan, spot check, export / import | export puis import restitue à l'identique ; fusion vérifiée |
 | 9 | Confort : sommaire, recherche, marque-pages, annotations, défilement, Wake Lock | — |
-| 10 | `voix.js` et ses replis | testé sur iPhone 15 en HTTPS **et en mode avion** |
+| 10 | `voix.js` et ses replis (Web Speech seul) | testé sur iPhone 15 en HTTPS **et en mode avion** |
 | 11 | `manifest`, `sw.js`, activation de GitHub Pages | ouverture hors ligne depuis l'écran d'accueil |
 | 12 | `README.md` du sous-projet | — |
 
@@ -685,26 +695,34 @@ regarder, et c'est la seule façon d'avoir confiance dans un score de fidélité
 
 ---
 
-## 15. Décisions à valider
+## 15. Décisions validées
 
-1. **Découpage en 12 fichiers** plutôt qu'un `index.html` unique (§3.2). Ce que
-   ça achète : des tests sans navigateur, donc une comparaison de texte dont on
-   peut se fier au score. Ce que ça coûte : plus d'ouverture par double-clic sur
-   le fichier — mais le micro imposait déjà HTTPS.
+Tranchées le **2026-08-03**. Aucune décision ne reste ouverte : l'implémentation
+peut commencer à l'étape 3 du [plan de livraison](#14-plan-de-livraison).
 
-2. **`tests/` dans `outil_repetition/`, lancés par `node --test`.** Cela introduit
-   Node comme outil de développement du sous-projet, alors qu'`outil_edition`
-   n'utilise que Python. Aucune dépendance n'est installée pour autant, et
-   `tests.html` reste un repli si tu préfères ne pas dépendre de Node du tout.
+| # | Décision | Retenu | Où cela se lit |
+|---|---|---|---|
+| 1 | Découpage en fichiers | **12 fichiers**, modules ES natifs, aucune étape de build | §3.1, §3.2 |
+| 2 | Exécution des tests | **`node --test`** sur les 7 modules purs, `tests.html` en complément pour le rendu | §13 |
+| 3 | Montage du DOM | **paresseux par unité dès l'étape 7**, pas de rendu complet transitoire | §6.4 |
+| 4 | Repli enregistrement audio | **retiré du périmètre** | §8.2, étape 10 |
 
-3. **Montage paresseux par unité dès l'étape 7**, ou rendu complet d'abord et
-   montage paresseux seulement si l'iPhone montre ses limites ? Le rendu complet
-   est plus simple à écrire ; le montage paresseux évite une réécriture de
-   `rendu.js` plus tard. Je penche pour le faire d'emblée, la structure par unité
-   étant de toute façon imposée par le repli des scènes.
+Deux remarques sur la portée de ces choix.
 
-4. **Le repli d'enregistrement audio** (§8.2) est-il vraiment utile ? Il ajoute
-   `MediaRecorder`, une gestion de blobs et un lecteur, pour un usage qui se
-   réduit peut-être à « je m'écoute une fois ». Le mémo vocal de l'iPhone fait
-   déjà cela très bien. Proposition : le sortir de l'étape 10 et n'y revenir que
-   si le besoin se confirme à l'usage.
+**La décision 1 est celle qui conditionne les autres.** Sans découpage, pas de
+`node --test`, donc pas de test de pureté, donc aucun moyen de se fier au score
+de fidélité produit par `comparaison.js`. Les décisions 1 et 2 forment un seul
+choix vu de deux côtés.
+
+**La décision 4 ne laisse aucun trou.** Le repli audio ne comblait rien : les
+cinq situations d'échec du micro (§8.2) ramènent toutes au chemin principal de
+l'outil — je récite, je touche « su » ou « à revoir » — que P2 impose de savoir
+faire sans micro de toute façon. Ce qui disparaît, c'est `MediaRecorder`, une
+gestion de blobs, un lecteur audio et leur part de quota `localStorage` ; ce qui
+reste, c'est l'app Dictaphone de l'iPhone, qui le fait mieux. À reconsidérer si
+le besoin se manifeste à l'usage, et pas avant.
+
+**La prochaine étape est l'étape 3 du plan** : `repet_export.py` dans
+`outil_edition`, avec ses tests — le premier maillon, et celui dont tout le reste
+dépend. Rien à écrire côté navigateur avant qu'un `REPET.json` existe pour de
+vrai.

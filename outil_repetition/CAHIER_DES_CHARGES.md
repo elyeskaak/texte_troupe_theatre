@@ -345,10 +345,18 @@ Replis, dans l'ordre :
 | Situation | Comportement |
 |---|---|
 | API absente (navigateur non compatible) | le bouton micro n'apparaît pas ; message une seule fois, discret |
-| Permission refusée | explication de la marche à suivre dans Réglages iOS, et proposition d'enregistrement audio |
-| Réseau absent | message explicite « la reconnaissance vocale a besoin du réseau », repli enregistrement |
+| Permission refusée | explication de la marche à suivre dans Réglages iOS |
+| Réseau absent | message explicite « la reconnaissance vocale a besoin du réseau » |
 | Reconnaissance muette ou interrompue | abandon silencieux après le délai de garde ; **aucun score enregistré**, aucune erreur bruyante |
-| Repli enregistrement | `MediaRecorder` (iOS 14.3+, sortie AAC/MP4 — ne pas coder en dur `audio/webm`) : je m'écoute et je juge moi-même |
+
+Dans tous ces cas, le repli est **le même et il suffit** : je récite, puis je
+touche « su » ou « à revoir ». C'est déjà le chemin principal de §8.
+
+**Pas de repli par enregistrement audio** (retiré du périmètre le 2026-08-03).
+Le prompt initial en prévoyait un « pour réécoute ». Il aurait coûté
+`MediaRecorder`, une gestion de blobs, un lecteur et un quota de stockage — pour
+un usage que l'app Dictaphone de l'iPhone rend déjà, mieux, et sans rien à écrire.
+À reconsidérer seulement si le besoin se manifeste à l'usage.
 
 ---
 
