@@ -845,7 +845,18 @@ $('btn-retour-accueil').addEventListener('click', () => {
   rafraichirListePieces();
   montrer('ecran-accueil');
 });
-$('btn-retour-roles').addEventListener('click', () => montrer('ecran-roles'));
+/**
+ * Retour au choix des rôles.
+ *
+ * `preparerEcranRoles()` est indispensable, et son absence était un vrai défaut :
+ * depuis que les rôles sont mémorisés, l'écran est court-circuité à l'ouverture
+ * et n'a donc **jamais été peuplé**. Se contenter de l'afficher montrait une page
+ * sans aucune pastille, et « Commencer » restait grisé faute de rôle sélectionnable.
+ */
+$('btn-retour-roles').addEventListener('click', () => {
+  preparerEcranRoles();
+  montrer('ecran-roles');
+});
 
 // --- commandes de répétition ---------------------------------
 

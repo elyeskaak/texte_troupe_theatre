@@ -293,6 +293,14 @@
   }
   #barre-contenu > .entete-groupe:first-child{ margin-top:0; }
 
+  /* Les groupes de la barre : un filet les sépare, sans consommer de ligne
+     comme le faisaient les en-têtes. */
+  .groupe-barre{
+    display:flex; flex-wrap:wrap; gap:8px; align-items:center;
+    padding-top:11px; margin-top:11px;
+    border-top:1px solid var(--trait);
+  }
+
   #btn-barre{
     flex:0 0 auto; min-height:38px; padding:7px 14px;
     font-size:0.8rem; letter-spacing:0.04em;
@@ -748,20 +756,22 @@
         </div>
       </div>
 
-      <!-- Une seule rangée, sans en-tête. « Sommaire » et « Bilan » ouvraient
-           exactement le même écran : ils n'en font plus qu'un. -->
-      <div class="rangee" style="margin-top:14px">
+      <!-- Deux groupes distingués par la forme, non par un en-tête qui prendrait
+           une ligne : les **réglages** sont des pastilles qui restent enfoncées,
+           les **actions** des boutons qui ne gardent pas d'état. Mélangés, ils
+           donnaient une rangée sans logique apparente. -->
+      <div class="groupe-barre">
         <button id="btn-mes-scenes" class="pastille pastille-mode" aria-pressed="false">
-          Mes scènes seules
+          Mes scènes seulement
         </button>
         <button id="btn-top-court" class="pastille pastille-mode" aria-pressed="false">
-          Top raccourci
+          Top abrégé
         </button>
       </div>
 
-      <div class="rangee" style="margin-top:8px">
-        <button id="btn-sommaire" class="btn btn-fantome btn-mini">Où j'en suis</button>
-        <button id="btn-retour-roles" class="btn btn-fantome btn-mini">Mes rôles</button>
+      <div class="groupe-barre">
+        <button id="btn-sommaire" class="btn btn-fantome btn-mini">Ma progression</button>
+        <button id="btn-retour-roles" class="btn btn-fantome btn-mini">Changer de rôle</button>
         <button id="btn-tout-remasquer" class="btn btn-fantome btn-mini">Tout remasquer</button>
         <button id="btn-exporter-3" class="btn btn-fantome btn-mini">Sauvegarder</button>
       </div>
