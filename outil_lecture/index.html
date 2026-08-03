@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lecture projetée — Troupe 122</title>
+<style>
+  /* La feuille de style complète arrive avec le rendu (étape 3). Pour
+     l'instant, juste de quoi lire la sortie de débogage confortablement. */
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee; padding: 2rem; }
+  pre { background: #000; padding: 1rem; overflow: auto; max-height: 70vh; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<h1>Outil de lecture projetée — en construction</h1>
+<p>
+  Étape 2 du plan de livraison (voir <code>ARCHITECTURE.md</code>) : la
+  logique pure (config, validation, modèle, état, stockage) est câblée, sans
+  encore d'écran définitif. Ce harnais sert uniquement à la vérifier à la
+  console avant d'écrire le rendu projeté.
+</p>
+<p>
+  <label for="debug-import">Charger un <code>REPET.json</code> pour test :</label>
+  <input type="file" id="debug-import" accept="application/json,.json">
+</p>
+<pre id="debug-output">(en attente d'un fichier)</pre>
+
+<script>
+// ============================================================
+// 1. CONFIG — constantes, aucune logique
+// ============================================================
+
+const CONFIG = Object.freeze({
+  /** Version de schéma acceptée pour un REPET.json. Toute autre est refusée. */
+  SCHEMA_ACCEPTE: 'repetition/1',
+
+  /** Les dix slots possibles, dans l'ordre d'affichage de la fenêtre de contrôle. */
+  SLOTS: Object.freeze(['H1', 'H2', 'H3', 'H4', 'H5', 'F1', 'F2', 'F3', 'F4', 'F5']),
+
+  /**
+   * Une couleur par slot, fixe, indépendante du prénom qui l'occupe (§8.2 de
+   * ARCHITECTURE.md). Choisies pour un fort contraste en salle éclairée,
+   * jamais de pastel : palette dérivée du jeu de 20 couleurs de
+   * Sasha Trubetskoy, conçu justement pour rester distinguable en conditions
+   * dégradées.
+   */
+  COULEURS_SLOT: Object.freeze({
+    H1: '#e6194b', // rouge
+    H2: '#3cb44b', // vert
+    H3: '#4363d8', // bleu
+    H4: '#f58231', // orange
+    H5: '#911eb4', // violet
+    F1: '#42d4f4', // cyan
+    F2: '#f032e6', // magenta
+    F3: '#ffe119', // jaune
+    F4: '#469990', // sarcelle
+    F5: '#9a6324', // brun
+  }),
+
+  /** Préfixe de toutes les clés localStorage de cet outil. */
+  PREFIXE_STOCKAGE: 'lecture:v1',
+
+  /** Délai avant écriture différée dans localStorage (session, prénoms). */
+  DELAI_ECRITURE_MS: 500,
+
+  /** Nom du canal BroadcastChannel entre projection et contrôle. */
+  CANAL_SYNCHRO: 'lecture:v1',
+});
+
+// ============================================================
+// 2. VALIDATION — valider un REPET.json importé, refuser tôt (§11)
+// ============================================================
+
+/** Types d'élément reconnus dans les `elements` d'une unité jouable. */
+const TYPES_ELEMENT_CONNUS = Object.freeze([
+  'replique',
+  'didascalie',
+  'lieu',
+  'texte_sans_personnage',
+]);
+
+/**
+ * Valide un objet issu de `JSON.parse`.
+ *
+ * Réécriture volontairement autonome de `outil_repetition/js/schema.js`
+ * (même esprit : refuser avant tout affichage, nommer le champ fautif) —
+ * voir §4.1 de ARCHITECTURE.md sur la raison de ne pas l'importer.
+ *
+ * @param {unknown} donnees
+ * @returns {{valide: true, piece: object} | {valide: false, erreur: string}}
+ */
+function validerRepet(donnees) {
+  if (donnees === null || typeof donnees !== 'object' || Array.isArray(donnees)) {
+    return _refusValidation('le fichier ne contient pas un objet JSON.');
+  }
+
+  if (donnees.schema !== CONFIG.SCHEMA_ACCEPTE) {
+    return _refusValidation(
+      `schéma « ${donnees.schema ?? 'absent'} » non reconnu — cette page ` +
+      `attend « ${CONFIG.SCHEMA_ACCEPTE} ». Régénérez le fichier avec la ` +
+      'version correspondante d’outil_edition.'
+    );
+  }
+
+  if (typeof donnees.piece !== 'string' || donnees.piece.trim() === '') {
+    return _refusValidation('le champ « piece » est absent ou vide.');
+  }
+
+  if (!Array.isArray(donnees.unites) || donnees.unites.length === 0) {
+    return _refusValidation('le champ « unites » est absent ou vide : aucun texte à lire.');
+  }
+
+  if (!Array.isArray(donnees.personnages) || donnees.personnages.length === 0) {
+    return _refusValidation('le champ « personnages » est absent ou vide.');
+  }
+
+  for (let i = 0; i < donnees.unites.length; i += 1) {
+    const erreur = _validerUnite(donnees.unites[i], i);
+
+    if (erreur) {
+      return _refusValidation(erreur);
+    }
+  }
+
+  return { valide: true, piece: donnees };
+}
+
+function _validerUnite(unite, position) {
+  const ou = `unité ${position + 1}`;
+
+  if (unite === null || typeof unite !== 'object' || Array.isArray(unite)) {
+    return `${ou} : ce n’est pas un objet.`;
+  }
+
+  if (typeof unite.id !== 'string' || unite.id === '') {
+    return `${ou} : champ « id » absent.`;
+  }
+
+  if (!Array.isArray(unite.elements)) {
+    return `${ou} (${unite.id}) : champ « elements » absent.`;
+  }
+
+  for (let i = 0; i < unite.elements.length; i += 1) {
+    const erreur = _validerElement(unite.elements[i], `${ou} (${unite.id})`, i);
+
+    if (erreur) {
+      return erreur;
+    }
+  }
+
+  return null;
+}
+
+function _validerElement(element, ou, position) {
+  const situe = `${ou}, élément ${position + 1}`;
+
+  if (element === null || typeof element !== 'object' || Array.isArray(element)) {
+    return `${situe} : ce n’est pas un objet.`;
+  }
+
+  if (typeof element.type !== 'string') {
+    return `${situe} : champ « type » absent.`;
+  }
+
+  if (!TYPES_ELEMENT_CONNUS.includes(element.type)) {
+    return `${situe} : type « ${element.type} » inconnu.`;
+  }
+
+  if (element.type !== 'replique') {
+    return typeof element.texte === 'string' ? null : `${situe} : champ « texte » absent.`;
+  }
+
+  for (const champ of ['id', 'personnage', 'texte']) {
+    if (typeof element[champ] !== 'string' || element[champ] === '') {
+      return `${situe} : réplique sans « ${champ} ».`;
+    }
+  }
+
+  return null;
+}
+
+function _refusValidation(erreur) {
+  return { valide: false, erreur };
+}
+
+// ============================================================
+// 3. MODELE — index dérivé du REPET.json, pur, sans effet de bord
+// ============================================================
+
+/**
+ * Aplatit `piece.unites[].elements[]` en une liste plate, unité de
+ * navigation et de rendu (§5 de ARCHITECTURE.md).
+ *
+ * @param {object} piece
+ * @returns {object[]}
+ */
+function aplatirEnElements(piece) {
+  const elements = [];
+
+  for (const unite of piece.unites) {
+    if (!unite.implicite) {
+      elements.push({
+        kind: 'scene',
+        uniteId: unite.id,
+        acte: unite.acte ?? null,
+        scene: unite.scene ?? null,
+      });
+    }
+
+    for (const el of unite.elements) {
+      elements.push(_elementAplati(el, unite.id));
+    }
+  }
+
+  return elements;
+}
+
+function _elementAplati(el, uniteId) {
+  if (el.type === 'replique') {
+    return {
+      kind: 'replique',
+      uniteId,
+      id: el.id,
+      personnage: el.personnage,
+      texte: el.texte,
+      vers: Boolean(el.vers),
+      didascaliesInternes: el.didascalies_internes ?? [],
+    };
+  }
+
+  // 'didascalie', 'lieu', 'texte_sans_personnage' : même forme minimale.
+  return { kind: el.type, uniteId, texte: el.texte };
+}
+
+/**
+ * Sommaire des scènes, dérivé de la liste plate : `[{ uniteId, acte, scene,
+ * position }]`. Sert à retrouver « scène courante » par recherche de la
+ * dernière entrée dont la position ne dépasse pas la position lue.
+ *
+ * @param {object[]} elements résultat de `aplatirEnElements`
+ */
+function calculerSommaire(elements) {
+  const sommaire = [];
+
+  elements.forEach((el, position) => {
+    if (el.kind === 'scene') {
+      sommaire.push({ uniteId: el.uniteId, acte: el.acte, scene: el.scene, position });
+    }
+  });
+
+  return sommaire;
+}
+
+/** Entrée du sommaire couvrant `position`, ou `null` avant la première scène. */
+function scenePourPosition(sommaire, position) {
+  let courante = null;
+
+  for (const entree of sommaire) {
+    if (entree.position > position) {
+      break;
+    }
+
+    courante = entree;
+  }
+
+  return courante;
+}
+
+/**
+ * Personnages de `piece.personnages` sans slot valide dans `cast`.
+ *
+ * @param {{nom: string}[]} personnages
+ * @param {Record<string,string>} cast
+ */
+function personnagesSansSlot(personnages, cast) {
+  return personnages
+    .map((p) => p.nom)
+    .filter((nom) => !CONFIG.SLOTS.includes(cast[nom]));
+}
+
+// ============================================================
+// 4. ETAT — position courante et transitions, pur
+// ============================================================
+
+function creerEtatInitial() {
+  return {
+    position: 0,
+    cast: {},     // { PERSONNAGE: 'H1', … }
+    prenoms: {},  // { H1: 'Émile', … }
+  };
+}
+
+/** Déplace la position, bornée à `[0, longueur - 1]`. */
+function irA(etat, nouvellePosition, longueur) {
+  const bornee = Math.max(0, Math.min(nouvellePosition, Math.max(longueur - 1, 0)));
+  return { ...etat, position: bornee };
+}
+
+function suivant(etat, longueur) {
+  return irA(etat, etat.position + 1, longueur);
+}
+
+function precedent(etat, longueur) {
+  return irA(etat, etat.position - 1, longueur);
+}
+
+// ============================================================
+// 5. STOCKAGE — localStorage, aucune écriture silencieusement avalée (§11)
+// ============================================================
+
+function cleStockage(suffixe) {
+  return `${CONFIG.PREFIXE_STOCKAGE}:${suffixe}`;
+}
+
+/**
+ * Identifiant de pièce dérivé de son nom (§10.1 et §13 point 1 de
+ * ARCHITECTURE.md : risque de collision accepté, pas de hachage de contenu).
+ */
+function pieceSlug(nomPiece) {
+  return nomPiece
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // diacritiques deposees par NFD
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'piece';
+}
+
+/**
+ * Écrit dans localStorage, sans jamais avaler une erreur (P3) : l'appelant
+ * reçoit `{ ok: false, erreur }` et décide de l'affichage (bandeau, §11).
+ */
+function ecrireStockage(cle, valeur) {
+  try {
+    localStorage.setItem(cle, JSON.stringify(valeur));
+    return { ok: true };
+  } catch (erreur) {
+    return { ok: false, erreur: String(erreur && erreur.message || erreur) };
+  }
+}
+
+function lireStockage(cle) {
+  try {
+    const brut = localStorage.getItem(cle);
+    return { ok: true, valeur: brut === null ? null : JSON.parse(brut) };
+  } catch (erreur) {
+    return { ok: false, erreur: String(erreur && erreur.message || erreur) };
+  }
+}
+
+// ============================================================
+// Harnais de débogage temporaire (étape 2 seulement) — sera remplacé par
+// la préparation, le rendu et le câblage des étapes suivantes.
+// ============================================================
+
+document.getElementById('debug-import').addEventListener('change', (evenement) => {
+  const fichier = evenement.target.files[0];
+  const sortie = document.getElementById('debug-output');
+
+  if (!fichier) {
+    return;
+  }
+
+  const lecteur = new FileReader();
+
+  lecteur.onload = () => {
+    let donnees;
+
+    try {
+      donnees = JSON.parse(lecteur.result);
+    } catch (erreur) {
+      sortie.textContent = `Fichier non JSON : ${erreur.message}`;
+      return;
+    }
+
+    const resultat = validerRepet(donnees);
+
+    if (!resultat.valide) {
+      sortie.textContent = `Refusé : ${resultat.erreur}`;
+      return;
+    }
+
+    const elements = aplatirEnElements(resultat.piece);
+    const sommaire = calculerSommaire(elements);
+    const slug = pieceSlug(resultat.piece.piece);
+
+    window.LECTURE_DEBUG = { piece: resultat.piece, elements, sommaire, slug };
+
+    sortie.textContent = [
+      `Pièce : ${resultat.piece.piece} (slug: ${slug})`,
+      `Personnages : ${resultat.piece.personnages.map((p) => p.nom).join(', ')}`,
+      `Éléments aplatis : ${elements.length}`,
+      `Scènes : ${sommaire.length}`,
+      '',
+      'Objet complet disponible dans la console : window.LECTURE_DEBUG',
+    ].join('\n');
+  };
+
+  lecteur.readAsText(fichier, 'utf-8');
+});
+</script>
+</body>
+</html>
