@@ -411,11 +411,16 @@ DOM.
 | # | Livrable | Vérifiable par |
 |---|---|---|
 | 1 | ✅ *fait* — ce document, validé, décisions de §13 tranchées | relecture |
-| 2 | Sections 1-6 de §4.2 (config, validation, modèle, état, stockage) | ouverture dans la console, appels manuels |
-| 3 | Rendu projection (§8) sans synchro ni contrôle | pièce d'essai affichée, navigation clavier |
-| 4 | Écran de préparation + attribution personnage → slot (§6) | import → attribution → démarrage |
-| 5 | Fenêtre de contrôle + `BroadcastChannel` (§7) | prénom tapé sur un écran, visible sur l'autre en direct |
-| 6 | `README.md`, `.gitignore` (`outil_lecture/pieces/`), lien depuis le `README.md` racine | — |
+| 2 | ✅ *fait* — sections pures (config, validation, modèle, état, stockage) | vérifié contre `outil_repetition/tests/exemple-repet.json` |
+| 3 | ✅ *fait* — rendu projection (§8), navigation clavier | pièce d'essai affichée, DOM simulé en Node |
+| 4 | ✅ *fait* — écran de préparation + attribution personnage → slot (§6), reprise de session | import → attribution → démarrage → reprise, vérifié de bout en bout |
+| 5 | ✅ *fait* — fenêtre de contrôle + `BroadcastChannel` (§7) | prénom diffusé, popup bloquée gérée |
+| 6 | ✅ *fait* — `README.md`, `.gitignore` (`outil_lecture/pieces/`), lien depuis le `README.md` racine | relecture |
+
+**Les six étapes sont livrées.** Reste, à l'usage réel (vidéoprojecteur,
+deuxième écran, plusieurs lecteurs), à confirmer la lisibilité de la
+palette de couleurs et l'ergonomie de la fenêtre de contrôle — hors du
+périmètre vérifiable sans matériel.
 
 L'ordre 2 → 3 → 4 → 5 garde la même logique que `outil_repetition` : la
 donnée avant l'écran, l'écran de projection avant le confort de contrôle.

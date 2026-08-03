@@ -17,8 +17,10 @@ sous-projet indépendant, dans son propre dossier.
   `REPET.json` produit par `outil_edition`. En cours de construction : voir son
   [cahier des charges](outil_repetition/CAHIER_DES_CHARGES.md) et son
   [architecture](outil_repetition/ARCHITECTURE.md).
-- **outil_lecture/** — outil de lecture interactif à venir, pour projeter une
-  pièce lors d'une lecture avec la troupe.
+- **[outil_lecture/](outil_lecture/README.md)** — lecture collective projetée
+  d'une pièce (surlignage par lecteur, fenêtre de contrôle sur un deuxième
+  écran). Lit le même `REPET.json` qu'`outil_repetition`. Voir son
+  [architecture](outil_lecture/ARCHITECTURE.md).
 
 ## Autres dossiers
 
