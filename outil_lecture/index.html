@@ -182,20 +182,6 @@
 
   .diapo.actif.kind-replique .personnage { font-size: clamp(0.8rem, 1.3vw, 1.3rem); margin-bottom: 0.8em; }
 
-  /*
-   * Suite d'une réplique paginée (§8.5) : volontairement discret, sans
-   * pastille pleine (contrairement à `.qui`) — sinon chaque page ressemble
-   * à une nouvelle réplique du même personnage (retour d'usage).
-   */
-  .diapo.kind-replique .suite-page {
-    font-size: clamp(0.7rem, 1vw, 1.1rem);
-    font-style: italic;
-    margin-bottom: 0.6em;
-    opacity: 0.85;
-  }
-
-  .diapo.actif.kind-replique .suite-page { font-size: clamp(0.9rem, 1.4vw, 1.4rem); }
-
   .diapo.kind-replique .texte {
     font-size: clamp(0.9rem, 1.8vw, 1.6rem);
     line-height: 1.35;
@@ -915,56 +901,11 @@ function _construireDiapoSimple(el, classeCss) {
   return diapo;
 }
 
-function _construireDiapoReplique(el, cast, prenoms) {
-  const slot = cast[el.personnage] || null;
-  const couleur = slot ? CONFIG.COULEURS_SLOT[slot] : '#555555';
-
-  // `el.segments` est précalculé par `paginerElements` (§8.5). Repli sur un
-  // calcul direct si absent, pour que cette fonction reste utilisable seule
-  // (tests, ou un futur appelant qui ne paginerait pas).
-  const segments = el.segments || segmenterAvecDidascalies(el.texte, el.didascaliesInternes);
-  const nombreDeMots = segments.filter((s) => s.type === 'mot').length;
-
-  const diapo = document.createElement('div');
-  diapo.className = 'diapo kind-replique';
-  diapo.dataset.slot = slot || '';
-  diapo.style.setProperty('--couleur', couleur);
-  diapo.style.setProperty('--taille-active', `${tailleActiveReplique(nombreDeMots)}vw`);
-
-  // Retour d'usage : répéter le badge complet (pastille + personnage) sur
-  // chaque page d'une réplique paginée (§8.5) donne l'impression de deux
-  // répliques distinctes, exactement le défaut déjà corrigé pour le
-  // dégradé (§8.1). La suite d'une même réplique n'a donc qu'un indicateur
-  // discret, sans pastille dupliquée ; seule la première page porte
-  // l'en-tête complet.
-  const premierePagesOuNonPaginee = !el.page || el.page.numero === 1;
-
-  if (premierePagesOuNonPaginee) {
-    const qui = document.createElement('div');
-    qui.className = 'qui';
-    qui.textContent = etiquetteSlot(slot, prenoms);
-    qui.style.background = couleur;
-    qui.style.color = couleurTexteContrastee(couleur);
-    diapo.appendChild(qui);
-
-    const perso = document.createElement('div');
-    perso.className = 'personnage';
-    perso.textContent = el.page ? `${el.personnage} — page 1/${el.page.total}` : el.personnage;
-    diapo.appendChild(perso);
-  } else {
-    const suite = document.createElement('div');
-    suite.className = 'suite-page';
-    suite.style.color = couleur;
-    suite.textContent = `— suite, page ${el.page.numero}/${el.page.total} —`;
-    diapo.appendChild(suite);
-  }
-
-  const texte = document.createElement('div');
-  texte.className = el.vers ? 'texte vers' : 'texte';
-
+/** Ajoute des segments (§7) au conteneur `.texte`, sans le vider. */
+function _ajouterSegments(texteEl, segments) {
   for (const segment of segments) {
     if (segment.type === 'saut') {
-      texte.appendChild(document.createElement('br'));
+      texteEl.appendChild(document.createElement('br'));
       continue;
     }
 
@@ -972,46 +913,167 @@ function _construireDiapoReplique(el, cast, prenoms) {
       const span = document.createElement('span');
       span.className = 'didascalie-interne';
       span.textContent = segment.texte;
-      texte.appendChild(span);
+      texteEl.appendChild(span);
       continue;
     }
 
-    texte.appendChild(document.createTextNode(`${segment.texte} `));
+    texteEl.appendChild(document.createTextNode(`${segment.texte} `));
   }
-
-  diapo.appendChild(texte);
-  return diapo;
 }
 
-/** Construit une diapo par élément de la liste plate, non montées. */
-function construireDiapos(elements, cast, prenoms) {
-  return elements.map((el, index) => {
-    let diapo;
+/**
+ * Regroupe la liste plate (déjà paginée, §8.5) en groupes navigables : un
+ * groupe couvre un seul index pour tout élément non paginé, ou plusieurs
+ * index consécutifs pour les pages d'une même réplique.
+ *
+ * Deuxième révision à l'usage : la première version montait chaque page
+ * dans sa **propre** diapo — même en supprimant le doublon d'en-tête (§8.5,
+ * première révision), deux pages restaient deux blocs DOM distincts, donc
+ * une vraie coupure visuelle (bordure, espacement) subsistait entre elles.
+ * Ce regroupement permet à `construireDiapos` de fusionner toutes les pages
+ * d'une réplique en **un seul conteneur DOM continu**.
+ *
+ * @param {object[]} elements résultat de `paginerElements`
+ * @returns {{indices: number[], elements: object[]}[]}
+ */
+function grouperPagesReplique(elements) {
+  const groupes = [];
+  let groupeEnCours = null;
 
-    if (el.kind === 'scene') {
-      diapo = _construireDiapoScene(el);
-    } else if (el.kind === 'lieu') {
-      diapo = _construireDiapoSimple(el, 'kind-lieu');
-    } else if (el.kind === 'didascalie') {
-      diapo = _construireDiapoSimple(el, 'kind-didascalie');
-    } else if (el.kind === 'texte_sans_personnage') {
-      diapo = _construireDiapoSimple(el, 'kind-texte-sans-personnage');
-    } else {
-      diapo = _construireDiapoReplique(el, cast, prenoms);
+  elements.forEach((el, index) => {
+    const estContinuation = el.kind === 'replique' && el.page && el.page.numero > 1;
+
+    if (estContinuation && groupeEnCours) {
+      groupeEnCours.indices.push(index);
+      groupeEnCours.elements.push(el);
+      return;
     }
 
-    diapo.dataset.index = String(index);
-    return diapo;
+    groupeEnCours = { indices: [index], elements: [el] };
+    groupes.push(groupeEnCours);
   });
+
+  return groupes;
 }
 
-/** Monte toutes les diapos une fois dans `container` (§8.1). */
+/**
+ * Construit le conteneur DOM d'une réplique, fusionnant toutes ses pages
+ * (une seule si non paginée) en un seul bloc continu : un en-tête unique
+ * (`.qui` + `.personnage`), un seul `.texte` qui concatène les segments de
+ * toutes les pages. Une ancre invisible (`<span class="ancre-page">`) est
+ * insérée à chaque frontière de page — c'est elle, et non le conteneur
+ * entier, que la navigation cible pour les pages 2 et suivantes (§8.1) :
+ * la flèche droite fait alors défiler *à l'intérieur* du même bloc, sans
+ * jamais montrer de coupure.
+ *
+ * @param {object[]} elementsDuGroupe pages d'une même réplique, dans l'ordre
+ * @returns {{diapo: HTMLElement, ancres: HTMLElement[]}} `ancres[0]` n'est
+ *   pas utilisée (la 1ʳᵉ page cible le conteneur entier) ; `ancres[i]` pour
+ *   i ≥ 1 est le span à cibler pour la page i+1.
+ */
+function construireDiapoRepliqueFusionnee(elementsDuGroupe, cast, prenoms) {
+  const elPremiere = elementsDuGroupe[0];
+  const slot = cast[elPremiere.personnage] || null;
+  const couleur = slot ? CONFIG.COULEURS_SLOT[slot] : '#555555';
+
+  const segmentsParPage = elementsDuGroupe.map(
+    (el) => el.segments || segmenterAvecDidascalies(el.texte, el.didascaliesInternes)
+  );
+  const nombreDeMots = segmentsParPage.reduce(
+    (total, segments) => total + segments.filter((s) => s.type === 'mot').length,
+    0
+  );
+
+  const diapo = document.createElement('div');
+  diapo.className = 'diapo kind-replique';
+  diapo.dataset.slot = slot || '';
+  diapo.style.setProperty('--couleur', couleur);
+  diapo.style.setProperty('--taille-active', `${tailleActiveReplique(nombreDeMots)}vw`);
+
+  const qui = document.createElement('div');
+  qui.className = 'qui';
+  qui.textContent = etiquetteSlot(slot, prenoms);
+  qui.style.background = couleur;
+  qui.style.color = couleurTexteContrastee(couleur);
+  diapo.appendChild(qui);
+
+  const perso = document.createElement('div');
+  perso.className = 'personnage';
+  perso.textContent = elPremiere.personnage;
+  diapo.appendChild(perso);
+
+  const texte = document.createElement('div');
+  texte.className = elPremiere.vers ? 'texte vers' : 'texte';
+
+  const ancres = [null];
+
+  segmentsParPage.forEach((segments, i) => {
+    if (i > 0) {
+      const ancre = document.createElement('span');
+      ancre.className = 'ancre-page';
+      texte.appendChild(ancre);
+      ancres.push(ancre);
+    }
+
+    _ajouterSegments(texte, segments);
+  });
+
+  diapo.appendChild(texte);
+
+  return { diapo, ancres };
+}
+
+/**
+ * Construit les diapos, une par groupe (§8.5) : `diapos[i]` reste indexé
+ * comme la liste plate (une entrée par position navigable), mais plusieurs
+ * indices consécutifs peuvent partager le même `element` DOM — les pages
+ * d'une réplique fusionnée. `ancre` est ce que la navigation doit faire
+ * défiler à l'écran : l'élément entier pour un index de première page,
+ * l'ancre interne sinon.
+ *
+ * @returns {{element: HTMLElement, ancre: HTMLElement}[]}
+ */
+function construireDiapos(elements, cast, prenoms) {
+  const diapos = new Array(elements.length);
+
+  for (const groupe of grouperPagesReplique(elements)) {
+    const elPremiere = groupe.elements[0];
+    let diapo;
+    let ancres = null;
+
+    if (elPremiere.kind === 'scene') {
+      diapo = _construireDiapoScene(elPremiere);
+    } else if (elPremiere.kind === 'lieu') {
+      diapo = _construireDiapoSimple(elPremiere, 'kind-lieu');
+    } else if (elPremiere.kind === 'didascalie') {
+      diapo = _construireDiapoSimple(elPremiere, 'kind-didascalie');
+    } else if (elPremiere.kind === 'texte_sans_personnage') {
+      diapo = _construireDiapoSimple(elPremiere, 'kind-texte-sans-personnage');
+    } else {
+      ({ diapo, ancres } = construireDiapoRepliqueFusionnee(groupe.elements, cast, prenoms));
+    }
+
+    diapo.dataset.index = String(groupe.indices[0]);
+
+    groupe.indices.forEach((index, i) => {
+      diapos[index] = { element: diapo, ancre: i === 0 ? diapo : ancres[i] };
+    });
+  }
+
+  return diapos;
+}
+
+/** Monte toutes les diapos une fois dans `container` (§8.1), sans doublon. */
 function monterProjection(container, elements, cast, prenoms) {
   container.innerHTML = '';
   const diapos = construireDiapos(elements, cast, prenoms);
+  const montes = new Set();
 
-  for (const diapo of diapos) {
-    container.appendChild(diapo);
+  for (const { element } of diapos) {
+    if (!montes.has(element)) {
+      container.appendChild(element);
+      montes.add(element);
+    }
   }
 
   return diapos;
@@ -1049,11 +1111,18 @@ let _porteeGradient = null;
  * l'attention plutôt qu'un vrai fondu vers la réplique courante.
  *
  * N'écrit que sur une fenêtre bornée autour de la position (2 × portée + 1
- * diapos), jamais sur la liste entière : le coût reste constant même sur
+ * indices), jamais sur la liste entière : le coût reste constant même sur
  * une pièce de plusieurs milliers d'éléments. La fenêtre précédente est
  * effacée (`removeProperty`, retour au plancher défini en CSS) avant
  * d'appliquer la nouvelle — sans quoi un grand saut (clic, sommaire, §8.6)
  * laisserait une diapo lointaine agrandie par erreur.
+ *
+ * Plusieurs index consécutifs peuvent partager le même `element` (les
+ * pages d'une réplique fusionnée, §8.5) : les indices sont donc parcourus
+ * **du plus éloigné vers le plus proche** de `position`, pour qu'un
+ * élément partagé reçoive en définitive la valeur de son sous-index le
+ * plus proche — sans cet ordre, la dernière écriture pourrait provenir
+ * d'une page plus lointaine et sous-évaluer la mise en avant du bloc.
  */
 function appliquerGradient(diapos, position) {
   const portee = CONFIG.PORTEE_GRADIENT;
@@ -1063,16 +1132,24 @@ function appliquerGradient(diapos, position) {
   if (_porteeGradient) {
     for (let i = _porteeGradient.debut; i <= _porteeGradient.fin; i += 1) {
       if (i < debut || i > fin) {
-        diapos[i].style.removeProperty('--opacite');
-        diapos[i].style.removeProperty('--echelle');
+        diapos[i].element.style.removeProperty('--opacite');
+        diapos[i].element.style.removeProperty('--echelle');
       }
     }
   }
 
+  const indices = [];
+
   for (let i = debut; i <= fin; i += 1) {
+    indices.push(i);
+  }
+
+  indices.sort((a, b) => Math.abs(b - position) - Math.abs(a - position));
+
+  for (const i of indices) {
     const t = Math.min(1, Math.abs(i - position) / portee);
-    diapos[i].style.setProperty('--opacite', (1 - t * 0.75).toFixed(3));
-    diapos[i].style.setProperty('--echelle', (1 - t * 0.5).toFixed(3));
+    diapos[i].element.style.setProperty('--opacite', (1 - t * 0.75).toFixed(3));
+    diapos[i].element.style.setProperty('--echelle', (1 - t * 0.5).toFixed(3));
   }
 
   _porteeGradient = { debut, fin };
@@ -1080,26 +1157,36 @@ function appliquerGradient(diapos, position) {
 
 /**
  * Change l'élément mis en avant : dégradé continu (`appliquerGradient`) plus
- * la classe `.actif`, qui sert d'ancre pour le défilement et de sélecteur
- * pour la taille de police de la réplique courante (§8.2).
+ * la classe `.actif`, qui sert de sélecteur pour la taille de police de la
+ * réplique courante (§8.2). Posée sur `diapos[position].element` : pour une
+ * réplique fusionnée sur plusieurs pages (§8.5), c'est le même élément pour
+ * toutes ses pages, qui reste donc `.actif` tant qu'on y navigue.
  *
- * Le défilement recentre la diapo courante (`block: 'center'`) — sauf si
- * elle est plus haute que la fenêtre (longue tirade) : la recentrer
- * couperait alors son début. On aligne plutôt son sommet (`block: 'start'`),
- * pour commencer la lecture au début du texte plutôt qu'au milieu.
+ * Le défilement cible `diapos[position].ancre` — le conteneur entier pour
+ * une première page, une ancre interne sinon (§8.5) : avancer dans une
+ * longue tirade fait ainsi défiler *à l'intérieur* du même bloc continu,
+ * sans jamais faire apparaître de coupure.
+ *
+ * Le défilement recentre l'ancre (`block: 'center'`) — sauf si le bloc
+ * entier est plus haut que la fenêtre (longue tirade) : la recentrer
+ * couperait alors le début du texte déjà lu. On aligne plutôt son sommet
+ * (`block: 'start'`), pour continuer la lecture depuis le haut de ce qui
+ * reste visible.
  */
 function afficherPosition(diapos, position) {
-  diapos.forEach((diapo, index) => {
-    diapo.classList.toggle('actif', index === position);
+  const actif = diapos[position].element;
+
+  diapos.forEach(({ element }) => {
+    element.classList.toggle('actif', element === actif);
   });
 
   appliquerGradient(diapos, position);
 
-  const actif = diapos[position];
+  const ancre = diapos[position].ancre;
 
-  if (actif && actif.scrollIntoView) {
+  if (ancre && ancre.scrollIntoView) {
     const depasse = actif.scrollHeight > window.innerHeight * 0.9;
-    actif.scrollIntoView({ behavior: 'smooth', block: depasse ? 'start' : 'center' });
+    ancre.scrollIntoView({ behavior: 'smooth', block: depasse ? 'start' : 'center' });
   }
 }
 
@@ -1434,7 +1521,7 @@ if (MODE_FENETRE === 'projection') (() => {
       return;
     }
 
-    const diapo = diapos[position];
+    const diapo = diapos[position].element;
     const entree = scenePourPosition(sommaire, position);
 
     canal.postMessage({

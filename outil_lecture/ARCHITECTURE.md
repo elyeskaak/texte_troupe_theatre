@@ -308,10 +308,17 @@ défaut). Le CSS ne fait que lire ces variables, avec un repli (`opacity: var(
 
 Pour rester bon marché même sur une pièce de plusieurs milliers d'éléments,
 `appliquerGradient` n'écrit **que sur une fenêtre bornée** autour de la
-position (2 × portée + 1 diapos), jamais sur la liste entière : la fenêtre
+position (2 × portée + 1 indices), jamais sur la liste entière : la fenêtre
 du tour précédent est effacée (`style.removeProperty`) avant d'appliquer la
 nouvelle, pour qu'un grand saut (clic sur une diapo lointaine, sommaire §8.6)
 ne laisse jamais une diapo agrandie par erreur loin de la position réelle.
+
+Depuis la fusion des pages d'une réplique en un seul bloc (§8.5), plusieurs
+index consécutifs peuvent partager le même élément DOM. `appliquerGradient`
+parcourt donc la fenêtre **du plus éloigné vers le plus proche** de la
+position : pour un élément partagé, la dernière écriture — celle qui compte
+— vient ainsi toujours de son sous-index le plus proche, jamais d'un plus
+lointain qui sous-évaluerait sa mise en avant.
 
 Changer de réplique reste borné et cohérent avec le principe de §6 de
 `outil_repetition/ARCHITECTURE.md` : jamais de reconstruction du DOM, une
@@ -356,22 +363,45 @@ pire des solutions pour un outil pensé « aucune souris nécessaire ».
 
 `paginerElements(elements, motsParPage)` s'insère entre l'aplatissement (§5)
 et le calcul du sommaire : toute réplique de plus de `CONFIG.MOTS_PAR_PAGE`
-mots est coupée en plusieurs éléments `kind: 'replique'` indépendants, chacun
-devenant sa propre diapo navigable (page 1/4, 2/4, …). La coupe préfère un
-saut de ligne (un vers) une fois 60 % du quota atteint — pour ne jamais
-trancher un vers en deux — et se force à 140 % du quota sinon, pour qu'une
-tirade en prose sans retour à la ligne ne parte pas en une seule page
-démesurée (`paginerSegments`, fonction pure, testée).
+mots est coupée en plusieurs éléments `kind: 'replique'` logiques, un par
+page. La coupe préfère un saut de ligne (un vers) une fois 60 % du quota
+atteint — pour ne jamais trancher un vers en deux — et se force à 140 % du
+quota sinon, pour qu'une tirade en prose sans retour à la ligne ne parte pas
+en une seule page démesurée (`paginerSegments`, fonction pure, testée).
 
-**Révision à l'usage, à nouveau :** la première version répétait l'en-tête
-complet (pastille de slot + nom du personnage) sur chaque page. Résultat :
-exactement le défaut déjà corrigé pour le dégradé (§8.1) — deux pages de la
-même réplique se lisaient comme deux répliques distinctes du même
-personnage. Seule la première page porte désormais l'en-tête complet
-(`.qui` + `.personnage`, avec « page 1/N ») ; les pages suivantes n'ont
-qu'un indicateur discret sans pastille dupliquée — `.suite-page`, coloré en
-texte (pas en fond) pour rester identifiable sans se faire passer pour une
-nouvelle prise de parole : *« — suite, page 2/N — »*.
+**Deux révisions à l'usage sur la façon de montrer ces pages,** l'une après
+l'autre, capture à l'appui :
+
+1. La première version montait chaque page dans sa **propre diapo**, avec
+   son propre en-tête (pastille de slot + personnage). Résultat : deux pages
+   de la même réplique se lisaient comme deux répliques distinctes du même
+   personnage — le même défaut que celui déjà corrigé pour le dégradé (§8.1),
+   mais pour une autre cause.
+2. Seule la première page a alors gardé l'en-tête complet, les suivantes un
+   indicateur discret sans pastille dupliquée. **Insuffisant** : même sans
+   doublon d'en-tête, deux pages restaient deux blocs DOM séparés — bordure,
+   espacement — donc une vraie coupure visuelle subsistait entre elles.
+
+**Solution retenue : fusionner toutes les pages d'une réplique en un seul
+bloc DOM continu.** `grouperPagesReplique(elements)` regroupe les indices
+consécutifs d'une même réplique paginée ; `construireDiapoRepliqueFusionnee`
+construit **un seul** conteneur — un en-tête unique, un seul `<div
+class="texte">` qui concatène les segments de toutes les pages, sans aucune
+coupure visuelle. Une ancre invisible (`<span class="ancre-page">`) est
+insérée à chaque frontière de page : c'est elle, et non le conteneur entier,
+que la navigation cible pour la page 2 et les suivantes. Avancer dans une
+longue tirade fait ainsi défiler *à l'intérieur* du même bloc continu — un
+vrai défilement, comme demandé, sans jamais montrer de coupure.
+
+Conséquence sur le modèle de navigation (§8) : `diapos[i]` n'est plus un
+nœud DOM mais `{ element, ancre }` — plusieurs index consécutifs peuvent
+partager le même `element` (les pages d'une réplique fusionnée), chacun avec
+sa propre `ancre` à faire défiler. `.actif` se pose sur `element` (reste
+donc actif tout le temps qu'on avance dans les pages d'une même réplique) ;
+`afficherPosition` fait défiler vers `ancre`, pas vers `element`. Le clic
+sur une réplique fusionnée (§8.6) saute toujours à sa première page — cliquer
+n'importe où dans le bloc revient à en cibler le début, cohérent avec le
+fait que ce soit maintenant visuellement une seule entité.
 
 **Point d'ordre critique :** la pagination doit s'exécuter *avant*
 `calculerSommaire` et le montage, jamais après — sans quoi les positions du
