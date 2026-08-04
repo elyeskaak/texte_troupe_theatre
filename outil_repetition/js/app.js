@@ -20,7 +20,7 @@ import { comparer } from './comparaison.js';
 import { graineDepuis, tirerPondere } from './tirage.js';
 import { creerStockage, ErreurStockage, idDePiece } from './stockage.js';
 import { piecesNonImportees } from './manifeste.js';
-import * as drive from '../pieces/drive.js';
+import * as drive from '../../pieces/drive.js';
 
 const $ = (id) => document.getElementById(id);
 

@@ -25,7 +25,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -220,6 +220,37 @@ describe('les modes se répondent des trois côtés', () => {
       numeros.map((_, rang) => rang + 1),
       `numérotation cassée : ${numeros.join(', ')}`,
     );
+  });
+});
+
+/**
+ * Chaque import relatif d'`app.js` doit résoudre vers un fichier réel.
+ *
+ * **Pourquoi ce test existe.** `import * as drive from '../pieces/drive.js'`
+ * a été écrit dans `app.js` (qui vit dans `js/`) en oubliant qu'un `import`
+ * résout **relativement au fichier qui importe**, et non relativement à la
+ * page HTML comme le fait `fetch()` — la confusion exacte qui a cassé
+ * l'outil en production : `app.js` échouait à charger tout son graphe de
+ * modules, donc n'exécutait **plus aucune ligne**, le bandeau « cette page ne
+ * peut pas fonctionner » restant affiché même servi en HTTPS. Aucun test
+ * existant ne l'attrapait : `cablage.test.js` ne vérifiait jusqu'ici que les
+ * imports en `./`, et aucun test ne charge réellement `app.js` comme un vrai
+ * module (il touche le DOM dès son évaluation, donc ce n'est pas testable
+ * par `node --test` sans navigateur — voir §6 de `ARCHITECTURE.md`). Ce test
+ * ne charge rien : il vérifie seulement que le fichier visé **existe**, ce
+ * qui suffit à attraper cette classe d'erreur sans navigateur.
+ */
+describe('les imports de app.js résolvent vers un fichier existant', () => {
+  test('aucun import relatif ne pointe dans le vide', () => {
+    const specifiers = [...codeApp.matchAll(/^import[^;]*from\s+'([^']+)';/gm)].map(
+      (m) => m[1],
+    );
+
+    const manquants = specifiers
+      .filter((specifier) => specifier.startsWith('.'))
+      .filter((specifier) => !existsSync(join(RACINE, 'js', specifier)));
+
+    assert.deepEqual(manquants, [], `imports introuvables : ${manquants.join(', ')}`);
   });
 });
 
