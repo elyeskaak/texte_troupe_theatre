@@ -33,14 +33,19 @@ import {
 
 let compteur = 0;
 
-/** Réplique minimale, identifiant automatique. */
-function r(personnage, texte) {
+/**
+ * Réplique minimale, identifiant automatique.
+ *
+ * @param {string|string[]} personnages - un nom, ou plusieurs pour une
+ *   réplique collective.
+ */
+function r(personnages, texte) {
   compteur += 1;
 
   return {
     type: 'replique',
     id: `r_${compteur}`,
-    personnage,
+    personnages: Array.isArray(personnages) ? personnages : [personnages],
     texte,
     vers: false,
   };
@@ -58,7 +63,9 @@ function unite(id, elements, extra = {}) {
     implicite: false,
     personnages: [
       ...new Set(
-        elements.filter((e) => e.type === 'replique').map((e) => e.personnage),
+        elements
+          .filter((e) => e.type === 'replique')
+          .flatMap((e) => e.personnages),
       ),
     ],
     elements,
@@ -67,7 +74,7 @@ function unite(id, elements, extra = {}) {
 }
 
 function piece(unites, personnages = []) {
-  return { schema: 'repetition/1', piece: 'Essai', personnages, unites };
+  return { schema: 'repetition/2', piece: 'Essai', personnages, unites };
 }
 
 describe('mes unités', () => {
@@ -119,7 +126,7 @@ describe('le top — cas 1 : réplique d’un autre', () => {
     const top = index.tops.get(mienne.id);
 
     assert.equal(top.type, TOP.REPLIQUE);
-    assert.equal(top.personnage, 'AUTRE');
+    assert.deepEqual(top.personnages, ['AUTRE']);
     assert.equal(top.texte, 'Le signal.');
   });
 });
@@ -184,7 +191,7 @@ describe('le top — cas 2 : didascalie', () => {
     const top = index.tops.get(mienne.id);
 
     assert.equal(top.type, TOP.REPLIQUE);
-    assert.equal(top.personnage, 'AUTRE');
+    assert.deepEqual(top.personnages, ['AUTRE']);
   });
 });
 
@@ -253,7 +260,7 @@ describe('le top — cas 3 : aucun top', () => {
     const top = index.tops.get(oliver.id);
 
     assert.equal(top.type, TOP.REPLIQUE);
-    assert.equal(top.personnage, 'TIERS');
+    assert.deepEqual(top.personnages, ['TIERS']);
   });
 });
 
@@ -379,7 +386,7 @@ describe('recherche', () => {
     const trouves = chercher(index, 'REPONDE');
 
     assert.equal(trouves.length, 1);
-    assert.equal(trouves[0].personnage, 'JAN');
+    assert.deepEqual(trouves[0].personnages, ['JAN']);
     assert.equal(trouves[0].unite, 'u1');
   });
 

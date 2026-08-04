@@ -29,7 +29,28 @@ import {
   positionsDesMots,
 } from './texte.js';
 import { graineReplique, motsAMasquer } from './tirage.js';
-import { MOTIF_SANS_TOP, TOP } from './modele.js';
+import { estMienne, libelleLocuteurs, MOTIF_SANS_TOP, TOP } from './modele.js';
+
+/**
+ * Encode une liste de personnages dans un attribut `data-*`.
+ *
+ * Chaque nom est entouré de barres verticales, y compris aux deux extrémités.
+ * C'est ce qui permet de le retrouver par un sélecteur `*="|NOM|"` sans faux
+ * positif : un nom de personnage contient souvent un espace (« SIR ROWLAND »),
+ * ce qu'un sélecteur d'attribut à liste (`~=`) ne sait pas gérer, et un
+ * personnage peut être le préfixe d'un autre (« JAN » / « JANE »), ce qu'une
+ * simple concaténation confondrait.
+ *
+ * @param {string[]} personnages
+ */
+function _clesPerso(personnages) {
+  return `|${personnages.join('|')}|`;
+}
+
+/** Sélecteur CSS ciblant les répliques d'un personnage donné. */
+function _selecteurPerso(nom) {
+  return `.replique[data-perso*="|${_echapper(nom)}|"]`;
+}
 
 /** Feuille de style dédiée au rôle actif, réécrite sans reconstruire le DOM. */
 let feuilleRoleActif = null;
@@ -54,8 +75,10 @@ export function declarerRoleActif(roles) {
     return;
   }
 
-  const selecteurs = roles
-    .map((role) => `.replique[data-perso="${_echapper(role)}"]`)
+  // Une réplique « TOUS » (voir `modele.estMienne`) est active dès qu'un rôle
+  // l'est : elle appartient à n'importe lequel, sans jamais figurer dans
+  // `roles`.
+  const selecteurs = [...roles.map(_selecteurPerso), _selecteurPerso(CONFIG.JOKER_TOUS)]
     .join(',');
 
   feuilleRoleActif.textContent = `${selecteurs}{--actif:1}\n${selecteurs}{}`;
@@ -66,8 +89,12 @@ export function declarerRoleActif(roles) {
   const attendus = new Set(roles);
 
   for (const replique of document.querySelectorAll('.replique')) {
-    replique.classList.toggle('actif', attendus.has(replique.dataset.perso));
+    replique.classList.toggle('actif', estMienne(_decoderPerso(replique.dataset.perso), attendus));
   }
+}
+
+function _decoderPerso(cle) {
+  return cle.split('|').filter(Boolean);
 }
 
 function _echapper(valeur) {
@@ -169,18 +196,18 @@ function _monterReplique(replique, { index, etat }) {
   const bloc = document.createElement('div');
   bloc.className = 'element replique';
   bloc.dataset.id = replique.id;
-  bloc.dataset.perso = replique.personnage;
+  bloc.dataset.perso = _clesPerso(replique.personnages);
 
   const mienne = index.repliques.get(replique.id)?.mienne ?? false;
   bloc.classList.toggle('mienne', mienne);
-  bloc.classList.toggle('actif', etat.roleActif.includes(replique.personnage));
+  bloc.classList.toggle('actif', estMienne(replique.personnages, new Set(etat.roleActif)));
 
   const qui = document.createElement('div');
   qui.className = 'qui';
 
   // Le nom n'est **jamais** masqué : je joue plusieurs rôles, et un bloc anonyme
   // rendrait illisible une scène entre deux de mes personnages.
-  qui.textContent = replique.personnage;
+  qui.textContent = libelleLocuteurs(replique.personnages);
   bloc.appendChild(qui);
 
   const texte = document.createElement('div');
@@ -583,7 +610,7 @@ function _marquerTops(unite, noeuds, index, etat) {
   const actifs = new Set(etat.roleActif);
 
   unite.elements.forEach((element, rang) => {
-    if (element.type !== 'replique' || !actifs.has(element.personnage)) {
+    if (element.type !== 'replique' || !estMienne(element.personnages, actifs)) {
       return;
     }
 

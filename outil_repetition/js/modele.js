@@ -12,8 +12,41 @@
  * réindexe donc rien.
  */
 
+import { CONFIG } from './config.js';
 import { repliques as toutesLesRepliques } from './schema.js';
 import { contient, derniersMots } from './texte.js';
+
+/**
+ * Un des noms de `personnages` est-il un des miens ?
+ *
+ * Centralise la seule subtilité du champ : `JOKER_TOUS` (« TOUS. » dans le
+ * texte) ne nomme personne et vaut pourtant pour n'importe quel rôle choisi.
+ * Sans ce point unique, chaque appelant devrait réinventer le cas particulier
+ * — et l'oublier serait invisible tant qu'aucune pièce ne contient de réplique
+ * collective.
+ *
+ * @param {string[]} personnages
+ * @param {Set<string>} ensemble - mes rôles, ou le rôle actif
+ */
+export function estMienne(personnages, ensemble) {
+  return (
+    personnages.includes(CONFIG.JOKER_TOUS) ||
+    personnages.some((nom) => ensemble.has(nom))
+  );
+}
+
+/**
+ * Libellé affichable des locuteurs d'une réplique.
+ *
+ * @param {string[]} personnages
+ */
+export function libelleLocuteurs(personnages) {
+  if (personnages.includes(CONFIG.JOKER_TOUS)) {
+    return 'TOUS';
+  }
+
+  return personnages.join(' / ');
+}
 
 /** Nature du top d'une réplique. */
 export const TOP = Object.freeze({
@@ -44,7 +77,7 @@ export function indexer(piece, mesRoles = []) {
 
   const unites = piece.unites.map((unite) => ({
     ...unite,
-    mienne: unite.personnages.some((nom) => miens.has(nom)),
+    mienne: estMienne(unite.personnages, miens),
     nbMesRepliques: _compterMesRepliques(unite, miens),
   }));
 
@@ -53,7 +86,7 @@ export function indexer(piece, mesRoles = []) {
   const mesRepliques = [];
 
   for (const replique of toutesLesRepliques(piece)) {
-    const mienne = miens.has(replique.personnage);
+    const mienne = estMienne(replique.personnages, miens);
 
     repliques.set(replique.id, {
       ...replique,
@@ -83,7 +116,7 @@ export function indexer(piece, mesRoles = []) {
 
 function _compterMesRepliques(unite, miens) {
   return unite.elements.filter(
-    (element) => element.type === 'replique' && miens.has(element.personnage),
+    (element) => element.type === 'replique' && estMienne(element.personnages, miens),
   ).length;
 }
 
@@ -156,7 +189,7 @@ function _calculerTops(piece, miens) {
     for (let i = 0; i < unite.elements.length; i += 1) {
       const element = unite.elements[i];
 
-      if (element.type !== 'replique' || !miens.has(element.personnage)) {
+      if (element.type !== 'replique' || !estMienne(element.personnages, miens)) {
         continue;
       }
 
@@ -173,7 +206,7 @@ const MUETS = new Set(['lieu', 'texte_sans_personnage']);
 function _topDe(elements, position, miens) {
   const derniere = _derniereRepliqueAvant(elements, position);
 
-  if (derniere && miens.has(derniere.personnage)) {
+  if (derniere && estMienne(derniere.personnages, miens)) {
     return { type: TOP.AUCUN, motif: MOTIF_SANS_TOP.ENCHAINEMENT };
   }
 
@@ -186,7 +219,7 @@ function _topDe(elements, position, miens) {
   if (precedent.type === 'replique') {
     return {
       type: TOP.REPLIQUE,
-      personnage: precedent.personnage,
+      personnages: precedent.personnages,
       texte: precedent.texte,
       id: precedent.id,
     };
@@ -279,7 +312,7 @@ export function repliqueVoisine(index, depuis, sens) {
  *
  * @param {object} index
  * @param {string} fragment
- * @returns {Array<{id: string, unite: string, personnage: string, texte: string}>}
+ * @returns {Array<{id: string, unite: string, personnages: string[], texte: string}>}
  */
 export function chercher(index, fragment) {
   const resultats = [];
@@ -291,7 +324,7 @@ export function chercher(index, fragment) {
       resultats.push({
         id,
         unite: replique.unite,
-        personnage: replique.personnage,
+        personnages: replique.personnages,
         texte: replique.texte,
       });
     }
@@ -531,7 +564,7 @@ export function statutDUnite(index, idUnite, progres) {
   let pire = ORDRE_STATUTS.length - 1;
 
   for (const element of unite.elements) {
-    if (element.type !== 'replique' || !miens.has(element.personnage)) {
+    if (element.type !== 'replique' || !estMienne(element.personnages, miens)) {
       continue;
     }
 

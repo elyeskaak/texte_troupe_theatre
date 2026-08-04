@@ -144,13 +144,37 @@ function _validerElement(element, ou, position) {
       : `${situe} : champ « texte » absent.`;
   }
 
-  for (const champ of ['id', 'personnage', 'texte']) {
+  for (const champ of ['id', 'texte']) {
     if (typeof element[champ] !== 'string' || element[champ] === '') {
       return `${situe} : réplique sans « ${champ} ».`;
     }
   }
 
+  const erreurPersonnages = _validerPersonnagesDeReplique(element, situe);
+
+  if (erreurPersonnages) {
+    return erreurPersonnages;
+  }
+
   return _validerDidascaliesInternes(element, situe);
+}
+
+/**
+ * Une réplique peut être dite par plusieurs personnages : « personnages » est
+ * donc une liste, jamais vide et jamais un nom seul en dehors d'une liste.
+ */
+function _validerPersonnagesDeReplique(element, situe) {
+  if (!Array.isArray(element.personnages) || element.personnages.length === 0) {
+    return `${situe} : réplique sans « personnages ».`;
+  }
+
+  for (const nom of element.personnages) {
+    if (typeof nom !== 'string' || nom === '') {
+      return `${situe} : « personnages » contient un nom vide.`;
+    }
+  }
+
+  return null;
 }
 
 function _validerDidascaliesInternes(replique, situe) {

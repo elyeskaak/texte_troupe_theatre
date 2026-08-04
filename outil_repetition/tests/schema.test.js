@@ -31,7 +31,7 @@ function piece(surcharges = {}) {
           {
             type: 'replique',
             id: 'r_aaa',
-            personnage: 'JAN',
+            personnages: ['JAN'],
             texte: 'Nous y sommes enfin.',
             vers: false,
           },
@@ -71,10 +71,10 @@ describe('un document conforme est accepté', () => {
 
 describe('version du schéma', () => {
   test('une version inconnue est refusée', () => {
-    const resultat = valider(piece({ schema: 'repetition/2' }));
+    const resultat = valider(piece({ schema: 'repetition/1' }));
 
     assert.ok(!resultat.valide);
-    assert.match(resultat.erreur, /repetition\/2/);
+    assert.match(resultat.erreur, /repetition\/1/);
   });
 
   test('le message dit quoi faire', () => {
@@ -171,11 +171,25 @@ describe('unités et éléments', () => {
     assert.match(valider(cassee).erreur, /« id »/);
   });
 
-  test('une réplique sans personnage est refusée', () => {
+  test('une réplique sans personnages est refusée', () => {
     const cassee = piece();
-    delete cassee.unites[0].elements[1].personnage;
+    delete cassee.unites[0].elements[1].personnages;
 
-    assert.match(valider(cassee).erreur, /personnage/);
+    assert.match(valider(cassee).erreur, /personnages/);
+  });
+
+  test('une réplique avec une liste de personnages vide est refusée', () => {
+    const cassee = piece();
+    cassee.unites[0].elements[1].personnages = [];
+
+    assert.match(valider(cassee).erreur, /personnages/);
+  });
+
+  test('une réplique dite par plusieurs personnages est acceptée', () => {
+    const collective = piece();
+    collective.unites[0].elements[1].personnages = ['JAN', 'MARTHA'];
+
+    assert.ok(valider(collective).valide);
   });
 
   test('une didascalie sans texte est refusée', () => {
@@ -211,7 +225,7 @@ describe('cohérence globale', () => {
     cassee.unites[0].elements.push({
       type: 'replique',
       id: 'r_aaa',
-      personnage: 'MARTHA',
+      personnages: ['MARTHA'],
       texte: 'Autre chose.',
       vers: false,
     });
@@ -235,7 +249,7 @@ describe('cohérence globale', () => {
         {
           type: 'replique',
           id: 'r_aaa',
-          personnage: 'JAN',
+          personnages: ['JAN'],
           texte: 'Encore.',
           vers: false,
         },

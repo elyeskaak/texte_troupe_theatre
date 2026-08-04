@@ -106,7 +106,13 @@ export const CONFIG = Object.freeze({
 
   // --- Données -----------------------------------------------------
   /** Version de schéma acceptée. Toute autre est refusée, jamais devinée. */
-  SCHEMA_ACCEPTE: 'repetition/1',
+  SCHEMA_ACCEPTE: 'repetition/2',
   /** Préfixe de toutes les clés localStorage. */
   PREFIXE_STOCKAGE: 'repet:v1',
+  /**
+   * Marque une réplique dite par toute la distribution (« TOUS. »), plutôt
+   * que par un ou plusieurs personnages nommés. Vaut pour n'importe quel rôle
+   * choisi — voir `modele.estMienne`.
+   */
+  JOKER_TOUS: '*',
 });

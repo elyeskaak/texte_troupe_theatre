@@ -108,7 +108,7 @@ Propriétés à respecter :
 
 ```json
 {
-  "schema": "repetition/1",
+  "schema": "repetition/2",
   "piece": "Le Malentendu",
   "genere_le": "2026-08-03T14:32:10",
   "outil": "outil_edition 1.0 — étape 4",
@@ -130,7 +130,7 @@ Propriétés à respecter :
         { "type": "lieu",        "texte": "Une auberge. Le soir." },
         { "type": "didascalie",  "texte": "Pause." },
         { "type": "replique",    "id": "r_8f3a1c",
-          "personnage": "JAN",
+          "personnages": ["JAN"],
           "texte": "Je t'attendais depuis une heure.",
           "didascalies_internes": [{ "avant_mot": 2, "texte": "elle se lève" }],
           "vers": false }
@@ -140,7 +140,7 @@ Propriétés à respecter :
 }
 ```
 
-Quatre points de conception portés par ce schéma.
+Cinq points de conception portés par ce schéma.
 
 **L'unité jouable, et non l'acte, est l'élément de premier niveau.** Une liste
 plate d'unités couvre les trois cas réels sans arborescence conditionnelle :
@@ -155,17 +155,26 @@ qu'une scène est « la mienne » sans la parcourir, donc de replier tout un act
 instantanément sur un iPhone.
 
 **L'`id` d'une réplique est dérivé de son contenu**, non de sa position :
-empreinte courte de `personnage + "|" + texte normalisé`. Un `EDIT.txt` relu et
-corrigé décale toutes les positions ; des identifiants positionnels feraient
-alors migrer silencieusement ma progression d'une réplique vers sa voisine. Avec
-une empreinte de contenu, la dégradation devient juste : une réplique dont le
-texte a changé perd son statut — ce qui est correct, il faut la réapprendre —
-et toutes les autres le conservent. Les collisions (deux répliques identiques du
-même personnage, « Oui. ») sont désambiguïsées par un suffixe d'occurrence.
+empreinte courte de `personnages.join("/") + "|" + texte normalisé`. Un
+`EDIT.txt` relu et corrigé décale toutes les positions ; des identifiants
+positionnels feraient alors migrer silencieusement ma progression d'une
+réplique vers sa voisine. Avec une empreinte de contenu, la dégradation devient
+juste : une réplique dont le texte a changé perd son statut — ce qui est
+correct, il faut la réapprendre — et toutes les autres le conservent. Les
+collisions (deux répliques identiques du même personnage, « Oui. ») sont
+désambiguïsées par un suffixe d'occurrence.
 
 **`vers` reprend la distinction déjà faite par le prompt d'édition** entre
 retour à la ligne mécanique et retour voulu (commit `3465015`). Un vers ne doit
 pas être reflué comme de la prose, et l'amorce de §5 se compte différemment.
+
+**`personnages` d'une réplique est une liste, pour les répliques dites à
+plusieurs voix.** « SIR ROWLAND et CLARISSA. » nomme deux personnages qui
+disent le même texte : une liste à un élément dans l'immense majorité des cas,
+ce qui laisse l'identifiant ci-dessus inchangé pour toute réplique à un seul
+personnage. « TOUS. » est différent — il ne nomme personne — et se traduit par
+le joker `"*"`, qui vaut pour n'importe quel rôle choisi dans l'outil sans
+jamais apparaître dans la distribution `personnages` de tête de document.
 
 ### 3.3 Charger une pièce dans l'outil
 
@@ -183,9 +192,9 @@ Après chargement, le JSON est stocké dans `localStorage` et l'écran d'accueil
 liste les pièces disponibles. **Aucune pièce n'est embarquée dans le code.**
 
 Validation à l'entrée : `schema` reconnu, `unites` non vide, chaque réplique
-porte `personnage`, `texte` et `id`. En cas d'échec, message explicite nommant
-le champ fautif — et rien n'est chargé. Un `schema` de version supérieure est
-refusé plutôt qu'interprété au mieux.
+porte `personnages` (une liste non vide), `texte` et `id`. En cas d'échec,
+message explicite nommant le champ fautif — et rien n'est chargé. Un `schema`
+de version supérieure est refusé plutôt qu'interprété au mieux.
 
 ---
 

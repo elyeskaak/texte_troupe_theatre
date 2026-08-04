@@ -24,7 +24,7 @@ import { repliques, valider } from '../js/schema.js';
 import { CONFIG } from '../js/config.js';
 import { comparer } from '../js/comparaison.js';
 import { mots } from '../js/texte.js';
-import { indexer, MOTIF_SANS_TOP, TOP } from '../js/modele.js';
+import { indexer, libelleLocuteurs, MOTIF_SANS_TOP, TOP } from '../js/modele.js';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 
@@ -132,9 +132,10 @@ describe('indexer une vraie pièce', () => {
   const index = indexer(EXEMPLE, ['CLARISSA']);
 
   test('mes unités sont reconnues', () => {
-    // CLARISSA parle dans les trois unités de la pièce d'essai.
-    assert.equal(index.unites.filter((u) => u.mienne).length, 3);
-    assert.equal(index.mesRepliques.length, 3);
+    // CLARISSA parle dans les quatre unités de la pièce d'essai — la
+    // quatrième par une réplique dite avec SIR ROWLAND.
+    assert.equal(index.unites.filter((u) => u.mienne).length, 4);
+    assert.equal(index.mesRepliques.length, 4);
   });
 
   test('le sommaire couvre toute la pièce', () => {
@@ -150,7 +151,7 @@ describe('indexer une vraie pièce', () => {
     }
   });
 
-  test('CLARISSA ouvre les trois unités : aucun top nulle part', () => {
+  test('CLARISSA ouvre les quatre unités : aucun top nulle part', () => {
     // Y compris la première, dont la scène ouvre sur une indication de lieu :
     // un décor n'est pas un signal, elle ouvre bien la scène.
     for (const id of index.mesRepliques) {
@@ -167,7 +168,7 @@ describe('indexer une vraie pièce', () => {
     const top = autre.tops.get(premiere);
 
     assert.equal(top.type, TOP.REPLIQUE);
-    assert.equal(top.personnage, 'CLARISSA');
+    assert.deepEqual(top.personnages, ['CLARISSA']);
   });
 
   test('en jouant les deux rôles, plus aucun top ne subsiste', () => {
@@ -181,6 +182,27 @@ describe('indexer une vraie pièce', () => {
       deux.mesRepliques.every((id) => deux.tops.get(id).type === TOP.AUCUN),
       'un top subsiste alors que je joue tous les rôles',
     );
+  });
+});
+
+describe('une réplique dite par plusieurs personnages (« X et Y. »)', () => {
+  const collective = repliques(EXEMPLE).find((r) => r.personnages.length > 1);
+
+  test('elle liste les deux personnages', () => {
+    assert.ok(collective, 'aucune réplique collective dans l’exemple');
+    assert.deepEqual(collective.personnages, ['SIR ROWLAND', 'CLARISSA']);
+  });
+
+  test('son libellé joint les deux noms', () => {
+    assert.equal(libelleLocuteurs(collective.personnages), 'SIR ROWLAND / CLARISSA');
+  });
+
+  test('elle compte parmi les miennes pour chacun des deux, seul', () => {
+    for (const role of ['SIR ROWLAND', 'CLARISSA']) {
+      const index = indexer(EXEMPLE, [role]);
+
+      assert.ok(index.mesRepliques.includes(collective.id), role);
+    }
   });
 });
 

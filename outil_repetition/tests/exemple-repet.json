@@ -1,5 +1,5 @@
 {
-  "schema": "repetition/1",
+  "schema": "repetition/2",
   "piece": "Pièce d'essai",
   "outil": "outil_edition 1.0.0 — étape 4",
   "avertissements": [],
@@ -20,13 +20,13 @@
   "personnages": [
     {
       "nom": "CLARISSA",
-      "repliques": 3,
-      "mots": 21
+      "repliques": 4,
+      "mots": 23
     },
     {
       "nom": "SIR ROWLAND",
-      "repliques": 2,
-      "mots": 7
+      "repliques": 3,
+      "mots": 9
     }
   ],
   "unites": [
@@ -47,14 +47,18 @@
         {
           "type": "replique",
           "id": "r_64cc8d4c7567",
-          "personnage": "CLARISSA",
+          "personnages": [
+            "CLARISSA"
+          ],
           "texte": "Vous ne savez pas ce que vous dites.",
           "vers": false
         },
         {
           "type": "replique",
           "id": "r_672228572172",
-          "personnage": "SIR ROWLAND",
+          "personnages": [
+            "SIR ROWLAND"
+          ],
           "texte": "Je ne crois pas qu'elle réponde.",
           "vers": false,
           "didascalies_internes": [
@@ -82,7 +86,9 @@
         {
           "type": "replique",
           "id": "r_ff6d8ebb9c56",
-          "personnage": "CLARISSA",
+          "personnages": [
+            "CLARISSA"
+          ],
           "texte": "Je vous ai vu venir de loin,\nEt je n'ai pas bougé.",
           "vers": true
         }
@@ -101,15 +107,41 @@
         {
           "type": "replique",
           "id": "r_abf669b491bf",
-          "personnage": "CLARISSA",
+          "personnages": [
+            "CLARISSA"
+          ],
           "texte": "Oui.",
           "vers": false
         },
         {
           "type": "replique",
           "id": "r_e92a0ccf1d3d",
-          "personnage": "SIR ROWLAND",
+          "personnages": [
+            "SIR ROWLAND"
+          ],
           "texte": "Oui.",
+          "vers": false
+        }
+      ]
+    },
+    {
+      "id": "u004",
+      "acte": "ACTE PREMIER",
+      "scene": "SCÈNE 3",
+      "implicite": false,
+      "personnages": [
+        "SIR ROWLAND",
+        "CLARISSA"
+      ],
+      "elements": [
+        {
+          "type": "replique",
+          "id": "r_14565f0b9896",
+          "personnages": [
+            "SIR ROWLAND",
+            "CLARISSA"
+          ],
+          "texte": "Bien sûr.",
           "vers": false
         }
       ]

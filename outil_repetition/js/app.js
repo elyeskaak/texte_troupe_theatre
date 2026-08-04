@@ -1414,7 +1414,7 @@ function rechercher(fragment) {
 
     const qui = document.createElement('div');
     qui.className = 'qui';
-    qui.textContent = trouve.personnage;
+    qui.textContent = modele.libelleLocuteurs(trouve.personnages);
 
     const extrait = document.createElement('div');
     extrait.textContent =
