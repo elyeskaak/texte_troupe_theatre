@@ -778,6 +778,34 @@ purge, le premier chargement exige donc du réseau, puis tout redevient hors lig
 C'est une limite à documenter dans le README, pas un défaut à corriger : aucune
 API ne permet de s'en exempter depuis iOS 17.4.
 
+**`VERSION` oubliée : le défaut le plus coûteux du projet.** `outil_edition` est
+passé au schéma `repetition/2`, cinq modules ont suivi, `sw.js` n'a pas été touché.
+Le cache s'appelait donc toujours `repetition-v19` et contenait l'ancien
+`config.js`, qui n'acceptait que `repetition/1`. En stratégie « cache d'abord »,
+rien n'est jamais redemandé : l'import refusait le JSON en conseillant de mettre la
+page à jour — ce que le service worker rendait précisément impossible. Le message
+d'erreur envoyait donc vers la seule action qui ne pouvait pas marcher.
+
+Ce défaut a trois traits qui le rendent redoutable, et qu'il faut nommer :
+
+- **il ne se manifeste pas là où il est causé** — le code du dépôt est juste, seul
+  l'appareil est faux ;
+- **il ne se voit sur aucune machine de développement**, où l'on purge sans cesse ;
+- **il touche exclusivement l'utilisateur**, une fois le déploiement fait.
+
+Un test vérifiait déjà cette constante, mais seulement sa *forme*
+(`/repetition-v\d+/`). Il passait pendant que le défaut partait en production —
+c'est-à-dire qu'il était pire que rien : il donnait l'impression que la question
+était couverte.
+
+Le garde-fou est désormais mécanique. `tests/empreinte-cache.json` enregistre le
+couple (version, empreinte SHA-1 des fichiers cachés). Si un fichier change sans
+que `VERSION` bouge, `cablage.test.js` échoue et donne la valeur à recopier.
+Vérifié en rejouant le scénario exact : modifier `config.js` sans toucher `sw.js`
+fait bien tomber le test. Le prix est une ligne à mettre à jour au déploiement ;
+l'oubli, lui, ne se voyait qu'une semaine plus tard, sur un téléphone, loin de tout
+outil de diagnostic.
+
 ### 10.6 Réglage de la taille de police et zoom
 
 La taille de police est un `--taille-texte` sur la racine, en `rem`. Elle

@@ -336,13 +336,13 @@ parcours('choisir un rôle libère « Commencer »', async (page) => {
   // Le texte doit être là, et les répliques d'ALICE marquées comme siennes.
   egal(
     page.document.querySelectorAll('#app .replique').length,
-    5,
-    'les cinq répliques sont montées',
+    6,
+    'les six répliques sont montées',
   );
   egal(
     page.document.querySelectorAll('#app .replique.mienne').length,
-    3,
-    'les trois répliques de CLARISSA sont les miennes',
+    4,
+    'les quatre répliques de CLARISSA — dont la réplique jointe — sont les miennes',
   );
 });
 
@@ -416,8 +416,8 @@ parcours('un rôle ajouté est actif aussitôt', async (page) => {
   await jusqua(() => ecran(page) === 'ecran-repetition', 'le texte s’affiche');
   egal(
     page.document.querySelectorAll('#app .replique.mienne').length,
-    5,
-    'CLARISSA (3) et SIR ROWLAND (2) sont masquées',
+    6,
+    'toutes les répliques sont masquées quand je joue les deux rôles',
   );
 });
 
@@ -469,8 +469,8 @@ parcours('« Tout remasquer » referme tout ce qui traîne', async (page) => {
   }
 
   await jusqua(
-    () => page.document.querySelectorAll('#app .replique.revelee').length === 3,
-    'les trois répliques sont dévoilées',
+    () => page.document.querySelectorAll('#app .replique.revelee').length === 4,
+    'les quatre répliques de CLARISSA sont dévoilées',
   );
 
   clic(page, 'btn-tout-remasquer');
@@ -515,7 +515,7 @@ parcours('le sommaire liste mes scènes et y ramène', async (page) => {
 
   const lignes = [...page.document.querySelectorAll('#bilan-scenes li')];
 
-  egal(lignes.length, 3, 'mes trois unités sont listées');
+  egal(lignes.length, 4, 'mes quatre unités sont listées');
 
   lignes.at(-1).click();
   await jusqua(() => ecran(page) === 'ecran-repetition', 'on revient au texte');
@@ -571,11 +571,18 @@ parcours('la file de révision classe par difficulté, et y mène', async (page)
 
   const lignes = [...$(rechargee, 'file-revision').children];
 
-  egal(lignes.length, 3, 'mes trois répliques sont dans la file');
+  egal(lignes.length, 4, 'mes quatre répliques sont dans la file');
   egal(
     lignes.map((l) => l.querySelector('.compte').textContent),
-    ['30 % · aujourd’hui', '100 % · il y a 60 j', '100 % · aujourd’hui'],
-    'la plus faible d’abord, puis la plus vieille, puis la fraîche',
+    [
+      // La réplique jointe (SIR ROWLAND + CLARISSA) n'est pas renseignée
+      // ci-dessus : jamais récitée, elle vaut 1 et passe donc devant tout.
+      'jamais récitée',
+      '30 % · aujourd’hui',
+      '100 % · il y a 60 j',
+      '100 % · aujourd’hui',
+    ],
+    'la jamais récitée, puis la plus faible, puis la plus vieille, puis la fraîche',
   );
 
   // L'extrait doit être le texte de l'auteur, et rien d'autre. Ce test manquait,
@@ -585,6 +592,7 @@ parcours('la file de révision classe par difficulté, et y mène', async (page)
   egal(
     lignes.map((l) => l.querySelector('.extrait').textContent),
     [
+      'Bien sûr.',
       // Apostrophe droite : c'est celle de `exemple-repet.json`. Le rendu ne
       // retouche pas la typographie de l'auteur, et il a raison de ne pas le faire.
       "Je vous ai vu venir de loin,\nEt je n'ai pas bougé.",

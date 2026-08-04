@@ -24,6 +24,7 @@
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -240,6 +241,68 @@ describe('le service worker suit les fichiers', () => {
 
   test('la version du cache est bien une constante à incrémenter', () => {
     assert.match(sw, /const VERSION = 'repetition-v\d+';/);
+  });
+
+  /**
+   * La version du cache doit changer dès qu'un fichier caché change.
+   *
+   * **Ce test existe parce que son absence a cassé l'outil sur le téléphone.**
+   * `outil_edition` est passé au schéma `repetition/2` ; cinq modules ont suivi ;
+   * `sw.js` n'a pas été touché. Le cache s'appelait donc toujours
+   * `repetition-v19` et contenait l'ancien `config.js`, qui n'acceptait que
+   * `repetition/1`. En stratégie « cache d'abord », rien n'est jamais redemandé :
+   * l'import refusait le JSON avec un message conseillant de mettre la page à
+   * jour — ce que le service worker rendait précisément impossible.
+   *
+   * Le test précédent ne vérifiait que la *forme* de la constante. Il passait
+   * pendant que le défaut partait en production, ce qui est pire que rien : il
+   * donnait l'impression que la question était couverte.
+   *
+   * Le mécanisme est volontairement bête. On enregistre dans
+   * `tests/empreinte-cache.json` le couple (version, empreinte des fichiers). Si
+   * les fichiers changent sans que la version bouge, ce test échoue et donne la
+   * valeur à recopier. Oublier devient impossible, au prix d'une ligne à mettre à
+   * jour — le bon échange, puisque l'oubli ne se voyait qu'une semaine plus tard,
+   * sur un téléphone, loin de tout outil de diagnostic.
+   */
+  test('la version change dès qu’un fichier caché change', () => {
+    const liste = sw.slice(sw.indexOf('const FICHIERS'), sw.indexOf('];', sw.indexOf('const FICHIERS')));
+    const chemins = [...liste.matchAll(/'\.\/([^']*)'/g)]
+      .map((m) => m[1])
+      .filter(Boolean); // « ./ » est un alias d'index.html, pas un fichier
+
+    const empreinte = createHash('sha1');
+
+    for (const chemin of chemins.sort()) {
+      // Le chemin entre dans l'empreinte : renommer un fichier sans changer son
+      // contenu modifie bien ce que le cache contient.
+      empreinte.update(chemin);
+      empreinte.update(readFileSync(join(RACINE, chemin)));
+    }
+
+    const calculee = empreinte.digest('hex').slice(0, 16);
+    const version = sw.match(/const VERSION = '([^']+)';/)[1];
+    const enregistre = JSON.parse(
+      readFileSync(join(RACINE, 'tests', 'empreinte-cache.json'), 'utf8'),
+    );
+
+    const aJour = JSON.stringify({ version, empreinte: calculee }, null, 2);
+
+    if (calculee !== enregistre.empreinte) {
+      assert.notEqual(
+        version,
+        enregistre.version,
+        `Les fichiers mis en cache ont changé, mais VERSION vaut toujours ` +
+          `« ${version} ». Incrémentez-la dans sw.js, sinon la correction restera ` +
+          `invisible sur les appareils qui ont déjà le cache.`,
+      );
+    }
+
+    assert.equal(
+      aJour,
+      JSON.stringify(enregistre, null, 2),
+      `Recopiez ceci dans tests/empreinte-cache.json :\n${aJour}`,
+    );
   });
 });
 
