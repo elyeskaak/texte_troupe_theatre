@@ -257,9 +257,13 @@ export async function authentifier({ clientId, scope }) {
 /**
  * Ouvre le sélecteur Google, restreint au choix d'un dossier.
  *
- * Scope `drive.file` : l'app ne reçoit l'accès qu'au dossier choisi ici, jamais
- * à l'ensemble du Drive de la personne (§3.3/§4.3, décision retenue plutôt que
- * `drive.readonly`).
+ * Le scope attendu dans `accessToken` est `drive.readonly` (§3.3/§4.3) : une
+ * première version visait `drive.file`, pour restreindre l'accès au seul
+ * dossier choisi ici — mais `drive.file` ne donne accès qu'aux fichiers
+ * **individuellement** ouverts via ce sélecteur, jamais au contenu d'un
+ * dossier, même reconnu et retenu correctement. Constaté en test réel, pas en
+ * théorie : un dossier bien identifié, contenant de vrais `_REPET.json`,
+ * rendait `listerFichiers` systématiquement vide, sans la moindre erreur.
  *
  * @param {{apiKey: string, accessToken: string}} options
  * @returns {Promise<{id: string, nom: string}|null>} `null` si annulé

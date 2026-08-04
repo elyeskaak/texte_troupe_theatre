@@ -224,10 +224,28 @@ gestion du jeton, du scope ou de l'expiration — alors que dupliquer une
 fonction de validation de schéma n'en a pas. Seul ce module est partagé ; ni
 l'un ni l'autre outil ne dépend du reste du code de l'autre.
 
-**Choix : Google Picker, pas un accès large au compte.** Le scope demandé est
-`drive.file` (l'app ne voit que ce que l'utilisateur choisit explicitement dans
-le sélecteur Google), jamais `drive.readonly` sur tout le Drive. Le dossier
-choisi est mémorisé (`localStorage`, clé `repetition:v1:drive-dossier`) : les
+**Choix initial, renversé à l'usage : `drive.readonly`, pas `drive.file`.**
+La première version demandait `drive.file`, en confiance : l'app ne verrait
+que ce que l'utilisateur choisit explicitement dans le sélecteur Google
+(Picker), jamais un accès large à tout le Drive. **Ça ne fonctionne pas pour
+ce cas d'usage.** `drive.file` ne donne accès qu'aux fichiers
+**individuellement** ouverts ou créés via l'app — pas au contenu d'un
+**dossier** choisi, même reconnu et mémorisé correctement par le Picker : en
+test réel, un dossier contenant neuf `_REPET.json` bien nommés rendait
+`files.list` **toujours vide**, sans la moindre erreur HTTP pour le signaler
+— exactement la panne silencieuse que ce projet cherche à éviter partout
+ailleurs (P3), ici causée par l'API elle-même plutôt que par le code.
+
+Deux remèdes envisagés, tranchés avec l'utilisateur : soit revenir à
+`drive.file` mais faire choisir les fichiers un par un dans le Picker à
+chaque session (perd l'intérêt d'un dossier qui se met à jour tout seul), soit
+passer à `drive.readonly` (accès en lecture à tout le Drive du compte
+connecté, pas seulement au dossier choisi). **Retenu : `drive.readonly`** —
+le workflow « un dossier choisi une fois, les nouvelles pièces y apparaissent
+sans réautoriser » l'emportait sur la portée plus large de l'accès. Voir
+§15, décision 6 (révisée).
+
+Le dossier choisi est mémorisé (`localStorage`, clé `repetition:v1:drive-dossier`) : les
 sessions suivantes ne redemandent que l'authentification, pas un nouveau choix
 de dossier.
 
@@ -1104,7 +1122,7 @@ export const CONFIG = {
   LANGUE_RECONNAISSANCE:    'fr-FR',
   DRIVE_CLIENT_ID:          '…',    // Google Cloud, "Application Web" — §3.3
   DRIVE_API_KEY:            '…',    // clé API restreinte au Picker — §3.3
-  DRIVE_SCOPE:              'https://www.googleapis.com/auth/drive.file',
+  DRIVE_SCOPE:              'https://www.googleapis.com/auth/drive.readonly', // révisé, §3.3
 };
 ```
 
@@ -1298,7 +1316,7 @@ plusieurs appareils (notamment l'iPhone, sans accès à `../pieces/`) :
 | # | Décision | Retenu | Où cela se lit |
 |---|---|---|---|
 | 5 | Source supplémentaire des pièces | **Google Drive**, dossier choisi par l'utilisateur, en complément du dossier local et de l'import manuel | §3.3 |
-| 6 | Portée de l'accès Drive | **Google Picker + scope `drive.file`** (accès uniquement à ce qui est choisi), plutôt qu'un accès large (`drive.readonly`) à tout le compte | §3.3 |
+| 6 | Portée de l'accès Drive | ~~Google Picker + scope `drive.file`~~ → **révisé le 2026-08-05 : `drive.readonly`** — `drive.file` ne donne pas accès au contenu d'un dossier choisi (constaté en test réel : dossier reconnu, fichiers bien présents, liste toujours vide) | §3.3 |
 | 7 | Emplacement du client Drive | **Module partagé `pieces/drive.js`**, importé par les deux outils, plutôt que dupliqué dans chacun | §3.3, §4 |
 
 Deux remarques sur la portée de ces choix.

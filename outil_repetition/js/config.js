@@ -127,9 +127,14 @@ export const CONFIG = Object.freeze({
     '865511393898-i692e2218d8u8hb4rd5afhjjhfb9opec.apps.googleusercontent.com',
   DRIVE_API_KEY: 'AIzaSyBKHu8igUEGgbNAACvjYZbCPppHi8nc8VU',
   /**
-   * Accès restreint à ce que l'utilisateur choisit explicitement dans le
-   * sélecteur Google (Picker), jamais un accès large à tout son Drive
-   * (`drive.readonly`) — décision retenue en §3.3.
+   * `drive.readonly`, révisé le 2026-08-05 (§3.3 : décision 6 renversée à
+   * l'usage). `drive.file` ne donne accès qu'aux fichiers individuellement
+   * ouverts via le sélecteur — pas au contenu d'un dossier choisi, même
+   * reconnu par le Picker : un dossier réel, contenant neuf `_REPET.json`
+   * bien nommés, rendait une liste vide sans la moindre erreur. Lecture
+   * seule sur tout le Drive du compte connecté, en échange d'un dossier qui
+   * fonctionne réellement comme un dossier (nouvelles pièces visibles sans
+   * réautoriser).
    */
-  DRIVE_SCOPE: 'https://www.googleapis.com/auth/drive.file',
+  DRIVE_SCOPE: 'https://www.googleapis.com/auth/drive.readonly',
 });

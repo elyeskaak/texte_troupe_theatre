@@ -625,7 +625,15 @@ const CONFIG = Object.freeze({
   DRIVE_CLIENT_ID:
     '865511393898-i692e2218d8u8hb4rd5afhjjhfb9opec.apps.googleusercontent.com',
   DRIVE_API_KEY: 'AIzaSyBKHu8igUEGgbNAACvjYZbCPppHi8nc8VU',
-  DRIVE_SCOPE: 'https://www.googleapis.com/auth/drive.file',
+  /**
+   * `drive.readonly`, révisé le 2026-08-05 (§4.3 : décision 6 renversée à
+   * l'usage, identique à `outil_repetition`). `drive.file` ne donne accès
+   * qu'aux fichiers individuellement ouverts via le sélecteur — pas au
+   * contenu d'un dossier choisi, même reconnu par le Picker : un dossier
+   * réel, contenant neuf `_REPET.json` bien nommés, rendait une liste vide
+   * sans la moindre erreur.
+   */
+  DRIVE_SCOPE: 'https://www.googleapis.com/auth/drive.readonly',
 });
 
 // ============================================================

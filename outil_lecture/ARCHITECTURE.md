@@ -1050,7 +1050,7 @@ const CONFIG = Object.freeze({
   PORTEE_GRADIENT: 6, // §8.1, portée du dégradé continu autour de la position
   DRIVE_CLIENT_ID: '…', // Google Cloud, "Application Web" — §4.3, identique à outil_repetition
   DRIVE_API_KEY: '…', // clé API restreinte au Picker — §4.3
-  DRIVE_SCOPE: 'https://www.googleapis.com/auth/drive.file',
+  DRIVE_SCOPE: 'https://www.googleapis.com/auth/drive.readonly', // révisé, §4.3
 });
 ```
 
@@ -1082,7 +1082,7 @@ de §11 et n'a donc pas besoin d'être mentionné dans le modèle de §5.
 | # | Décision | Retenu | Où cela se lit |
 |---|---|---|---|
 | 5 | Distribution de l'outil | **Publié sur GitHub Pages**, en plus du double-clic local ; le double-clic reste pleinement fonctionnel pour l'import manuel. Constaté à l'implémentation : rien à activer, la publication du dépôt entier (faite pour `outil_repetition`) couvrait déjà `outil_lecture` | §1, §2.2 |
-| 6 | Source Drive, portée de l'accès | **Google Picker + scope `drive.file`**, identique à `outil_repetition` | §4.3 |
+| 6 | Source Drive, portée de l'accès | ~~Google Picker + scope `drive.file`~~ → **révisé le 2026-08-05 : `drive.readonly`**, identique à `outil_repetition` (§3.3 de son `ARCHITECTURE.md` : `drive.file` ne donne pas accès au contenu d'un dossier choisi) | §4.3 |
 | 7 | Emplacement du client Drive | **Module partagé `pieces/drive.js`**, importé dynamiquement, plutôt que dupliqué | §4.1, §4.2, §4.3 |
 
 **La prochaine étape est l'étape 2 du plan de livraison** (§14) : les sections
