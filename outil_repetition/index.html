@@ -701,6 +701,15 @@
       </button>
     </div>
 
+    <!-- Le lien double le bouton, et ce n'est pas une redondance : le bouton vit
+         dans ce fichier, donc dans le cache. Quand c'est le cache qui est en
+         cause, il peut être absent de la page affichée — c'est exactement ce qui
+         est arrivé. `maj.html` n'est jamais mis en cache, lui. -->
+    <p class="aide" style="margin-top:18px">
+      L’outil refuse une pièce en parlant de « schéma » ?
+      <a href="./maj.html">Remettre l’outil à jour</a>.
+    </p>
+
     <label class="champ">Ma progression</label>
     <div class="rangee">
       <button id="btn-exporter-accueil" class="btn btn-fantome btn-mini">Sauvegarder</button>

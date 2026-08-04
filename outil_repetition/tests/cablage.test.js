@@ -223,6 +223,15 @@ describe('les modes se répondent des trois côtés', () => {
   });
 });
 
+/** Les chemins de la liste `FICHIERS` de `sw.js`, sans les commentaires alentour. */
+function fichiersDuCache() {
+  const debut = sw.indexOf('const FICHIERS');
+
+  return [...sw.slice(debut, sw.indexOf('];', debut)).matchAll(/'\.\/([^']*)'/g)]
+    .map((trouve) => trouve[1])
+    .filter(Boolean); // « ./ » est un alias d'index.html, pas un fichier
+}
+
 describe('le service worker suit les fichiers', () => {
   test('chaque module de js/ est préchargé', () => {
     // Un module oublié rend l'outil inutilisable hors ligne, sans erreur
@@ -241,6 +250,40 @@ describe('le service worker suit les fichiers', () => {
 
   test('la version du cache est bien une constante à incrémenter', () => {
     assert.match(sw, /const VERSION = 'repetition-v\d+';/);
+  });
+
+  test('l’issue de secours n’est jamais mise en cache', () => {
+    // `maj.html` sert à sortir d'un cache périmé. La mettre en cache la rendrait
+    // périmable, donc inutile précisément le jour où elle sert : on se retrouverait
+    // à devoir réparer le réparateur. Ce test existe pour qu'aucune bonne intention
+    // future — « tant qu'on y est, mettons tout hors ligne » — ne referme la porte.
+    // On inspecte la **liste**, non le fichier entier : la première version de ce
+    // test cherchait « maj.html » dans tout `sw.js` et se déclenchait sur le
+    // commentaire qui explique justement pourquoi elle n'y est pas. Un test doit
+    // porter sur la portée exacte de ce qu'il affirme.
+    assert.ok(
+      !fichiersDuCache().includes('maj.html'),
+      'maj.html figure dans FICHIERS : elle doit rester hors du cache',
+    );
+    assert.ok(
+      html.includes('./maj.html'),
+      'l’accueil doit pointer vers l’issue de secours, sinon elle est introuvable',
+    );
+  });
+
+  test('le service worker demande le réseau avant le cache', () => {
+    // Le cache d'abord rend le défaut auto-scellant : sans nouvelle VERSION,
+    // l'appareil ne redemande jamais rien, et le remède qu'on déploie voyage par
+    // le canal bloqué. Un appareil est resté sur v19 à travers trois versions.
+    assert.ok(
+      sw.includes('reseauDAbord'),
+      'sw.js ne suit plus la stratégie « réseau d’abord »',
+    );
+    assert.ok(
+      /const DELAI_RESEAU_MS = \d+;/.test(sw),
+      'le repli sur le cache doit être borné dans le temps : un réseau lent mais ' +
+        'présent est le pire cas, et pendrait indéfiniment sans délai de garde',
+    );
   });
 
   /**
@@ -266,11 +309,7 @@ describe('le service worker suit les fichiers', () => {
    * sur un téléphone, loin de tout outil de diagnostic.
    */
   test('la version change dès qu’un fichier caché change', () => {
-    const liste = sw.slice(sw.indexOf('const FICHIERS'), sw.indexOf('];', sw.indexOf('const FICHIERS')));
-    const chemins = [...liste.matchAll(/'\.\/([^']*)'/g)]
-      .map((m) => m[1])
-      .filter(Boolean); // « ./ » est un alias d'index.html, pas un fichier
-
+    const chemins = fichiersDuCache();
     const empreinte = createHash('sha1');
 
     for (const chemin of chemins.sort()) {

@@ -802,7 +802,49 @@ Un test vérifiait déjà cette constante, mais seulement sa *forme*
 c'est-à-dire qu'il était pire que rien : il donnait l'impression que la question
 était couverte.
 
-**Le message d'erreur offre maintenant le geste au lieu de le décrire.** L'ancien
+**Le cache d'abord était le vrai défaut, et il a fallu deux rechutes pour le voir.**
+Le bump de `VERSION` n'a pas suffi : un appareil est resté sur les fichiers de v19
+à travers v20, v21 **et** v22, refusant un schéma que le dépôt acceptait depuis
+longtemps. Le serveur était irréprochable — vérifié en interrogeant GitHub Pages
+directement.
+
+Le défaut est de **conception**, et se formule en une phrase : *le remède voyage
+par le canal qui est en panne.* Un bouton de purge, un meilleur message, une
+version incrémentée — tout cela vit dans le code neuf, c'est-à-dire précisément
+dans ce qui n'arrive pas. La panne est **auto-scellante**, et aucune correction ne
+peut l'atteindre.
+
+Deux changements, tous deux structurels :
+
+**1. Réseau d'abord, cache en repli** (`reseauDAbord` dans `sw.js`), avec un délai
+de garde de 2,5 s — un réseau présent mais mauvais est le pire cas, et pendrait
+indéfiniment sans borne. Le cache ne sert plus qu'à ce pour quoi il a été mis là,
+ouvrir sans réseau, et ne décide plus de ce qu'on exécute. L'oubli d'un numéro de
+version cesse d'avoir des conséquences visibles.
+
+Le prix est un aller-retour au démarrage quand on est connecté ; sur douze fichiers
+de quelques kilo-octets il est imperceptible, et l'exigence était de s'ouvrir *sans*
+réseau, pas instantanément *avec*.
+
+Vérifié en empoisonnant le cache à la main avec un `config.js` n'acceptant que
+`repetition/1` : après rechargement, la pièce en `repetition/2` est acceptée et
+l'entrée du cache s'est réécrite d'elle-même. Sous l'ancienne stratégie, ce même
+montage la refusait.
+
+**2. `maj.html`, une issue de secours hors du cache.** Elle ne figure pas dans
+`FICHIERS`, et c'est toute sa raison d'être : un fichier absent du cache ne peut pas
+être servi périmé, donc c'est une porte que le service worker ne peut pas
+verrouiller. Elle ne dépend d'aucun module — tout est en dur, sinon la dépendance
+serait un fichier de plus susceptible d'être périmé — et **ne touche pas à
+`localStorage`** : un dépannage qui efface trois semaines de travail serait un
+remède pire que le mal. Vérifié : un témoin planté dans `localStorage` survit.
+
+`cablage.test.js` interdit désormais de l'ajouter au cache, et exige que l'accueil y
+renvoie. La première version de ce test cherchait « maj.html » dans tout `sw.js` et
+se déclenchait sur le commentaire expliquant pourquoi elle n'y est pas — un test
+doit porter sur la portée exacte de ce qu'il affirme.
+
+**Le message d'erreur offre aussi le geste au lieu de le décrire.** L'ancien
 disait « Mettez la page à jour, ou régénérez le fichier » — les deux remèdes à la
 fois, donc aucun, et le premier était justement impossible. `schema.js` distingue
 désormais les deux sens, qui ont des causes opposées :

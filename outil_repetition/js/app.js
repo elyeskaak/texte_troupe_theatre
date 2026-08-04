@@ -1653,6 +1653,14 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   window.addEventListener('load', () => {
     navigator.serviceWorker
       .register('./sw.js')
+      .then((enregistrement) => {
+        // `update()` explicite à chaque ouverture. Le navigateur vérifie déjà de
+        // lui-même, mais à sa propre cadence et sous réserve du cache HTTP : un
+        // appareil est resté trois déploiements en arrière. Cet appel ne coûte
+        // qu'une requête conditionnelle, et rend la vérification certaine plutôt
+        // que probable.
+        return enregistrement.update();
+      })
       .catch((erreur) => console.warn('service worker non enregistré', erreur));
   });
 }
