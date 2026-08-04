@@ -89,9 +89,12 @@ MOTIF_ESPACES = re.compile(r"\s+")
 # `nom_personnage` : sans cela, la même personne se dédouble.
 MOTIF_APOSTROPHES = re.compile(r"[’‘‛`´]")
 
-# Jonction de plusieurs personnages dans un même label : « X et Y. » ou
-# « X ET Y. ». Insensible à la casse, comme le reste de la saisie.
-MOTIF_JONCTION = re.compile(r"\s+et\s+", re.IGNORECASE)
+# Jonction de plusieurs personnages dans un même label : « X et Y. »,
+# « X ET Y. » ou « X / Y. ». Insensible à la casse, comme le reste de la
+# saisie. Le slash est la convention retenue pour les nouvelles répliques
+# collectives ; « et »/« ET » reste reconnu pour les documents déjà écrits
+# ainsi.
+MOTIF_JONCTION = re.compile(r"\s*/\s*|\s+et\s+", re.IGNORECASE)
 
 # Label qui ne nomme aucun personnage précis : toute la distribution parle.
 MARQUEUR_TOUS = "TOUS"
@@ -144,9 +147,11 @@ def noms_personnages(label: str) -> list[str]:
     `JOKER_TOUS`, qui vaut pour n'importe quel rôle plutôt que pour un
     personnage fantôme de plus dans la distribution.
 
-    « SIR ROWLAND et CLARISSA. » / « X ET Y. » nomme deux personnages
-    distincts qui parlent ensemble ; chacun est renormalisé comme s'il
-    parlait seul, pour ne pas se dédoubler avec ses répliques individuelles.
+    « SIR ROWLAND / CLARISSA. » (ou, dans un document plus ancien,
+    « SIR ROWLAND et CLARISSA. » / « X ET Y. ») nomme plusieurs personnages
+    distincts qui parlent ensemble — deux ou davantage, sans limite. Chacun
+    est renormalisé comme s'il parlait seul, pour ne pas se dédoubler avec ses
+    répliques individuelles.
     """
     if nom_personnage(label).upper() == MARQUEUR_TOUS:
         return [JOKER_TOUS]
@@ -407,8 +412,15 @@ class _Constructeur:
         voulu. Mais une fusion muette empêcherait de découvrir que le document
         source mélange deux graphies, ce qui se paie ailleurs : dans le DOCX
         imprimé, où les deux apparaissent, et dans l'outil de coupes.
+
+        La ponctuation finale est retirée avant comparaison. Sans ça, un
+        personnage cité dans un label joint (« SIR ROWLAND et CLARISSA. »)
+        se distinguerait à tort de ses apparitions seules (« SIR ROWLAND. ») :
+        seul le dernier nom d'un label joint porte le point de la ligne, ce
+        qui n'est pas une variante d'écriture, juste un artefact de position.
         """
-        self._graphies.setdefault(canonique, set()).add(brut.strip())
+        sans_ponctuation = blocks.MOTIF_PONCTUATION_FINALE.sub("", brut.strip())
+        self._graphies.setdefault(canonique, set()).add(sans_ponctuation)
 
     def terminer(self) -> None:
         """Referme ce qui reste ouvert."""

@@ -603,10 +603,13 @@ une réplique perdue y était indétectable.
 texte produisent des dictionnaires strictement égaux, ce qui rend le déterminisme
 testable. `genere_le` est ajouté au moment de l'écriture.
 
-**`personnages` d'une réplique est toujours une liste.** « SIR ROWLAND et
-CLARISSA. » ou « X ET Y. » joignent deux personnages dans un même label, et le
-texte est bien dit par les deux — les séparer en deux répliques identiques
-fausserait le compte. Un seul nom dans l'immense majorité des cas produit une
+**`personnages` d'une réplique est toujours une liste.** « SIR ROWLAND /
+CLARISSA. » — ou, dans un document plus ancien, « SIR ROWLAND et CLARISSA. »
+/ « X ET Y. » — joignent plusieurs personnages dans un même label, et le
+texte est bien dit par tous — les séparer en répliques identiques fausserait
+le compte. Le slash est la convention retenue pour l'écriture de nouvelles
+répliques collectives ; « et »/« ET » reste reconnu pour ne pas casser les
+documents déjà écrits ainsi. Un seul nom dans l'immense majorité des cas produit une
 liste à un élément, ce qui laisse l'identifiant inchangé (§ ci-dessus, la
 jonction d'une liste à un élément est ce nom-là). « TOUS. » est différent :
 il ne nomme personne, et qui est en scène n'est pas su à ce stade. Il se

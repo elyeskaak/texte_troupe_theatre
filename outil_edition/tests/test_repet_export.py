@@ -324,6 +324,28 @@ class RepliquesCollectives(unittest.TestCase):
 
         self.assertEqual(repliques(document)[0]["personnages"], ["JAN", "MARTHA"])
 
+    def test_deux_personnages_joints_par_un_slash(self):
+        """Convention retenue pour les nouvelles répliques collectives."""
+        document = construire("**SIR ROWLAND / CLARISSA.**\nChippendale ?\n")
+
+        self.assertEqual(
+            repliques(document)[0]["personnages"], ["SIR ROWLAND", "CLARISSA"]
+        )
+
+    def test_le_slash_sans_espaces_fonctionne_aussi(self):
+        document = construire("**JAN/MARTHA.**\nOui.\n")
+
+        self.assertEqual(repliques(document)[0]["personnages"], ["JAN", "MARTHA"])
+
+    def test_plus_de_deux_personnages_joints_par_slash(self):
+        texte = "**HUGO / MISS PEAKE / CLARISSA / JEREMY.**\nPlus sûr ?\n"
+        document = construire(texte)
+
+        self.assertEqual(
+            repliques(document)[0]["personnages"],
+            ["HUGO", "MISS PEAKE", "CLARISSA", "JEREMY"],
+        )
+
     def test_les_deux_personnages_apparaissent_dans_l_unite(self):
         document = construire("**SIR ROWLAND et CLARISSA.**\nChippendale ?\n")
 
@@ -380,6 +402,29 @@ class RepliquesCollectives(unittest.TestCase):
 
         self.assertEqual(len(trouvees), 2)
         self.assertNotEqual(trouvees[0]["id"], trouvees[1]["id"])
+
+    def test_un_personnage_seul_puis_dans_un_label_joint_ne_declenche_rien(self):
+        """
+        Seul le dernier nom d'un label joint porte le point de la ligne :
+        « JAN » (dans « JAN et MARTHA. ») contre « JAN. » (seul) n'est pas une
+        variante d'écriture, et ne doit pas se signaler comme telle.
+        """
+        texte = "**JAN.**\nUn.\n\n**JAN et MARTHA.**\nDeux.\n"
+        document = construire(texte)
+
+        self.assertFalse(
+            [a for a in document["avertissements"] if "graphies" in a],
+            document["avertissements"],
+        )
+
+    def test_un_personnage_seul_puis_dans_un_label_joint_par_slash(self):
+        texte = "**JAN.**\nUn.\n\n**JAN / MARTHA.**\nDeux.\n"
+        document = construire(texte)
+
+        self.assertFalse(
+            [a for a in document["avertissements"] if "graphies" in a],
+            document["avertissements"],
+        )
 
 
 class RienDeJeteEnSilence(unittest.TestCase):
