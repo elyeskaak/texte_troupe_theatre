@@ -682,6 +682,16 @@
 
     <div id="message-accueil" class="message" hidden></div>
 
+    <!-- Ne paraît que si la page est en retard sur le fichier. Un message qui
+         décrit comment vider le cache de Safari serait illisible sur téléphone,
+         et l'ancien conseillait « mettez la page à jour » — ce que le service
+         worker rendait justement impossible. Ici, le geste est offert. -->
+    <div class="rangee" id="bloc-mise-a-jour" hidden>
+      <button id="btn-mettre-a-jour" class="btn btn-primaire">
+        Mettre l’outil à jour
+      </button>
+    </div>
+
     <label class="champ">Ma progression</label>
     <div class="rangee">
       <button id="btn-exporter-accueil" class="btn btn-fantome btn-mini">Sauvegarder</button>

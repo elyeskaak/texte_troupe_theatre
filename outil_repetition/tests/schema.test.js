@@ -10,7 +10,7 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { repliques, valider } from '../js/schema.js';
+import { repliques, valider, REMEDE } from '../js/schema.js';
 import { CONFIG } from '../js/config.js';
 
 /** Un document minimal mais valide. */
@@ -77,11 +77,42 @@ describe('version du schéma', () => {
     assert.match(resultat.erreur, /repetition\/1/);
   });
 
-  test('le message dit quoi faire', () => {
-    // La cause est toujours la même : un outil_edition plus récent que la page.
+  test('un fichier plus récent accuse la page, non le fichier', () => {
+    // C'est le cas qui a réellement bloqué l'outil : le fichier était au schéma 2,
+    // la page cachée en était restée au 1. Le message doit désigner la page, et le
+    // remède doit permettre à l'interface d'offrir la purge du cache.
     const resultat = valider(piece({ schema: 'repetition/9' }));
 
-    assert.match(resultat.erreur, /à jour|régénérez/i);
+    assert.ok(!resultat.valide);
+    assert.equal(resultat.remede, REMEDE.PAGE_PERIMEE);
+    assert.match(resultat.erreur, /plus récent/i);
+    assert.match(resultat.erreur, /page.*en retard/i);
+  });
+
+  test('un fichier plus ancien accuse le fichier, non la page', () => {
+    // Le sens inverse a la cause inverse : purger le cache n'y changerait rien, et
+    // le proposer enverrait vers un geste inutile.
+    const resultat = valider(piece({ schema: 'repetition/1' }));
+
+    assert.equal(resultat.remede, REMEDE.FICHIER_PERIME);
+    assert.match(resultat.erreur, /plus ancien/i);
+    assert.match(resultat.erreur, /régénérez/i);
+  });
+
+  test('les deux sens ne donnent pas le même remède', () => {
+    // L'ancien message conseillait « mettez la page à jour, ou régénérez le
+    // fichier » — les deux à la fois, donc aucun. Ce test interdit d'y revenir.
+    assert.notEqual(
+      valider(piece({ schema: 'repetition/9' })).remede,
+      valider(piece({ schema: 'repetition/1' })).remede,
+    );
+  });
+
+  test('une forme étrangère n’est pas prise pour une version', () => {
+    const resultat = valider(piece({ schema: 'lecture/1' }));
+
+    assert.ok(!resultat.valide);
+    assert.equal(resultat.remede, REMEDE.FICHIER_ETRANGER);
   });
 
   test('un schéma absent est refusé', () => {

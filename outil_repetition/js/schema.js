@@ -15,6 +15,26 @@
 
 import { CONFIG } from './config.js';
 
+/**
+ * Ce qu'il y a à faire quand un fichier est refusé.
+ *
+ * Un code, et non une phrase, pour que l'interface puisse **proposer le geste**
+ * plutôt que le décrire. Un bouton qui purge le cache vaut mieux qu'un paragraphe
+ * expliquant comment fouiller les réglages de Safari — et incomparablement mieux
+ * que l'ancien message, qui conseillait de mettre la page à jour alors que le
+ * service worker était précisément ce qui l'en empêchait.
+ */
+export const REMEDE = Object.freeze({
+  /** Rien de particulier : le fichier est abîmé ou mal formé. */
+  AUCUN: 'aucun',
+  /** La page est en retard sur le fichier. Purger le cache et recharger. */
+  PAGE_PERIMEE: 'page_perimee',
+  /** Le fichier est en retard sur la page. Le régénérer depuis outil_edition. */
+  FICHIER_PERIME: 'fichier_perime',
+  /** Ce fichier ne vient pas d'outil_edition. */
+  FICHIER_ETRANGER: 'fichier_etranger',
+});
+
 /** Types d'élément reconnus dans une unité jouable. */
 export const TYPES_ELEMENT = Object.freeze([
   'replique',
@@ -34,10 +54,10 @@ export function valider(donnees) {
     return _refus('le fichier ne contient pas un objet JSON.');
   }
 
-  const erreurDeVersion = _validerVersion(donnees.schema);
+  const problemeDeVersion = _validerVersion(donnees.schema);
 
-  if (erreurDeVersion) {
-    return _refus(erreurDeVersion);
+  if (problemeDeVersion) {
+    return _refus(problemeDeVersion.erreur, problemeDeVersion.remede);
   }
 
   if (typeof donnees.piece !== 'string' || donnees.piece.trim() === '') {
@@ -69,28 +89,79 @@ export function valider(donnees) {
   return { valide: true, piece: donnees };
 }
 
+/** Numéro d'une version de schéma, ou `null` si la forme est inconnue. */
+function _numeroDeSchema(schema) {
+  const trouve = /^repetition\/(\d+)$/.exec(schema);
+
+  return trouve ? Number(trouve[1]) : null;
+}
+
 /**
  * Contrôle la version du schéma.
  *
  * Une version **supérieure est refusée**, jamais interprétée au mieux : un champ
  * dont le sens a changé produirait sinon un outil qui fonctionne en apparence et
- * masque la mauvaise réplique. Le message dit quoi faire, parce que la cause est
- * toujours la même — un `outil_edition` plus récent que la page.
+ * masque la mauvaise réplique.
+ *
+ * **Le message doit dire qui est en retard, et l'ancien ne le faisait pas.** Il
+ * disait « Mettez la page à jour, ou régénérez le fichier » — les deux remèdes à
+ * la fois, sans trancher, donc en laissant le lecteur choisir au hasard. Or les
+ * deux sens ont des causes opposées :
+ *
+ * - **fichier plus récent que la page** : la page est périmée. Sur un téléphone,
+ *   c'est presque toujours le service worker qui sert un ancien `config.js`, et
+ *   « mettre la page à jour » est précisément ce que le cache empêche. Conseiller
+ *   cette action était donc envoyer vers la seule chose qui ne pouvait pas
+ *   marcher ;
+ * - **fichier plus ancien que la page** : c'est le fichier qu'il faut régénérer,
+ *   et vider le cache n'y changerait rien.
+ *
+ * Le remède est rendu sous forme de **code**, non de prose, pour que l'interface
+ * puisse proposer le geste au lieu de le décrire — un bouton qui purge le cache
+ * vaut mieux qu'un paragraphe expliquant comment fouiller les réglages de Safari.
+ * Ce module reste pur : il nomme le remède, il ne l'applique pas.
  */
 function _validerVersion(schema) {
   if (typeof schema !== 'string') {
-    return 'le champ « schema » est absent : ce fichier ne vient pas d’outil_edition.';
+    return {
+      erreur: 'le champ « schema » est absent : ce fichier ne vient pas d’outil_edition.',
+      remede: REMEDE.FICHIER_ETRANGER,
+    };
   }
 
   if (schema === CONFIG.SCHEMA_ACCEPTE) {
     return null;
   }
 
-  return (
-    `schéma « ${schema} » non reconnu — cette page attend ` +
-    `« ${CONFIG.SCHEMA_ACCEPTE} ». Mettez la page à jour, ou régénérez le ` +
-    'fichier avec la version d’outil_edition correspondante.'
-  );
+  const duFichier = _numeroDeSchema(schema);
+  const attendu = _numeroDeSchema(CONFIG.SCHEMA_ACCEPTE);
+
+  if (duFichier === null || attendu === null) {
+    return {
+      erreur:
+        `schéma « ${schema} » inconnu : cette page attend ` +
+        `« ${CONFIG.SCHEMA_ACCEPTE} ». Ce fichier ne semble pas venir d’outil_edition.`,
+      remede: REMEDE.FICHIER_ETRANGER,
+    };
+  }
+
+  if (duFichier > attendu) {
+    return {
+      erreur:
+        `Ce fichier est plus récent que cette page : il est au schéma « ${schema} », ` +
+        `la page en est restée à « ${CONFIG.SCHEMA_ACCEPTE} ». C’est la page qui ` +
+        'est en retard, pas le fichier — l’outil doit être mis à jour.',
+      remede: REMEDE.PAGE_PERIMEE,
+    };
+  }
+
+  return {
+    erreur:
+      `Ce fichier est plus ancien que cette page : il est au schéma « ${schema} », ` +
+      `la page attend « ${CONFIG.SCHEMA_ACCEPTE} ». Régénérez-le depuis ` +
+      'outil_edition ; rien ne peut être corrigé de ce côté-ci.',
+    remede: REMEDE.FICHIER_PERIME,
+  };
 }
 
 function _validerUnite(unite, position) {
@@ -237,8 +308,8 @@ function _validerCoherence(donnees) {
   return null;
 }
 
-function _refus(erreur) {
-  return { valide: false, erreur };
+function _refus(erreur, remede = REMEDE.AUCUN) {
+  return { valide: false, erreur, remede };
 }
 
 /**

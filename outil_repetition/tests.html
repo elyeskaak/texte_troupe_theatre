@@ -250,20 +250,51 @@ const PIECE = await fetch('./tests/exemple-repet.json').then((r) => {
   return r.text();
 });
 
-/** Charge la pièce d'essai par le vrai chemin d'import : coller, puis charger. */
-async function importerLaPiece(page) {
-  // Deux dépliages successifs : « + Ajouter une pièce », puis « ou coller le
-  // texte ». Le collage est le second recours, derrière le choix de fichier —
-  // qu'on ne peut pas simuler, un `<input type="file">` n'étant pas remplissable
-  // par script.
-  clic(page, 'btn-ouvrir-ajout');
-  await jusqua(() => !$(page, 'bloc-ajout').hidden, 'le bloc d’ajout s’ouvre');
+/**
+ * Déplie un bloc escamotable, sans le refermer s'il est déjà ouvert.
+ *
+ * Les deux boutons concernés sont des **bascules**. Cliquer sans regarder l'état
+ * refermait ce qu'un appel précédent avait ouvert, et l'attente expirait sur un
+ * bloc qu'on venait soi-même de replier — panne d'autant plus déroutante que
+ * l'application, elle, était irréprochable.
+ */
+async function deplier(page, bouton, bloc, quoi) {
+  if (!$(page, bloc).hidden) {
+    return;
+  }
 
-  clic(page, 'btn-basculer-collage');
-  await jusqua(() => !$(page, 'bloc-collage').hidden, 'la zone de collage s’ouvre');
+  clic(page, bouton);
+  await jusqua(() => !$(page, bloc).hidden, quoi);
+}
 
-  $(page, 'saisie-piece').value = PIECE;
+/**
+ * Colle la pièce d'essai et la charge, par le vrai chemin d'import.
+ *
+ * Le collage est le second recours, derrière le choix de fichier — qu'on ne peut
+ * pas simuler, un `<input type="file">` n'étant pas remplissable par script.
+ *
+ * @param {Window} page
+ * @param {{schema?: string}} options - pour éprouver les désaccords de version
+ */
+async function collerLaPiece(page, { schema } = {}) {
+  await deplier(page, 'btn-ouvrir-ajout', 'bloc-ajout', 'le bloc d’ajout s’ouvre');
+  await deplier(
+    page,
+    'btn-basculer-collage',
+    'bloc-collage',
+    'la zone de collage s’ouvre',
+  );
+
+  $(page, 'saisie-piece').value = schema
+    ? JSON.stringify({ ...JSON.parse(PIECE), schema })
+    : PIECE;
+
   clic(page, 'btn-charger');
+}
+
+/** Charge la pièce d'essai et attend l'écran des rôles. */
+async function importerLaPiece(page) {
+  await collerLaPiece(page);
   await jusqua(() => ecran(page) === 'ecran-roles', 'l’écran des rôles s’ouvre');
 }
 
@@ -629,6 +660,37 @@ parcours('« Réviser la plus difficile » vise la tête de file', async (page) 
   clic(page, 'btn-reviser');
   await jusqua(() => ecran(page) === 'ecran-repetition', 'le bouton mène au texte');
   egal($(page, 'app').dataset.mode, 'aveugle', 'en aveugle également');
+});
+
+parcours('le remède proposé dépend de qui est en retard', async (page) => {
+  const importerAuSchema = async (schema) => {
+    await collerLaPiece(page, { schema });
+    await jusqua(() => !$(page, 'message-accueil').hidden, 'un message de refus');
+  };
+
+  // Fichier plus RÉCENT que la page : c'est la page qui est en retard, et le seul
+  // geste utile est de purger le cache. Le bouton doit donc être offert — sans lui,
+  // le message renverrait vers une action que le service worker rend impossible.
+  await importerAuSchema('repetition/99');
+  affirmer(
+    /plus récent/i.test($(page, 'message-accueil').textContent),
+    `le message n’accuse pas la page : « ${$(page, 'message-accueil').textContent} »`,
+  );
+  egal($(page, 'bloc-mise-a-jour').hidden, false, 'la mise à jour est proposée');
+
+  // Fichier plus ANCIEN : purger n'y changerait rien, et le proposer enverrait vers
+  // un geste inutile qui ferait croire l'outil cassé.
+  await importerAuSchema('repetition/1');
+  affirmer(
+    /plus ancien/i.test($(page, 'message-accueil').textContent),
+    'le message n’accuse pas le fichier',
+  );
+  egal($(page, 'bloc-mise-a-jour').hidden, true, 'aucune mise à jour proposée');
+
+  // Un import réussi doit rétracter le bouton, sans quoi il resterait affiché à
+  // proposer une purge sans raison.
+  await importerLaPiece(page);
+  egal($(page, 'bloc-mise-a-jour').hidden, true, 'le bouton se rétracte au succès');
 });
 
 // ============================================================

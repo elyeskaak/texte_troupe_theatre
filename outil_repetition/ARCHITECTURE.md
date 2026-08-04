@@ -798,6 +798,29 @@ Un test vérifiait déjà cette constante, mais seulement sa *forme*
 c'est-à-dire qu'il était pire que rien : il donnait l'impression que la question
 était couverte.
 
+**Le message d'erreur offre maintenant le geste au lieu de le décrire.** L'ancien
+disait « Mettez la page à jour, ou régénérez le fichier » — les deux remèdes à la
+fois, donc aucun, et le premier était justement impossible. `schema.js` distingue
+désormais les deux sens, qui ont des causes opposées :
+
+| Situation | Qui est en retard | Remède |
+|---|---|---|
+| fichier au schéma **supérieur** | la page | `PAGE_PERIMEE` → purger le cache |
+| fichier au schéma **inférieur** | le fichier | `FICHIER_PERIME` → régénérer |
+| forme non reconnue | ni l'un ni l'autre | `FICHIER_ETRANGER` |
+
+Le remède est rendu sous forme de **code**, non de prose : `schema.js` reste pur, il
+nomme le remède sans l'appliquer. C'est l'interface qui, sur `PAGE_PERIMEE` — et sur
+ce cas seulement — révèle un bouton « Mettre l'outil à jour » qui désenregistre les
+service workers, vide les caches, puis recharge sur une URL horodatée. L'ordre
+importe : recharger d'abord réinstallerait aussitôt l'ancien worker.
+
+Le proposer sur les autres refus serait pire qu'inutile — purger ne répare pas un
+fichier tronqué, et l'utilisateur en conclurait que l'outil est cassé sans remède.
+
+Vérifié de bout en bout : un cache `repetition-v19` semé à la main disparaît au clic,
+remplacé par le cache courant, et la page revient sur l'accueil.
+
 Le garde-fou est désormais mécanique. `tests/empreinte-cache.json` enregistre le
 couple (version, empreinte SHA-1 des fichiers cachés). Si un fichier change sans
 que `VERSION` bouge, `cablage.test.js` échoue et donne la valeur à recopier.

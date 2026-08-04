@@ -203,6 +203,10 @@ function carteDePiece(entree) {
 function chargerDepuisTexte(texte) {
   effacerMessage('message-accueil');
 
+  // Le bouton de mise à jour se rétracte à chaque tentative : laissé visible
+  // après un import réussi, il proposerait de purger le cache sans raison.
+  proposerMiseAJour(null);
+
   let donnees;
 
   try {
@@ -220,6 +224,7 @@ function chargerDepuisTexte(texte) {
 
   if (!verdict.valide) {
     afficherMessage('message-accueil', verdict.erreur);
+    proposerMiseAJour(verdict.remede);
     return;
   }
 
@@ -240,6 +245,61 @@ function chargerDepuisTexte(texte) {
   $('btn-ouvrir-ajout').setAttribute('aria-expanded', 'false');
   rafraichirListePieces();
   ouvrirPiece(id, verdict.piece);
+}
+
+/**
+ * Montre le bouton de mise à jour, et seulement quand il peut servir.
+ *
+ * Il n'apparaît que pour `PAGE_PERIMEE`. Le proposer sur les autres refus serait
+ * pire qu'inutile : purger le cache ne répare pas un fichier tronqué, et
+ * l'utilisateur en conclurait que l'outil est cassé sans remède.
+ */
+function proposerMiseAJour(remede) {
+  $('bloc-mise-a-jour').hidden = remede !== schema.REMEDE.PAGE_PERIMEE;
+}
+
+/**
+ * Purge le service worker et ses caches, puis recharge.
+ *
+ * C'est le seul geste qui sort de l'impasse décrite dans `_validerVersion`. La
+ * page ne peut pas se mettre à jour d'elle-même tant que le service worker sert
+ * l'ancien code : il faut le désenregistrer **avant** de recharger, sinon le
+ * rechargement repasse par le même cache et rien ne change.
+ *
+ * L'ordre importe : désenregistrer, vider, **puis** recharger. Recharger d'abord
+ * rendrait la purge inutile, la nouvelle page réinstallant aussitôt l'ancien
+ * worker.
+ */
+async function mettreAJourLOutil() {
+  const bouton = $('btn-mettre-a-jour');
+
+  bouton.disabled = true;
+  bouton.textContent = 'Mise à jour…';
+
+  try {
+    if ('serviceWorker' in navigator) {
+      for (const enregistrement of await navigator.serviceWorker.getRegistrations()) {
+        await enregistrement.unregister();
+      }
+    }
+
+    if ('caches' in window) {
+      for (const nom of await caches.keys()) {
+        await caches.delete(nom);
+      }
+    }
+  } catch (erreur) {
+    // Un échec de purge ne doit pas laisser le bouton inerte : on recharge tout
+    // de même, et le pire cas est que rien ne change — ce qui est l'état actuel.
+    console.warn('[maj] purge incomplète', erreur);
+  }
+
+  // `location.reload()` peut resservir depuis le cache HTTP. Une URL horodatée
+  // force un aller au réseau pour le document lui-même.
+  const url = new URL(window.location.href);
+
+  url.searchParams.set('maj', String(Date.now()));
+  window.location.replace(url.toString());
 }
 
 function ouvrirPiece(id, dejaValidee = null) {
@@ -265,6 +325,12 @@ function ouvrirPiece(id, dejaValidee = null) {
       'message-accueil',
       `La pièce enregistrée est inutilisable : ${verdict.erreur}`,
     );
+
+    // Ce chemin est le plus probable des deux en pratique : la pièce a été
+    // importée quand la page était à jour, puis le cache s'est figé sur une
+    // version antérieure. L'utilisateur n'a alors rien réimporté — il a seulement
+    // rouvert l'outil, et sa pièce est devenue illisible sans qu'il touche à rien.
+    proposerMiseAJour(verdict.remede);
     return;
   }
 
@@ -1436,6 +1502,8 @@ function rechercher(fragment) {
 // ============================================================
 
 $('btn-sommaire').addEventListener('click', ouvrirBilan);
+$('btn-mettre-a-jour').addEventListener('click', mettreAJourLOutil);
+
 $('btn-spot-check').addEventListener('click', spotCheck);
 
 /**
