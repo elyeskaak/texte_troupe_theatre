@@ -885,6 +885,36 @@ devient jamais la diapo active. Une seule exception assumée, à la toute
 première position de la pièce : si elle commence par une scène et qu'on
 recule au-delà, il n'y a rien d'autre avant elle vers quoi continuer.
 
+### 9.3 Revenir à l'écran d'accueil
+
+**Retour d'usage :** aucun moyen de quitter la projection en cours pour
+revenir à l'écran de préparation (changer de pièce, revoir l'attribution)
+sans recharger la page entière — perte silencieuse de tout ce qui n'était
+pas déjà écrit en session.
+
+Un bouton `#bouton-accueil` (⌂, même style que ses voisins `#bouton-sommaire`
+et `#bouton-reouvrir-controle` dans `#barre-progression`, §9.1) appelle
+`retournerAlAccueil()`, strictement symétrique de `demarrerProjection` (§8.1) :
+referme le panneau de sommaire s'il était ouvert, retire la classe `visible`
+de `#ecran-projection` (§8.1, `display: none`) et réaffiche `#ecran-preparation`
+(retire le `style.display = 'none'` posé au démarrage). Aucune réinitialisation
+au passage — la pièce importée, l'attribution et le mode solo restent tels
+quels sur l'écran de préparation, prêts pour un nouveau « Démarrer » sur la
+même pièce, ou pour importer une pièce différente.
+
+Rien à perdre ni à nettoyer explicitement : la session (pièce, distribution,
+position) est déjà écrite en continu dans `localStorage` à chaque navigation
+(§10.2), donc la reprise habituelle fonctionne normalement si la personne
+revient plus tard sur cette pièce. La navigation clavier (§9) se désactive
+d'elle-même : son gestionnaire vérifie déjà `ecranProjection.classList.
+contains('visible')` avant d'agir, qui devient faux dès ce clic — aucun code
+supplémentaire à écrire pour ce cas. Ni le canal de synchro ni une éventuelle
+fenêtre de contrôle déjà ouverte ne sont touchés : ils retrouvent un état
+cohérent dès le prochain `demarrerProjection`.
+
+Fonctionne identiquement sur mobile et sur ordinateur : un bouton classique,
+sans dépendance à un geste ou une touche propre à une plate-forme.
+
 ---
 
 ## 10. Persistance

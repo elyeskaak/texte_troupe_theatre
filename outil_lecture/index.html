@@ -371,8 +371,11 @@
 
   /* Même correctif que #bouton-reouvrir-controle ci-dessus : cible tactile
      garantie sur petit écran, `0.9vw` seul y était illisible et impossible
-     à toucher précisément (retour d'usage, iPhone). */
-  #bouton-sommaire {
+     à toucher précisément (retour d'usage, iPhone). Partagé avec
+     #bouton-accueil (retour à l'écran de préparation, §9.3), même bouton
+     rond minimaliste que ses deux voisins de la barre du bas. */
+  #bouton-sommaire,
+  #bouton-accueil {
     background: none;
     border: 1px solid var(--bordure);
     color: var(--attenue);
@@ -499,6 +502,7 @@
   <div id="contenu-projection"></div>
   <div id="panneau-sommaire"></div>
   <div id="barre-progression">
+    <button id="bouton-accueil" type="button" title="Revenir à l'écran d'accueil">⌂</button>
     <span id="progression-scene"></span>
     <span id="progression-position"></span>
     <button id="bouton-sommaire" type="button" title="Aller à une scène (touche S)">☰</button>
@@ -1970,6 +1974,7 @@ if (MODE_FENETRE === 'projection') (() => {
   const boutonReouvrirControle = document.getElementById('bouton-reouvrir-controle');
   const boutonSommaire = document.getElementById('bouton-sommaire');
   const panneauSommaire = document.getElementById('panneau-sommaire');
+  const boutonAccueil = document.getElementById('bouton-accueil');
 
   prenoms = lire(cleStockage('prenoms')) || {};
 
@@ -2344,6 +2349,30 @@ if (MODE_FENETRE === 'projection') (() => {
     diffuserPosition();
     planifierMiseAJourDegrade();
   }
+
+  /**
+   * Retour d'usage : « je veux un bouton pour revenir à l'écran d'accueil ».
+   * Symétrique de `demarrerProjection` ci-dessus : referme l'écran de
+   * projection, réaffiche l'écran de préparation tel qu'il était (rien n'y
+   * est réinitialisé — la pièce importée, l'attribution et le mode solo
+   * restent en place, prêts pour un nouveau « Démarrer » sur la même pièce).
+   *
+   * Aucune donnée n'est perdue : la session (position, pièce, distribution)
+   * est déjà écrite en continu dans localStorage à chaque navigation
+   * (`planifierEcritureSession`), donc la reprise habituelle (§13 point 3)
+   * fonctionne normalement si la personne revient plus tard sur cette pièce.
+   *
+   * Ne touche ni au canal de synchro ni à une éventuelle fenêtre de contrôle
+   * déjà ouverte : elles retrouveront un état cohérent dès le prochain
+   * `demarrerProjection` (même pièce reprise, ou nouvelle pièce).
+   */
+  function retournerAlAccueil() {
+    panneauSommaire.classList.remove('visible');
+    ecranProjection.classList.remove('visible');
+    ecranPreparation.style.display = '';
+  }
+
+  boutonAccueil.addEventListener('click', retournerAlAccueil);
 
   document.addEventListener('keydown', (evenement) => {
     if (!ecranProjection.classList.contains('visible')) {
