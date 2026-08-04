@@ -262,6 +262,17 @@ slot) marque les titres de section et le bouton principal. États `:hover` /
 réagisse visuellement à l'interaction — aucun de ces détails n'est
 fonctionnel, ils ne font que rendre l'écran moins austère.
 
+**Ajout à l'usage :** les options du menu déroulant n'affichaient que le
+code de slot (« H1 »), alors que la fenêtre de contrôle (§7.3) connaît
+peut-être déjà un prénom pour ce slot — d'une session précédente, puisque
+`lecture:v1:prenoms` est global et non lié à une pièce (§13, point 4).
+`etiquetteSlot(slot, prenoms)` (déjà écrite, mais devenue orpheline après
+la fusion de l'en-tête projeté en §8.2) reprend du service ici : chaque
+option affiche « H1 (Émile) » si ce prénom est connu, pour reconnaître le
+bon slot par un prénom plutôt que par un code abstrait. Changé au passage
+de format (« H1 — Émile » → « H1 (Émile) ») pour rester cohérent avec le
+reste de l'outil, qui utilise désormais les parenthèses partout ailleurs.
+
 ---
 
 ## 7. La fenêtre de contrôle et sa synchronisation
@@ -318,6 +329,19 @@ démarre, ce champ reste vide au chargement, puis se complète tout seul :
 ouvert avant le démarrage se met à jour au premier changement de position.
 Coût négligeable : `rolesParSlot` ne parcourt qu'une quinzaine de
 personnages tout au plus.
+
+**Fermeture sur iPhone :** la fenêtre de contrôle n'est, sur iPhone, qu'un
+onglet Safari ordinaire — pas de fenêtre séparée à faire glisser sur un
+second écran, ni de bouton natif évident pour la refermer une fois la
+lecture terminée. Un bouton « Fermer cette fenêtre » appelle
+`window.close()`, qui fonctionne ici précisément parce que cet onglet a été
+ouvert par un script (`window.open`, §7.1) — c'est la condition que les
+navigateurs exigent pour l'autoriser à se refermer lui-même. Si l'onglet a
+été ouvert autrement (URL tapée à la main, marque-page), l'appel ne fait
+rien silencieusement, sans erreur détectable côté script ; un texte d'aide
+sous le bouton couvre ce cas (« fermez depuis le sélecteur d'onglets »),
+plutôt que de laisser un bouton qui a l'air d'avoir marché sans l'avoir dit
+(P3).
 
 ---
 

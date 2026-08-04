@@ -133,6 +133,12 @@
   }
   .ligne-slot input { flex: 1; font-size: 1rem; }
 
+  #bouton-fermer-controle { display: block; margin: 1.4rem auto 0.6rem; }
+  .controle-aide {
+    color: var(--attenue); font-size: 0.8rem; text-align: center;
+    line-height: 1.4; margin: 0;
+  }
+
   /* Basculement d'affichage selon `?fenetre=controle` (§7.1) : la même page
      sert les deux rendus, un seul est monté visuellement à la fois. */
   body.mode-controle #ecran-preparation,
@@ -427,6 +433,11 @@
   <p id="controle-rappel" class="controle-rappel">—</p>
   <div id="controle-champs"></div>
   <p id="controle-erreur" class="message-erreur" hidden></p>
+  <button id="bouton-fermer-controle" type="button">Fermer cette fenêtre</button>
+  <p class="controle-aide">
+    Sur iPhone (pas de fenêtre séparée) : cet onglet peut aussi se fermer
+    depuis le sélecteur d'onglets de Safari si le bouton ne suffit pas.
+  </p>
 </div>
 
 <script>
@@ -893,10 +904,11 @@ function couleurTexteContrastee(hex) {
 
 /**
  * Étiquette d'un slot : « H1 » seul si aucun prénom n'est attribué,
- * « H1 — Émile » sinon. Le slot reste toujours visible, même une fois le
- * prénom saisi (retour d'usage) : c'est le repère fixe (couleur + H1-H5/
- * F1-F5) qui permet à un lecteur de reconnaître ses répliques même s'il
- * change de personnage, le prénom est un complément, pas un remplacement.
+ * « H1 (Émile) » sinon. Utilisée dans le menu déroulant de l'écran
+ * d'attribution (§6, retour d'usage) : les prénoms saisis dans la fenêtre
+ * de contrôle — éventuellement lors d'une session précédente, §10.1 —
+ * permettent de reconnaître le bon slot par un prénom plutôt que par un
+ * code abstrait.
  *
  * @param {string|null} slot
  * @param {Record<string,string>} prenoms
@@ -907,7 +919,7 @@ function etiquetteSlot(slot, prenoms) {
   }
 
   const prenom = prenoms && prenoms[slot];
-  return prenom ? `${slot} — ${prenom}` : slot;
+  return prenom ? `${slot} (${prenom})` : slot;
 }
 
 /**
@@ -1594,8 +1606,14 @@ function construireChampsControle(container, prenoms, roles) {
 // 9. RENDU PRÉPARATION — import et attribution personnage → slot (§6)
 // ============================================================
 
-/** Une ligne de la table d'attribution : personnage, volume, slot, aperçu. */
-function construireLigneAttribution(personnage, slotActuel) {
+/**
+ * Une ligne de la table d'attribution : personnage, volume, slot, aperçu.
+ * Les options du menu affichent le prénom déjà connu pour chaque slot
+ * (`prenoms`, §7.3 — global, indépendant de la pièce, §13 point 4) : « H1
+ * (Émile) » plutôt que « H1 » seul, pour reconnaître le bon slot au
+ * prénom plutôt qu'à un code abstrait.
+ */
+function construireLigneAttribution(personnage, slotActuel, prenoms) {
   const tr = document.createElement('tr');
   tr.dataset.personnage = personnage.nom;
 
@@ -1619,7 +1637,7 @@ function construireLigneAttribution(personnage, slotActuel) {
   for (const slot of CONFIG.SLOTS) {
     const option = document.createElement('option');
     option.value = slot;
-    option.textContent = slot;
+    option.textContent = etiquetteSlot(slot, prenoms);
     option.selected = slot === slotActuel;
     select.appendChild(option);
   }
@@ -1644,11 +1662,13 @@ function construireLigneAttribution(personnage, slotActuel) {
 }
 
 /** (Re)construit la table d'attribution, pré-remplie depuis `castInitial`. */
-function construireTableAttribution(corps, personnages, castInitial) {
+function construireTableAttribution(corps, personnages, castInitial, prenoms) {
   corps.innerHTML = '';
 
   for (const personnage of personnages) {
-    corps.appendChild(construireLigneAttribution(personnage, castInitial[personnage.nom] || ''));
+    corps.appendChild(
+      construireLigneAttribution(personnage, castInitial[personnage.nom] || '', prenoms)
+    );
   }
 }
 
@@ -1821,6 +1841,18 @@ function demarrerFenetreControle() {
     ecritureEnAttente = setTimeout(() => {
       ecrire(cleStockage('prenoms'), prenoms);
     }, CONFIG.DELAI_ECRITURE_MS);
+  });
+
+  // Retour d'usage : sur iPhone, cette fenêtre est un onglet ordinaire
+  // (pas de fenêtre séparée à déplacer), sans bouton natif évident pour le
+  // refermer une fois la lecture terminée. `window.close()` fonctionne ici
+  // car cet onglet a été ouvert par un script (`window.open`, §7.1) — c'est
+  // précisément la condition que les navigateurs exigent pour l'autoriser.
+  // S'il a été ouvert autrement (URL tapée à la main, marque-page), l'appel
+  // ne fait rien silencieusement : le texte d'aide sous le bouton couvre ce
+  // cas (§11, jamais un bouton qui a l'air d'avoir marché sans l'avoir dit).
+  document.getElementById('bouton-fermer-controle').addEventListener('click', () => {
+    window.close();
   });
 }
 
@@ -2260,7 +2292,7 @@ if (MODE_FENETRE === 'projection') (() => {
 
       const castSauvegarde = lire(cleStockage(`cast:${pieceSlug(piece.piece)}`)) || {};
 
-      construireTableAttribution(corpsAttribution, personnagesCourants, castSauvegarde);
+      construireTableAttribution(corpsAttribution, personnagesCourants, castSauvegarde, prenoms);
       sectionAttribution.hidden = false;
       rafraichirEtatDemarrage();
     };
