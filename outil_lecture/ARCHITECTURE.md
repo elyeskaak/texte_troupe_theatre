@@ -46,6 +46,16 @@ Trois principes, hérités de `outil_repetition` et assumés ici aussi :
 - **P3 — Zéro installation.** Un seul fichier HTML, ouvrable par double-clic,
   sans serveur ni build. C'est la contrainte qui gouverne §2 et §4.
 
+> **Révision du 2026-08-05 (voir §4.3) :** `outil_lecture` est désormais aussi
+> publié sur GitHub Pages, comme `outil_repetition`
+> (voir son [`README.md`](../outil_repetition/README.md#pourquoi-une-page-servie-en-https-et-non-un-fichier)) —
+> nécessaire pour l'intégration Google Drive (§4.3), qui exige une origine
+> HTTPS pour l'authentification OAuth et ne fonctionnerait de toute façon pas
+> sur iPhone en `file://`. **P3 n'est pas abandonné** : ouvrir `index.html` par
+> double-clic reste possible et pleinement fonctionnel pour l'import manuel —
+> seul le bouton Drive s'efface silencieusement dans ce mode (§11), au lieu de
+> rester un bouton inerte.
+
 ## 2. Révision du prompt initial
 
 Deux décisions ont été prises en échangeant avec l'utilisateur avant ce
@@ -109,6 +119,16 @@ Le fichier reste organisé en sections `// ====…` nettement séparées à
 l'intérieur, pour rester lisible malgré l'absence de découpage physique
 (§4.2).
 
+**Révision du 2026-08-05 :** une unique exception, isolée et non bloquante.
+`pieces/drive.js` (le module partagé avec `outil_repetition`, §4.3) est chargé
+par un `import()` **dynamique**, entouré d'un `try`/`catch` — la seule façon
+de faire cohabiter un module ES avec un fichier par ailleurs fait de scripts
+classiques. Sous `file://`, cet `import()` échoue (même politique de
+navigateur qu'évoquée ci-dessus) : c'est **attendu**, capté, et traité comme
+un cas de plus en §11 (le bouton Drive ne s'affiche pas) — pas comme une
+erreur. Le reste du fichier (import manuel, attribution, projection) ne
+dépend d'aucun module et continue de fonctionner à l'identique en double-clic.
+
 ---
 
 ## 3. Vue d'ensemble
@@ -141,9 +161,18 @@ fichier » sans dupliquer le HTML.
 ```
 outil_lecture/
 ├── index.html      coque + CSS + tout le JS, sections séparées (§2.2, §4.2)
-├── README.md        usage, limites (écrit en dernier, §14 étape 6)
-└── pieces/          JAMAIS versionné (.gitignore) — REPET.json chargés localement
+└── README.md        usage, limites (écrit en dernier, §14 étape 6)
 ```
+
+Le `REPET.json` importé ne vit dans aucun dossier local à `outil_lecture/` :
+soit collé/choisi par fichier (§2.1), soit lu depuis le dossier partagé
+`../pieces/` à la racine du dépôt (le même qu'`outil_repetition`, voir son
+`ARCHITECTURE.md` §3.1), soit récupéré depuis Google Drive (§4.3, révision du
+2026-08-05). Dans les trois cas, le JSON n'est jamais réécrit ni recopié sur
+disque : il finit dans `localStorage` (§10), jamais dans un fichier.
+
+*(L'ancien `outil_lecture/pieces/` local, jamais versionné, est abandonné au
+profit du dossier partagé — voir le commentaire du `.gitignore` racine.)*
 
 ### 4.1 Pourquoi pas de fichier séparé pour la validation du JSON
 
@@ -155,6 +184,15 @@ actuellement modifié par un autre processus** — un mauvais moment pour y
 accrocher un import. La fonction de validation est donc réécrite, à l'identique
 dans son esprit (refuser tôt, nommer le champ fautif), dans `index.html`.
 C'est une duplication assumée, pas un oubli.
+
+**Exception, depuis le 2026-08-05 : `pieces/drive.js` (§4.3) est, lui,
+partagé.** La raison ne contredit pas ce qui précède : un client OAuth
+dupliqué peut diverger silencieusement (jeton, scope, expiration mal gérés
+d'un côté et pas de l'autre), ce qu'une fonction de validation ne risque pas.
+Le fichier partagé ne vit dans aucun des deux outils — il vit dans
+`pieces/`, à la racine, frère des deux — donc aucun des deux ne dépend du
+code de l'autre : la règle « pas de couplage entre les deux sous-projets »
+reste respectée à la lettre.
 
 ### 4.2 Sections internes du fichier unique
 
@@ -180,6 +218,32 @@ Les sections 2 à 4 n'accèdent ni au DOM ni à `window` : elles ne sont pas
 extraites en fichiers séparés (§2.2), mais restent des fonctions pures
 appelables isolément — un futur passage à `node --test` (si le besoin s'en
 fait sentir) n'exigerait qu'un copier-coller, pas une réécriture.
+
+### 4.3 Google Drive comme source partagée (`pieces/drive.js`)
+
+Même besoin, même solution qu'`outil_repetition` (voir son `ARCHITECTURE.md`
+§3.3, qui détaille l'ensemble du mécanisme — cette section n'en reprend que ce
+qui concerne spécifiquement `outil_lecture`) : retrouver ses pièces depuis
+n'importe quel appareil, sans dossier local partagé — en particulier depuis
+l'iPhone/iPad qui tient la fenêtre de projection ou de contrôle (§7), et n'a
+jamais accès à `../pieces/` du poste qui héberge le dépôt.
+
+**Chargement du module :** `import('../pieces/drive.js')` **dynamique**, dans
+la section CABLAGE (§4.2), entouré d'un `try`/`catch` (§2.2 ci-dessus). En cas
+d'échec — `file://`, réseau absent, module introuvable — la section « Charger
+depuis Google Drive » de l'écran de préparation (§6) ne se monte simplement
+pas : ni bouton inerte, ni message d'erreur, puisque ce n'est pas une panne
+mais un mode de fonctionnement normal de l'outil dans ce contexte (P2, §11).
+
+**Scope, Picker, limites (Safari/iPhone, expiration du jeton) :** identiques à
+`outil_repetition` §3.3, y compris la clé de dossier retenu en `localStorage`
+(`lecture:v1:drive-dossier`, §10.1) et l'absence de secret réel dans
+`DRIVE_CLIENT_ID`/`DRIVE_API_KEY` (§12).
+
+**Ce qui ne change pas :** un fichier Drive suit exactement le même chemin de
+validation qu'un fichier importé à la main (`validerRepet`, §11) — Drive n'est
+qu'une troisième façon d'obtenir le même JSON, jamais un cas particulier pour
+le reste de l'outil.
 
 ---
 
@@ -927,6 +991,7 @@ lecture:v1:cast:<pieceSlug>           { PERSONNAGE: 'H1', … } — ou { PERSONN
 lecture:v1:prenoms                    { H1: 'Émile', … } — global, pas par pièce (§13, point 4)
 lecture:v1:session                    { pieceSlug, position, avecDistribution } — reprise après un rechargement (§6.1)
 lecture:v1:modeSolo                   booléen — global, dernier choix d'interrupteur (§6.1)
+lecture:v1:drive-dossier              id du dossier Google Drive retenu (§4.3) — global, comme prenoms
 ```
 
 `pieceSlug` : le champ `piece` du JSON, mis en minuscules, accents retirés,
@@ -957,6 +1022,9 @@ geste rare, pas besoin de différer.
 | `BroadcastChannel` absent (navigateur très ancien) | message explicite « la fenêtre de contrôle ne se synchronisera pas », l'outil continue de fonctionner en projection seule |
 | `localStorage` plein ou indisponible | bandeau « la pièce et l'attribution ne seront pas conservées », l'outil continue sans persistance (P4, même logique que `outil_repetition`) |
 | élément `texte_sans_personnage` rencontré | affiché en style neutre distinct, jamais masqué ni fondu dans la réplique précédente |
+| `import('../pieces/drive.js')` échoue (`file://`, réseau absent) | section Drive non montée, silencieusement — mode de fonctionnement normal, pas une panne (§4.3) |
+| authentification Drive refusée, popup bloquée, jeton expiré | bouton « Se reconnecter » ; le reste de l'outil continue de fonctionner sans Drive (P4) |
+| fichier Drive non conforme ou dossier vide | même refus qu'un fichier importé à la main, message nommant le fichier fautif (§4.1) |
 
 **Bug corrigé à l'usage :** `#section-bandeau-stockage` (où s'affiche le
 message ci-dessus) ne portait pas `hidden` dans le HTML de départ — vide en
@@ -980,8 +1048,14 @@ const CONFIG = Object.freeze({
   CANAL_SYNCHRO: 'lecture:v1',
   PART_ECRAN_CIBLE: 0.95, // §8.5, remplace un ancien MOTS_PAR_PAGE fixe (45 puis 100)
   PORTEE_GRADIENT: 6, // §8.1, portée du dégradé continu autour de la position
+  DRIVE_CLIENT_ID: '…', // Google Cloud, "Application Web" — §4.3, identique à outil_repetition
+  DRIVE_API_KEY: '…', // clé API restreinte au Picker — §4.3
+  DRIVE_SCOPE: 'https://www.googleapis.com/auth/drive.file',
 });
 ```
+
+`DRIVE_CLIENT_ID` et `DRIVE_API_KEY` ne sont pas des secrets (§4.3) : ils
+peuvent rester en clair ici, comme le reste de la configuration.
 
 ---
 
@@ -1002,6 +1076,15 @@ Un seul point à noter sur la portée de ces choix : le point 2 est celui qui
 retire le plus de surface — `piece.liminaires` est validé par aucune fonction
 de §11 et n'a donc pas besoin d'être mentionné dans le modèle de §5.
 
+**Ajoutées le 2026-08-05**, celles-ci changent la structure du fichier
+(publication, dépendance à un module partagé) :
+
+| # | Décision | Retenu | Où cela se lit |
+|---|---|---|---|
+| 5 | Distribution de l'outil | **Publié sur GitHub Pages**, en plus du double-clic local ; le double-clic reste pleinement fonctionnel pour l'import manuel | §1, §2.2 |
+| 6 | Source Drive, portée de l'accès | **Google Picker + scope `drive.file`**, identique à `outil_repetition` | §4.3 |
+| 7 | Emplacement du client Drive | **Module partagé `pieces/drive.js`**, importé dynamiquement, plutôt que dupliqué | §4.1, §4.2, §4.3 |
+
 **La prochaine étape est l'étape 2 du plan de livraison** (§14) : les sections
 pures de `index.html` (config, validation, modèle, état, stockage), avant tout
 DOM.
@@ -1018,11 +1101,13 @@ DOM.
 | 4 | ✅ *fait* — écran de préparation + attribution personnage → slot (§6), reprise de session | import → attribution → démarrage → reprise, vérifié de bout en bout |
 | 5 | ✅ *fait* — fenêtre de contrôle + `BroadcastChannel` (§7) | prénom diffusé, popup bloquée gérée |
 | 6 | ✅ *fait* — `README.md`, `.gitignore` (`outil_lecture/pieces/`), lien depuis le `README.md` racine | relecture |
+| 7 | ⬜ *à faire* — publication GitHub Pages, `import('../pieces/drive.js')` + section « Charger depuis Google Drive » (§4.3, §13 pts 5-7) | pièce chargée depuis Drive sur ordinateur et sur iPhone/iPad, `file://` toujours fonctionnel en repli |
 
-**Les six étapes sont livrées.** Reste, à l'usage réel (vidéoprojecteur,
-deuxième écran, plusieurs lecteurs), à confirmer la lisibilité de la
-palette de couleurs et l'ergonomie de la fenêtre de contrôle — hors du
-périmètre vérifiable sans matériel.
+**Les six premières étapes sont livrées.** Reste, à l'usage réel
+(vidéoprojecteur, deuxième écran, plusieurs lecteurs), à confirmer la
+lisibilité de la palette de couleurs et l'ergonomie de la fenêtre de
+contrôle — hors du périmètre vérifiable sans matériel. L'étape 7
+(Google Drive) reste à livrer.
 
 L'ordre 2 → 3 → 4 → 5 garde la même logique que `outil_repetition` : la
 donnée avant l'écran, l'écran de projection avant le confort de contrôle.

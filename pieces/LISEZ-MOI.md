@@ -37,6 +37,12 @@ importer une par une).
 - `<Livre>_REPET.json` — la sortie consommée par les deux outils.
 - `manifest.json` — la liste des pièces disponibles, régénérée à chaque
   passage de `docx_vers_repet.py`.
+- `drive.js` — module partagé (pas régénéré, versionné comme du code) : le
+  client Google Drive utilisé par les deux outils pour retrouver leurs pièces
+  depuis n'importe quel appareil, sans dossier local. Voir
+  `outil_repetition/ARCHITECTURE.md` §3.3 et `outil_lecture/ARCHITECTURE.md`
+  §4.3 pour le détail du mécanisme — ce fichier-ci ne documente que la
+  régénération des données, pas ce module.
 - `temp/<Livre>/` — fichiers de travail intermédiaires (`EDIT.txt`,
   `CONVERSION.txt`) ; à consulter en cas d'avertissement, jamais à corriger
   ici (voir plus haut).

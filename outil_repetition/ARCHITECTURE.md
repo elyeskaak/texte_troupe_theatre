@@ -9,6 +9,10 @@
 >
 > Révision notable depuis la première rédaction : le **repli par enregistrement
 > audio est retiré du périmètre**, `voix.js` ne porte plus que Web Speech.
+>
+> **Révision du 2026-08-05 :** ajout de Google Drive comme source partagée des
+> pièces (§3.3), en complément du dossier local `../pieces/`. Décisions
+> tranchées en [§15](#15-décisions-validées), 5 à 7.
 
 ---
 
@@ -201,6 +205,55 @@ sans conséquence : le micro imposait déjà HTTPS (§4.1 du cahier).
 
 Validé en [§15](#15-décisions-validées), décision 1.
 
+### 3.3 Google Drive comme source partagée (`pieces/drive.js`)
+
+En complément de la découverte locale ci-dessus (`js/manifeste.js` +
+`pieces/manifest.json`, qui suppose un serveur sur le même poste que le dossier
+partagé) : un accès direct à un dossier Google Drive choisi par l'utilisateur,
+pour retrouver ses pièces depuis n'importe quel appareil sans dépendre d'un
+dossier local — en particulier depuis l'iPhone, qui n'a jamais accès à
+`../pieces/` du dépôt.
+
+**Le module vit dans `pieces/drive.js`**, à côté de `pieces/manifest.json` :
+frère des deux outils, pas fils de l'un d'eux. `outil_lecture` l'importe de la
+même façon (voir son `ARCHITECTURE.md`, §4.3). C'est une exception assumée à la
+règle « aucune dépendance entre les deux outils » (posée dans
+`outil_lecture/ARCHITECTURE.md` §2.1) : dupliquer un client OAuth entre deux
+copies aurait un vrai coût de sécurité — une divergence silencieuse dans la
+gestion du jeton, du scope ou de l'expiration — alors que dupliquer une
+fonction de validation de schéma n'en a pas. Seul ce module est partagé ; ni
+l'un ni l'autre outil ne dépend du reste du code de l'autre.
+
+**Choix : Google Picker, pas un accès large au compte.** Le scope demandé est
+`drive.file` (l'app ne voit que ce que l'utilisateur choisit explicitement dans
+le sélecteur Google), jamais `drive.readonly` sur tout le Drive. Le dossier
+choisi est mémorisé (`localStorage`, clé `repetition:v1:drive-dossier`) : les
+sessions suivantes ne redemandent que l'authentification, pas un nouveau choix
+de dossier.
+
+**Ce que ça exige côté Google Cloud** (une fois, hors du dépôt, à faire par
+l'utilisateur) : un projet avec l'API Drive activée, un écran de consentement
+OAuth en mode Test, un Client ID « Application Web » avec
+`https://elyeskaak.github.io` et `http://localhost:8000` comme origines
+autorisées, et une clé API restreinte au Picker. Le Client ID et cette clé ne
+sont pas des secrets — la sécurité vient des origines autorisées et du
+consentement utilisateur, pas de leur confidentialité — et vivent en clair
+dans `js/config.js` (§12).
+
+**Limite connue, pas un défaut à corriger.** Safari applique l'ITP
+(*Intelligent Tracking Prevention*), qui bloque la reconnexion silencieuse à
+Google en arrière-plan : sur iPhone, la reconnexion demandera donc souvent un
+clic explicite à chaque ouverture, alors qu'elle est silencieuse sur un
+ordinateur où la session Google reste active dans le navigateur. Le jeton
+d'accès expire de toute façon après environ une heure (limite de Google
+Identity Services, non ajustable) — un nouveau clic suffit, aucune donnée
+n'est perdue (P4).
+
+**Ce qui ne change pas.** Drive est une commodité de plus, jamais une
+condition pour répéter (même principe que la découverte locale ci-dessus, et
+que P4 en §1) : import fichier et collage restent fonctionnels si Drive est
+indisponible, refusé, ou non configuré (§11).
+
 ---
 
 ## 4. Rôle de chaque module
@@ -215,6 +268,7 @@ Validé en [§15](#15-décisions-validées), décision 1.
 | `tirage.js` | aléatoire reproductible à partir d'une graine | **oui** | non |
 | `etat.js` | l'état de session et ses transitions | **oui** | non |
 | `stockage.js` | `localStorage`, export / import, quota | non | non |
+| `../pieces/drive.js`¹ | OAuth + Picker Google, lister/lire les `REPET.json` d'un dossier Drive (§3.3) | non | non |
 | `voix.js` | Web Speech et permission micro | non | non |
 | `rendu.js` | montage et mise à jour du DOM | non | **oui** |
 | `app.js` | câblage, écouteurs, cycle de vie | non | oui |
@@ -228,6 +282,9 @@ tenable :
 - **un seul module touche le DOM.** `rendu.js` est le seul endroit où une erreur
   d'affichage peut se trouver, et `voix.js` le seul où une API capricieuse peut
   se cacher.
+
+¹ Seul module qui ne vit pas dans `js/` : partagé avec `outil_lecture`, il vit
+dans `../pieces/`, au même niveau que `pieces/manifest.json` (§3.3).
 
 ---
 
@@ -1018,6 +1075,8 @@ P3 en pratique. Quatre familles, quatre traitements, aucun `catch` vide.
 | `localStorage` indisponible ou saturé | bandeau persistant « la progression ne sera pas conservée », et l'outil continue de fonctionner (P4) |
 | capacité absente (micro, Wake Lock) | la commande n'est pas montée. Un bouton inerte est pire que pas de bouton |
 | erreur inattendue | `window.onerror` et `unhandledrejection` consignent dans un journal en mémoire, consultable depuis les réglages et exportable |
+| authentification Drive refusée, popup bloquée, jeton expiré (§3.3) | bouton « Se reconnecter » ; le reste de l'outil continue de fonctionner sans Drive (P4) |
+| fichier Drive non conforme ou dossier vide | même refus qu'un fichier local non conforme (`schema.js`), message nommant le fichier fautif |
 
 Ce dernier point est ce qui aurait révélé le bug `window.storage` en dix
 secondes au lieu de le laisser vivre indéfiniment.
@@ -1043,8 +1102,14 @@ export const CONFIG = {
   JOURS_SANS_EXPORT_ALERTE: 5,     // avant les 7 jours de Safari
   VITESSE_DEFILEMENT:       [1, 2, 3, 4],
   LANGUE_RECONNAISSANCE:    'fr-FR',
+  DRIVE_CLIENT_ID:          '…',    // Google Cloud, "Application Web" — §3.3
+  DRIVE_API_KEY:            '…',    // clé API restreinte au Picker — §3.3
+  DRIVE_SCOPE:              'https://www.googleapis.com/auth/drive.file',
 };
 ```
+
+`DRIVE_CLIENT_ID` et `DRIVE_API_KEY` ne sont pas des secrets (§3.3) : ils
+peuvent rester en clair ici, comme le reste de la configuration.
 
 `JOURS_SANS_EXPORT_ALERTE` à 5 et non 7 : alerter le jour de l'échéance serait
 alerter trop tard.
@@ -1205,6 +1270,7 @@ Un commit par étape. Reprend le §13 du cahier, en le précisant.
 | 10 | ✅ *fait* — `voix.js`, récitation contrôlée | **reste à éprouver sur iPhone**, micro compris |
 | 11 | `manifest` ✅, `sw.js` ✅ — **activation de GitHub Pages à faire à la main** | ouverture hors ligne depuis l'écran d'accueil |
 | 12 | `README.md` du sous-projet | — |
+| 13 | ⬜ *à faire* — `pieces/drive.js`, section « Charger depuis Google Drive » (§3.3, §15 pts 5-7) | pièce chargée depuis Drive sur ordinateur et sur iPhone, dossier local et import manuel toujours fonctionnels |
 
 L'ordre 4 → 5 → 6 → 7 n'est pas négociable : le pur avant l'impur, la logique
 avant le DOM. Il donne des tests verts avant qu'il y ait quoi que ce soit à
@@ -1225,6 +1291,15 @@ peut commencer à l'étape 3 du [plan de livraison](#14-plan-de-livraison).
 | 2 | Exécution des tests | **`node --test`** sur les 7 modules purs, `tests.html` en complément pour le rendu | §13 |
 | 3 | Montage du DOM | ~~paresseux par unité~~ → **révisé le 2026-08-03 : montage complet**, mesures à l'appui | §6.4 |
 | 4 | Repli enregistrement audio | ~~retiré~~ → **remis le 2026-08-03**, à l'usage | §8.3 |
+
+**Ajoutées le 2026-08-05**, en réponse au besoin de retrouver ses pièces sur
+plusieurs appareils (notamment l'iPhone, sans accès à `../pieces/`) :
+
+| # | Décision | Retenu | Où cela se lit |
+|---|---|---|---|
+| 5 | Source supplémentaire des pièces | **Google Drive**, dossier choisi par l'utilisateur, en complément du dossier local et de l'import manuel | §3.3 |
+| 6 | Portée de l'accès Drive | **Google Picker + scope `drive.file`** (accès uniquement à ce qui est choisi), plutôt qu'un accès large (`drive.readonly`) à tout le compte | §3.3 |
+| 7 | Emplacement du client Drive | **Module partagé `pieces/drive.js`**, importé par les deux outils, plutôt que dupliqué dans chacun | §3.3, §4 |
 
 Deux remarques sur la portée de ces choix.
 
