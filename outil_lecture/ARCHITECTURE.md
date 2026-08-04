@@ -567,18 +567,71 @@ pureté de principe, pas l'usage.
 
 ## 9. Navigation
 
-Clavier en usage principal sur la fenêtre de projection, complété par la
-souris pour les sauts longs (§8.6, révision à l'usage) :
+Clavier en usage principal sur ordinateur, complété par la souris pour les
+sauts longs (§8.6, révision à l'usage) et par le défilement libre (roulette,
+tactile) — indispensable sur un appareil sans clavier physique, comme un
+iPhone :
 
 | Entrée | Effet |
 |---|---|
 | `→` | élément suivant dans la liste plate |
 | `←` | élément précédent |
-| `F` | plein écran (`requestFullscreen`), utile si le clic initial est requis par le navigateur |
+| `F` | plein écran (`requestFullscreen`), utile si le clic initial est requis par le navigateur — **inopérant sur iOS**, voir plus bas |
 | `S` | ouvre/ferme le panneau de sommaire (§8.6) |
 | `Échap` | ferme le panneau de sommaire |
 | clic sur une diapo | saute directement à cette diapo (§8.6) |
 | clic sur une entrée du sommaire | saute à cette scène, referme le panneau |
+| roulette de souris / glissement tactile | fait défiler librement ; la diapo qui occupe le centre de l'écran devient active (ci-dessous) |
+
+### 9.1 Défilement libre (roulette, tactile — iPhone)
+
+**Retour d'usage :** rien ne suivait un défilement manuel de
+`#contenu-projection` (`overflow-y: auto`, natif depuis §8.1) — la roulette
+de souris ou un glissement tactile faisaient bien défiler l'écran, mais la
+diapo `.actif` restait celle laissée par la dernière flèche ou le dernier
+clic. Sur iPhone, sans clavier physique, c'était plus grave : la flèche
+n'existe pas, donc la seule navigation restante (clic, sommaire) imposait
+de viser précisément une diapo à chaque geste.
+
+`activerSuiviDefilement()` observe toutes les diapos montées avec un
+`IntersectionObserver`, `rootMargin` réduit à une bande fine autour du
+centre vertical de l'écran (`-45% 0px -45% 0px`) : la diapo qui traverse
+cette bande devient active via `suivreDefilement(index)` — même écriture de
+classe et dégradé que la navigation habituelle (`afficherPosition`), mais
+**sans jamais déclencher son propre défilement** (`afficherPosition(diapos,
+position, false)`, §8.1) : on suit le geste de la personne qui lit, on ne
+le contrarie jamais avec un second défilement programmatique qui
+partirait dans une autre direction.
+
+**Point délicat : distinguer un défilement libre d'un défilement
+programmatique.** `allerA` et le démarrage appellent aussi
+`scrollIntoView` (via `afficherPosition`, `defiler = true`) pour amener la
+diapo choisie par flèche/clic/sommaire à l'écran — et cette animation
+traverse elle aussi la bande centrale, donc déclencherait l'observateur en
+retour si rien ne l'en empêchait, avec le risque qu'une diapo intermédiaire
+croisée en cours d'animation supplante la cible réelle.
+`marquerDefilementProgrammatique()` pose une fenêtre de 600 ms (une
+animation `smooth` n'a pas de durée standardisée, cette marge est
+confortable) pendant laquelle l'observateur s'ignore lui-même. Vérifié avec
+un `IntersectionObserver` simulé en Node (pas de vrai layout hors
+navigateur, §8.5) : une intersection simulée pendant la fenêtre
+programmatique n'a aucun effet ; une fois la fenêtre passée, elle déplace
+correctement la diapo active.
+
+**Repli, jamais un blocage :** si `IntersectionObserver` est absent (très
+vieux navigateur), `activerSuiviDefilement` ne fait rien silencieusement —
+la navigation clavier, le clic et le sommaire restent pleinement
+utilisables sans lui (§11), le défilement libre n'est qu'un confort de
+plus, jamais le seul chemin.
+
+**Limite assumée sur iOS :** `requestFullscreen()` n'existe pas dans Safari
+iOS pour un élément arbitraire (limite de la plate-forme, pas de contournement
+possible depuis une page web). La touche `F` y reste sans effet ; la lecture
+sur iPhone se fait donc dans la fenêtre du navigateur, jamais en plein écran
+au sens strict — `-webkit-overflow-scrolling: touch` sur `#contenu-projection`
+et `#panneau-sommaire` assure au moins un défilement tactile fluide.
+
+### 9.2 Ne jamais s'arrêter sur une transition de scène
 
 **Révision à l'usage :** les éléments `kind: 'scene'` étaient au départ
 traversés comme les autres — un simple décalage d'index, sans cas
