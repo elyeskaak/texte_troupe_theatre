@@ -273,6 +273,61 @@ bon slot par un prénom plutôt que par un code abstrait. Changé au passage
 de format (« H1 — Émile » → « H1 (Émile) ») pour rester cohérent avec le
 reste de l'outil, qui utilise désormais les parenthèses partout ailleurs.
 
+### 6.1 Mode solo : lire sans distribuer
+
+**Ajout à l'usage :** l'outil sert parfois à une lecture seul, sans troupe
+ni lecteurs à désigner — l'attribution à des slots H1-H5/F1-F5 n'a alors
+aucun sens, ni la fenêtre de contrôle qui va avec. Un interrupteur sur
+l'écran de préparation (« une sorte de bouton on/off », §2 de la charte
+graphique) bascule entre les deux modes :
+
+- **avec distribution** (par défaut, coché) : le comportement décrit plus
+  haut, inchangé ;
+- **solo** (décoché) : la table d'attribution et la section « fenêtre de
+  contrôle » restent cachées ; un unique bouton « Démarrer la lecture »
+  suffit, sans rien à configurer.
+
+En mode solo, `cast[personnage] = personnage` — le personnage devient son
+propre « slot ». Ce choix évite de dupliquer tout le code de rendu
+(`_construireBadgeQui`, `construireDiapoRepliqueFusionnee`…) : il continue
+de chercher une couleur via `cast[personnage]`, sans savoir si ce qu'il y
+trouve est un vrai code de slot ou le nom du personnage lui-même.
+
+La couleur, elle, ne peut pas venir de `CONFIG.COULEURS_SLOT` : cette
+palette est pensée pour dix *lecteurs*, alors qu'une pièce a souvent plus
+de dix *personnages* (onze dans la pièce réelle testée) — s'y limiter
+aurait fait partager la même couleur à deux personnages sans lien, LE
+défaut que ce mode existe justement pour éviter. `genererCouleursParPersonnage`
+répartit les teintes également sur le cercle chromatique (`360 × i / n`,
+via `hslVersHex`) : toujours *n* couleurs distinctes, quel que soit *n*.
+
+Toutes les fonctions qui construisaient une diapo en lisant directement
+`CONFIG.COULEURS_SLOT` (`_construireBadgeQui`, `construireDiapoRepliqueFusionnee`,
+`construireDiapos`, `monterProjection`, `mesurerMotsParPage`) acceptent
+désormais cette palette en paramètre (`couleursSlot`, repli par défaut sur
+`CONFIG.COULEURS_SLOT` pour ne rien changer aux appels existants) —
+plutôt que deux chemins de rendu parallèles, un seul, dont la source de
+couleur est injectée.
+
+**Ce qui change concrètement dans l'affichage projeté :** l'étiquette
+(`etiquetteReplique`) ne montre jamais de prénom en mode solo — `prenoms`
+reste vide, aucune fenêtre de contrôle n'existant pour le renseigner —
+donc juste le nom du personnage, sans parenthèses vides. Le bouton discret
+de réouverture de la fenêtre de contrôle (§7.1) est caché pendant la
+projection : rien à contrôler, rien à rouvrir.
+
+**Persistance et reprise (§10.1) :** `lecture:v1:session` gagne un champ
+`avecDistribution`, sans quoi la reprise (§13 point 3) appliquerait à tort
+`personnagesSansSlot` — qui ne trouverait jamais de vrai code de slot dans
+un cast solo — et refuserait silencieusement de proposer la reprise. Absent
+d'une session écrite avant ce champ, il vaut `true` (le seul mode qui
+existait alors). La couleur n'est pas persistée : elle est régénérée à la
+reprise depuis `piece.personnages`, ce qui la reproduit à l'identique
+(même ordre, même fonction déterministe) sans avoir à la stocker. Le choix
+de mode lui-même (case cochée ou non) est mémorisé séparément
+(`lecture:v1:modeSolo`, global comme les prénoms, §13 point 4) : quelqu'un
+qui lit toujours en solo n'a pas à décocher la case à chaque ouverture.
+
 ---
 
 ## 7. La fenêtre de contrôle et sa synchronisation
@@ -734,9 +789,10 @@ recule au-delà, il n'y a rien d'autre avant elle vers quoi continuer.
 
 ```
 lecture:v1:piece:<pieceSlug>          le REPET.json importé, écrit une fois
-lecture:v1:cast:<pieceSlug>           { PERSONNAGE: 'H1', … }
+lecture:v1:cast:<pieceSlug>           { PERSONNAGE: 'H1', … } — ou { PERSONNAGE: 'PERSONNAGE', … } en mode solo (§6.1)
 lecture:v1:prenoms                    { H1: 'Émile', … } — global, pas par pièce (§13, point 4)
-lecture:v1:session                    { pieceSlug, position } — reprise après un rechargement
+lecture:v1:session                    { pieceSlug, position, avecDistribution } — reprise après un rechargement (§6.1)
+lecture:v1:modeSolo                   booléen — global, dernier choix d'interrupteur (§6.1)
 ```
 
 `pieceSlug` : le champ `piece` du JSON, mis en minuscules, accents retirés,
@@ -752,6 +808,8 @@ dernière fois. Un slug par nom suffit (§13, point 1, pour le cas de collision)
 `prenoms` : différée de courte durée après chaque frappe dans la fenêtre de
 contrôle. `session` : différée après chaque navigation clavier, pour que
 rouvrir la fenêtre de projection reprenne à la bonne réplique (§13, point 3).
+`modeSolo` : immédiate, à chaque bascule de l'interrupteur (§6.1) — un
+geste rare, pas besoin de différer.
 
 ---
 

@@ -99,12 +99,33 @@
     display: inline-block; width: 0.9em; height: 0.9em; border-radius: 50%;
     margin-right: 0.4em; vertical-align: middle;
   }
-  #bouton-demarrer {
+  #bouton-demarrer, #bouton-demarrer-solo {
     background: var(--accent); border-color: var(--accent); color: #0b0b0e;
     font-weight: bold;
   }
-  #bouton-demarrer:hover:not(:disabled) { background: #7aa4f2; }
+  #bouton-demarrer:hover:not(:disabled), #bouton-demarrer-solo:hover { background: #7aa4f2; }
   #bouton-demarrer:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* Interrupteur mode solo / distribution (§6, retour d'usage) : « une
+     sorte de bouton on/off ». */
+  .interrupteur {
+    display: flex; align-items: center; gap: 0.7rem; cursor: pointer;
+    margin-bottom: 0.6rem; font-weight: bold;
+  }
+  .interrupteur input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .glissiere {
+    position: relative; display: inline-block; flex: none;
+    width: 2.6rem; height: 1.5rem; background: var(--bordure);
+    border-radius: 999px; transition: background-color 0.15s ease;
+  }
+  .glissiere::before {
+    content: ''; position: absolute; top: 0.15rem; left: 0.15rem;
+    width: 1.2rem; height: 1.2rem; border-radius: 50%;
+    background: var(--texte-clair); transition: transform 0.15s ease;
+  }
+  .interrupteur input:checked + .glissiere { background: var(--accent); }
+  .interrupteur input:checked + .glissiere::before { transform: translateX(1.1rem); }
+  .aide-mode { margin-top: 0; }
   .message-erreur {
     color: #ff9b9b; background: #3a1414; border: 1px solid #7a2020;
     padding: 0.6rem 0.9rem; border-radius: 0.3rem; font-weight: bold;
@@ -390,8 +411,21 @@
     <p id="erreur-import" class="message-erreur" hidden></p>
   </section>
 
+  <section id="section-mode">
+    <h2>2. Mode de lecture</h2>
+    <label class="interrupteur">
+      <input type="checkbox" id="case-distribution" checked>
+      <span class="glissiere"></span>
+      Distribuer les personnages à des lecteurs (H1-H5 / F1-F5)
+    </label>
+    <p class="aide-mode">
+      Décochez pour une lecture solo, sans distribution ni fenêtre de
+      contrôle : chaque personnage garde simplement sa propre couleur.
+    </p>
+  </section>
+
   <section id="section-attribution" hidden>
-    <h2>2. Attribuer les personnages aux lecteurs</h2>
+    <h2>3. Attribuer les personnages aux lecteurs</h2>
     <p>
       Un lecteur (slot) peut jouer plusieurs personnages : plusieurs menus
       peuvent pointer vers le même slot. Aucune valeur n'est devinée.
@@ -406,8 +440,17 @@
     <button id="bouton-demarrer" type="button" disabled>Démarrer la lecture</button>
   </section>
 
+  <section id="section-demarrer-solo" hidden>
+    <h2>3. Démarrer</h2>
+    <p>
+      Chaque personnage affiche sa propre couleur, générée automatiquement —
+      pas de lecteur à désigner, pas de fenêtre de contrôle.
+    </p>
+    <button id="bouton-demarrer-solo" type="button">Démarrer la lecture</button>
+  </section>
+
   <section id="section-controle-fenetre">
-    <h2>3. Fenêtre de contrôle (deuxième écran)</h2>
+    <h2>4. Fenêtre de contrôle (deuxième écran)</h2>
     <p>
       Ouvre une seconde fenêtre à déplacer sur l'écran qui n'est pas projeté :
       elle sert à saisir le prénom de chaque lecteur, en direct.
@@ -903,6 +946,57 @@ function couleurTexteContrastee(hex) {
 }
 
 /**
+ * Convertit une teinte HSL en couleur hexadécimale `#rrggbb` — formule
+ * standard, sans dépendance. Sert à `genererCouleursParPersonnage` : le
+ * reste du code (couleurTexteContrastee, styles inline) ne connaît que des
+ * chaînes hex, quelle que soit leur origine (palette fixe ou générée).
+ */
+function hslVersHex(teinte, saturation, luminosite) {
+  const s = saturation / 100;
+  const l = luminosite / 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const x = c * (1 - Math.abs(((teinte / 60) % 2) - 1));
+  const m = l - c / 2;
+
+  let r = 0, g = 0, b = 0;
+
+  if (teinte < 60) { [r, g, b] = [c, x, 0]; }
+  else if (teinte < 120) { [r, g, b] = [x, c, 0]; }
+  else if (teinte < 180) { [r, g, b] = [0, c, x]; }
+  else if (teinte < 240) { [r, g, b] = [0, x, c]; }
+  else if (teinte < 300) { [r, g, b] = [x, 0, c]; }
+  else { [r, g, b] = [c, 0, x]; }
+
+  const vers255 = (v) => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+
+  return `#${vers255(r)}${vers255(g)}${vers255(b)}`;
+}
+
+/**
+ * Une couleur par personnage (§6, mode « lecture solo », retour d'usage) :
+ * répartit les teintes également sur le cercle chromatique
+ * (`360 × i / n`), à saturation et luminosité fixes, pour un jeu de
+ * couleurs toujours distinctes quel que soit le nombre de personnages —
+ * contrairement à la palette fixe de 10 slots (§12), pensée pour des
+ * *lecteurs*, pas pour des personnages dont une pièce peut avoir plus de
+ * dix.
+ *
+ * @param {{nom: string}[]} personnages
+ * @returns {Record<string, string>} nom de personnage → couleur hex
+ */
+function genererCouleursParPersonnage(personnages) {
+  const total = personnages.length || 1;
+  const couleurs = {};
+
+  personnages.forEach((personnage, index) => {
+    const teinte = Math.round((360 * index) / total);
+    couleurs[personnage.nom] = hslVersHex(teinte, 65, 50);
+  });
+
+  return couleurs;
+}
+
+/**
  * Étiquette d'un slot : « H1 » seul si aucun prénom n'est attribué,
  * « H1 (Émile) » sinon. Utilisée dans le menu déroulant de l'écran
  * d'attribution (§6, retour d'usage) : les prénoms saisis dans la fenêtre
@@ -1190,9 +1284,9 @@ function grouperPagesReplique(elements) {
  * chacun dans la couleur de son propre slot — retour d'usage : une seule
  * couleur pour tout le groupe aurait effacé la distinction entre les voix.
  */
-function _construireBadgeQui(personnage, cast, prenoms) {
+function _construireBadgeQui(personnage, cast, prenoms, couleursSlot = CONFIG.COULEURS_SLOT) {
   const slot = cast[personnage] || null;
-  const couleur = slot ? CONFIG.COULEURS_SLOT[slot] : '#555555';
+  const couleur = slot ? couleursSlot[slot] : '#555555';
 
   const badge = document.createElement('span');
   badge.className = 'qui';
@@ -1220,14 +1314,14 @@ function _construireBadgeQui(personnage, cast, prenoms) {
  *   pas utilisée (la 1ʳᵉ page cible le conteneur entier) ; `ancres[i]` pour
  *   i ≥ 1 est le span à cibler pour la page i+1.
  */
-function construireDiapoRepliqueFusionnee(elementsDuGroupe, cast, prenoms) {
+function construireDiapoRepliqueFusionnee(elementsDuGroupe, cast, prenoms, couleursSlot = CONFIG.COULEURS_SLOT) {
   const elPremiere = elementsDuGroupe[0];
   // Barre d'accent de `.texte` (--couleur) : celle du premier personnage du
   // groupe. Simplification assumée pour une réplique à plusieurs voix — ce
   // sont les badges de l'en-tête qui portent la distinction utile, pas
   // cette bordure décorative.
   const premierSlot = cast[elPremiere.personnages[0]] || null;
-  const couleur = premierSlot ? CONFIG.COULEURS_SLOT[premierSlot] : '#555555';
+  const couleur = premierSlot ? couleursSlot[premierSlot] : '#555555';
 
   const segmentsParPage = elementsDuGroupe.map(
     (el) => el.segments || segmenterAvecDidascalies(el.texte, el.didascaliesInternes)
@@ -1241,7 +1335,7 @@ function construireDiapoRepliqueFusionnee(elementsDuGroupe, cast, prenoms) {
   entete.className = 'entete-replique';
 
   for (const personnage of elPremiere.personnages) {
-    entete.appendChild(_construireBadgeQui(personnage, cast, prenoms));
+    entete.appendChild(_construireBadgeQui(personnage, cast, prenoms, couleursSlot));
   }
 
   diapo.appendChild(entete);
@@ -1289,7 +1383,7 @@ function construireDiapoRepliqueFusionnee(elementsDuGroupe, cast, prenoms) {
  * @returns {Map<string, number>} mots par page, indexée par id de
  *   réplique ; absente de la map = pas besoin d'être coupée.
  */
-function mesurerMotsParPage(elements, cast) {
+function mesurerMotsParPage(elements, cast, couleursSlot = CONFIG.COULEURS_SLOT) {
   const conteneurMesure = document.createElement('div');
   conteneurMesure.style.position = 'fixed';
   conteneurMesure.style.visibility = 'hidden';
@@ -1301,7 +1395,7 @@ function mesurerMotsParPage(elements, cast) {
 
   const repliques = elements.filter((el) => el.kind === 'replique');
   const diapos = repliques.map((el) => {
-    const { diapo } = construireDiapoRepliqueFusionnee([el], cast, {});
+    const { diapo } = construireDiapoRepliqueFusionnee([el], cast, {}, couleursSlot);
     diapo.classList.add('actif');
     return diapo;
   });
@@ -1341,7 +1435,7 @@ function mesurerMotsParPage(elements, cast) {
  *
  * @returns {{element: HTMLElement, ancre: HTMLElement}[]}
  */
-function construireDiapos(elements, cast, prenoms) {
+function construireDiapos(elements, cast, prenoms, couleursSlot = CONFIG.COULEURS_SLOT) {
   const diapos = new Array(elements.length);
 
   for (const groupe of grouperPagesReplique(elements)) {
@@ -1358,7 +1452,7 @@ function construireDiapos(elements, cast, prenoms) {
     } else if (elPremiere.kind === 'texte_sans_personnage') {
       diapo = _construireDiapoSimple(elPremiere, 'kind-texte-sans-personnage');
     } else {
-      ({ diapo, ancres } = construireDiapoRepliqueFusionnee(groupe.elements, cast, prenoms));
+      ({ diapo, ancres } = construireDiapoRepliqueFusionnee(groupe.elements, cast, prenoms, couleursSlot));
     }
 
     diapo.dataset.index = String(groupe.indices[0]);
@@ -1372,9 +1466,9 @@ function construireDiapos(elements, cast, prenoms) {
 }
 
 /** Monte toutes les diapos une fois dans `container` (§8.1), sans doublon. */
-function monterProjection(container, elements, cast, prenoms) {
+function monterProjection(container, elements, cast, prenoms, couleursSlot = CONFIG.COULEURS_SLOT) {
   container.innerHTML = '';
-  const diapos = construireDiapos(elements, cast, prenoms);
+  const diapos = construireDiapos(elements, cast, prenoms, couleursSlot);
   const montes = new Set();
 
   for (const { element } of diapos) {
@@ -1868,6 +1962,8 @@ if (MODE_FENETRE === 'projection') (() => {
   let piece = null;
   let slug = null;
   let castCourant = {};
+  let couleursSlotCourant = CONFIG.COULEURS_SLOT;
+  let avecDistributionCourante = true;
   let personnagesCourants = [];
   let elements = [];
   let diapos = [];
@@ -1885,7 +1981,11 @@ if (MODE_FENETRE === 'projection') (() => {
 
   const importFichier = document.getElementById('import-fichier');
   const erreurImport = document.getElementById('erreur-import');
+  const caseDistribution = document.getElementById('case-distribution');
   const sectionAttribution = document.getElementById('section-attribution');
+  const sectionDemarrerSolo = document.getElementById('section-demarrer-solo');
+  const boutonDemarrerSolo = document.getElementById('bouton-demarrer-solo');
+  const sectionControleFenetre = document.getElementById('section-controle-fenetre');
   const corpsAttribution = document.getElementById('corps-attribution');
   const erreurAttribution = document.getElementById('erreur-attribution');
   const boutonDemarrer = document.getElementById('bouton-demarrer');
@@ -2004,7 +2104,13 @@ if (MODE_FENETRE === 'projection') (() => {
     }
 
     ecritureSessionEnAttente = setTimeout(() => {
-      ecrire(cleStockage('session'), { pieceSlug: slug, position });
+      ecrire(cleStockage('session'), {
+        pieceSlug: slug,
+        position,
+        // §6, mode solo : nécessaire pour que la reprise (§10.1) sache
+        // quelle validité appliquer et quelles couleurs régénérer.
+        avecDistribution: avecDistributionCourante,
+      });
     }, CONFIG.DELAI_ECRITURE_MS);
   }
 
@@ -2132,10 +2238,24 @@ if (MODE_FENETRE === 'projection') (() => {
     }
   }
 
-  function demarrerProjection(piecePreparee, cast, positionDepart) {
+  /**
+   * @param {object} piecePreparee
+   * @param {Record<string,string>} cast personnage → slot (H1-F5 en mode
+   *   distribution, ou personnage → lui-même en mode solo, §6)
+   * @param {number} [positionDepart]
+   * @param {Record<string,string>} [couleursSlot] `CONFIG.COULEURS_SLOT` en
+   *   mode distribution, une couleur générée par personnage en mode solo
+   *   (`genererCouleursParPersonnage`)
+   * @param {boolean} [avecDistribution] persisté dans la session (§10.1),
+   *   pour que la reprise applique la bonne validité et régénère les
+   *   bonnes couleurs
+   */
+  function demarrerProjection(piecePreparee, cast, positionDepart, couleursSlot, avecDistribution) {
     piece = piecePreparee;
     slug = pieceSlug(piece.piece);
     castCourant = cast;
+    couleursSlotCourant = couleursSlot || CONFIG.COULEURS_SLOT;
+    avecDistributionCourante = avecDistribution !== false;
 
     // aplatir → mesurer → paginer → sommaire → montage, dans cet ordre : le
     // sommaire et le montage doivent travailler sur la liste *après*
@@ -2144,10 +2264,10 @@ if (MODE_FENETRE === 'projection') (() => {
     // La mesure a lieu une fois, ici, avant de savoir combien de pages il y
     // aura — c'est elle qui répond à la question, pas un nombre de mots fixe.
     const elementsBruts = aplatirEnElements(piece);
-    const motsParPageParReplique = mesurerMotsParPage(elementsBruts, cast);
+    const motsParPageParReplique = mesurerMotsParPage(elementsBruts, cast, couleursSlotCourant);
     elements = paginerElements(elementsBruts, motsParPageParReplique);
     sommaire = calculerSommaire(elements);
-    diapos = monterProjection(contenu, elements, cast, prenoms);
+    diapos = monterProjection(contenu, elements, cast, prenoms, couleursSlotCourant);
     construirePanneauSommaire(panneauSommaire, sommaire);
 
     // Jamais démarrer sur une transition de scène (§9, eviterScene) : on
@@ -2159,6 +2279,10 @@ if (MODE_FENETRE === 'projection') (() => {
 
     ecranPreparation.style.display = 'none';
     ecranProjection.classList.add('visible');
+
+    // Rien à contrôler ni à rouvrir en mode solo (§6) : aucun lecteur
+    // désigné, la fenêtre de contrôle n'a pas de sens ici.
+    boutonReouvrirControle.hidden = !avecDistributionCourante;
 
     marquerDefilementProgrammatique();
     afficherPosition(diapos, position);
@@ -2210,15 +2334,33 @@ if (MODE_FENETRE === 'projection') (() => {
       return; // donnée corrompue : jamais de reprise sur une pièce invalide
     }
 
-    if (personnagesSansSlot(resultat.piece.personnages, castSauvegarde).length > 0) {
+    // §13 point 3 étendu au mode solo (§6) : une session ancienne, écrite
+    // avant l'ajout du mode, n'a pas ce champ — absent équivaut à « avec
+    // distribution » (true), le seul mode qui existait alors.
+    const avecDistributionSession = session.avecDistribution !== false;
+
+    if (
+      avecDistributionSession &&
+      personnagesSansSlot(resultat.piece.personnages, castSauvegarde).length > 0
+    ) {
       return; // attribution incomplète : on repasse par l'écran normal
     }
+
+    const couleursReprise = avecDistributionSession
+      ? CONFIG.COULEURS_SLOT
+      : genererCouleursParPersonnage(resultat.piece.personnages);
 
     messageReprise.textContent = `« ${resultat.piece.piece} » — reprendre à la position sauvegardée.`;
     sectionReprise.hidden = false;
 
     boutonReprendre.addEventListener('click', () => {
-      demarrerProjection(resultat.piece, castSauvegarde, session.position);
+      demarrerProjection(
+        resultat.piece,
+        castSauvegarde,
+        session.position,
+        couleursReprise,
+        avecDistributionSession
+      );
     });
   })();
 
@@ -2253,8 +2395,59 @@ if (MODE_FENETRE === 'projection') (() => {
     ecrire(cleStockage(`piece:${slugCourant}`), piece);
     ecrire(cleStockage(`cast:${slugCourant}`), cast);
 
-    demarrerProjection(piece, cast);
+    demarrerProjection(piece, cast, undefined, CONFIG.COULEURS_SLOT, true);
   });
+
+  // --- mode solo : une couleur par personnage, aucune distribution (§6) ---
+
+  boutonDemarrerSolo.addEventListener('click', () => {
+    const castSolo = {};
+
+    for (const personnage of personnagesCourants) {
+      castSolo[personnage.nom] = personnage.nom;
+    }
+
+    const couleursSolo = genererCouleursParPersonnage(personnagesCourants);
+    const slugCourant = pieceSlug(piece.piece);
+    ecrire(cleStockage(`piece:${slugCourant}`), piece);
+    ecrire(cleStockage(`cast:${slugCourant}`), castSolo);
+
+    demarrerProjection(piece, castSolo, undefined, couleursSolo, false);
+  });
+
+  /**
+   * Bascule l'écran de préparation entre les deux modes (§6) : montre la
+   * table d'attribution et la fenêtre de contrôle en mode distribution,
+   * le bouton de démarrage direct en mode solo — jamais les deux à la
+   * fois, jamais aucun avant qu'une pièce soit chargée.
+   */
+  function appliquerModeAffichage() {
+    const avecDistribution = caseDistribution.checked;
+
+    sectionControleFenetre.hidden = !avecDistribution;
+
+    if (!piece) {
+      sectionAttribution.hidden = true;
+      sectionDemarrerSolo.hidden = true;
+      return;
+    }
+
+    sectionAttribution.hidden = !avecDistribution;
+    sectionDemarrerSolo.hidden = avecDistribution;
+  }
+
+  // Mémorisé d'une fois sur l'autre (§10.1) : quelqu'un qui lit toujours en
+  // solo ne devrait pas avoir à décocher la case à chaque ouverture.
+  if (lire(cleStockage('modeSolo')) === true) {
+    caseDistribution.checked = false;
+  }
+
+  caseDistribution.addEventListener('change', () => {
+    ecrire(cleStockage('modeSolo'), !caseDistribution.checked);
+    appliquerModeAffichage();
+  });
+
+  appliquerModeAffichage();
 
   importFichier.addEventListener('change', (evenement) => {
     const fichier = evenement.target.files[0];
@@ -2290,11 +2483,16 @@ if (MODE_FENETRE === 'projection') (() => {
       piece = resultat.piece;
       personnagesCourants = piece.personnages;
 
-      const castSauvegarde = lire(cleStockage(`cast:${pieceSlug(piece.piece)}`)) || {};
+      // La table d'attribution ne sert qu'en mode distribution (§6) : en
+      // mode solo, rien à construire, le bouton de démarrage direct suffit
+      // (branché dans appliquerModeAffichage).
+      if (caseDistribution.checked) {
+        const castSauvegarde = lire(cleStockage(`cast:${pieceSlug(piece.piece)}`)) || {};
+        construireTableAttribution(corpsAttribution, personnagesCourants, castSauvegarde, prenoms);
+        rafraichirEtatDemarrage();
+      }
 
-      construireTableAttribution(corpsAttribution, personnagesCourants, castSauvegarde, prenoms);
-      sectionAttribution.hidden = false;
-      rafraichirEtatDemarrage();
+      appliquerModeAffichage();
     };
 
     lecteur.readAsText(fichier, 'utf-8');
