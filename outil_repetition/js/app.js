@@ -392,11 +392,30 @@ async function changerDossierDrive() {
   }
 }
 
+/**
+ * Remplit la liste des pièces d'un dossier Drive.
+ *
+ * **Un dossier sans résultat le dit explicitement (P3).** Un ancien défaut :
+ * une liste vide sans message ressemble exactement à une panne — c'est ce qui
+ * s'est produit en pratique quand le filtre côté serveur (retiré depuis,
+ * voir `drive.js`) ne remontait jamais rien malgré un fichier bien présent.
+ * Rien à l'écran ne permettait de distinguer « dossier vide » de « ça ne
+ * marche pas ».
+ */
 async function rafraichirPiecesDrive(dossierId) {
   const liste = $('liste-pieces-drive');
   liste.innerHTML = '';
 
   const fichiers = await drive.listerFichiers(jetonDrive, dossierId);
+
+  if (fichiers.length === 0) {
+    afficherMessage(
+      'message-drive',
+      'Aucun fichier « _REPET.json » trouvé dans ce dossier.',
+      'avertissement',
+    );
+    return;
+  }
 
   for (const fichier of fichiers) {
     liste.appendChild(carteDeFichierDrive(fichier));

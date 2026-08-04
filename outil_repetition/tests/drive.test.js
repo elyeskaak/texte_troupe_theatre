@@ -16,20 +16,29 @@ import {
   ErreurDrive,
   urlListeFichiers,
   urlContenuFichier,
+  estFichierRepet,
   fichiersDepuisReponse,
   listerFichiers,
   lireFichier,
 } from '../../pieces/drive.js';
 
 describe('urlListeFichiers', () => {
-  test('inclut le dossier, exclut la corbeille, filtre sur _REPET.json', () => {
+  test('inclut le dossier, exclut la corbeille', () => {
     const url = new URL(urlListeFichiers('DOSSIER123'));
     const requete = url.searchParams.get('q');
 
     assert.equal(url.origin + url.pathname, 'https://www.googleapis.com/drive/v3/files');
     assert.match(requete, /'DOSSIER123' in parents/);
     assert.match(requete, /trashed = false/);
-    assert.match(requete, /name contains '_REPET\.json'/);
+  });
+
+  test('ne filtre plus sur le nom côté serveur', () => {
+    // Régression : `name contains '_REPET.json'` ne remontait jamais rien,
+    // l'opérateur de l'API Drive segmentant le nom en mots ('_' et '.' comptent
+    // comme séparateurs). Le filtre vit maintenant dans `estFichierRepet`.
+    const requete = new URL(urlListeFichiers('DOSSIER123')).searchParams.get('q');
+
+    assert.ok(!requete.includes('contains'));
   });
 
   test('demande seulement id et name', () => {
@@ -55,19 +64,37 @@ describe('urlContenuFichier', () => {
   });
 });
 
+describe('estFichierRepet', () => {
+  test('un nom qui finit par _REPET.json est reconnu', () => {
+    assert.ok(estFichierRepet('Le roi nu_REPET.json'));
+  });
+
+  test('tout le reste est écarté', () => {
+    assert.ok(!estFichierRepet('Le roi nu.docx'));
+    assert.ok(!estFichierRepet('notes.txt'));
+    assert.ok(!estFichierRepet(''));
+    assert.ok(!estFichierRepet(null));
+    assert.ok(!estFichierRepet(undefined));
+  });
+});
+
 describe('fichiersDepuisReponse', () => {
-  test('rend les fichiers valides tels quels', () => {
+  test('rend les fichiers _REPET.json valides tels quels', () => {
     const json = { files: [{ id: '1', name: 'A_REPET.json' }, { id: '2', name: 'B_REPET.json' }] };
 
     assert.deepEqual(fichiersDepuisReponse(json), json.files);
   });
 
-  test('écarte un fichier sans id ou sans name', () => {
+  test('écarte un fichier sans id, sans name, ou qui n’est pas un _REPET.json', () => {
+    // Le dossier Drive peut contenir d'autres documents : notes, PDF sources,
+    // le .docx d'origine — jamais listés ici (voir urlListeFichiers).
     const json = {
       files: [
         { id: '1', name: 'A_REPET.json' },
         { id: '2' },
         { name: 'sans-id_REPET.json' },
+        { id: '3', name: 'notes.txt' },
+        { id: '4', name: 'Le roi nu.docx' },
       ],
     };
 

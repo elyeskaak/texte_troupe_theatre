@@ -2682,10 +2682,22 @@ if (MODE_FENETRE === 'projection') (() => {
       return carte;
     }
 
+    /**
+     * Un dossier sans résultat le dit explicitement (§11) : une liste vide
+     * sans message ressemble à une panne — c'est ce qui s'est produit en
+     * pratique quand le filtre côté serveur (retiré depuis, voir
+     * `pieces/drive.js`) ne remontait jamais rien malgré un fichier présent.
+     */
     async function rafraichirPiecesDrive(dossierId) {
       listeFichiers.innerHTML = '';
 
       const fichiers = await drive.listerFichiers(jetonDrive, dossierId);
+
+      if (fichiers.length === 0) {
+        erreurDrive.hidden = false;
+        erreurDrive.textContent = 'Aucun fichier « _REPET.json » trouvé dans ce dossier.';
+        return;
+      }
 
       for (const fichier of fichiers) {
         listeFichiers.appendChild(carteDeFichierDrive(fichier));

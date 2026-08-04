@@ -43,18 +43,23 @@ export class ErreurDrive extends Error {
 // ============================================================
 
 /**
- * URL de listage des `_REPET.json` d'un dossier Drive.
+ * URL de listage du contenu d'un dossier Drive.
  *
- * Filtré côté serveur (`name contains '_REPET.json'`) plutôt que de tout lister
- * et filtrer ici : un dossier Drive peut contenir d'autres documents (notes,
- * PDF sources), et les lister tous ne servirait à rien.
+ * **Ne filtre plus sur le nom côté serveur.** Une première version ajoutait
+ * `name contains '_REPET.json'` à la requête, en confiance : ça a semblé
+ * raisonnable, et ça ne renvoyait **jamais rien**, dossier réel avec fichier
+ * réel dedans. En cause : l'opérateur `contains` de l'API Drive segmente le
+ * nom en mots pour le comparer, et `_` comme `.` comptent comme des
+ * séparateurs — `'_REPET.json'` ne correspond donc à aucun « mot » complet
+ * d'un nom de fichier réel, quel qu'il soit. Le filtre est donc refait
+ * côté client, dans `estFichierRepet` : plus lent d'un aller-retour réseau
+ * négligeable sur un dossier de quelques pièces, mais **testable**, et qui ne
+ * dépend plus d'un comportement de tokenisation non documenté.
  *
  * @param {string} dossierId
  */
 export function urlListeFichiers(dossierId) {
-  const requete =
-    `'${dossierId}' in parents and trashed = false and ` +
-    "name contains '_REPET.json'";
+  const requete = `'${dossierId}' in parents and trashed = false`;
 
   const params = new URLSearchParams({
     q: requete,
@@ -70,13 +75,20 @@ export function urlContenuFichier(fichierId) {
   return `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fichierId)}?alt=media`;
 }
 
+/** Vrai si un nom de fichier est un `REPET.json` (voir `urlListeFichiers`). */
+export function estFichierRepet(nom) {
+  return typeof nom === 'string' && nom.endsWith('_REPET.json');
+}
+
 /**
- * Fichiers valides d'une réponse `files.list`, jamais `undefined`.
+ * Fichiers `_REPET.json` valides d'une réponse `files.list`, jamais `undefined`.
  *
  * Une réponse malformée (champ absent, fichier sans `id` ni `name`) rend une
  * liste vide plutôt que de lever : c'est à l'appelant de décider si « rien à
  * afficher » est une erreur ou un dossier simplement vide — cette fonction ne
- * fait qu'interpréter la forme, pas juger du cas.
+ * fait qu'interpréter la forme, pas juger du cas. Écarte aussi, ici, tout
+ * fichier qui n'est pas un `_REPET.json` (§ci-dessus : le dossier peut
+ * contenir d'autres documents, notes, PDF sources).
  *
  * @param {unknown} json
  * @returns {{id: string, name: string}[]}
@@ -87,7 +99,12 @@ export function fichiersDepuisReponse(json) {
   }
 
   return json.files.filter(
-    (f) => f && typeof f === 'object' && typeof f.id === 'string' && typeof f.name === 'string',
+    (f) =>
+      f &&
+      typeof f === 'object' &&
+      typeof f.id === 'string' &&
+      typeof f.name === 'string' &&
+      estFichierRepet(f.name),
   );
 }
 
