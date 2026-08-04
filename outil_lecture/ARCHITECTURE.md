@@ -445,9 +445,21 @@ lointain qui sous-évaluerait sa mise en avant.
 
 Changer de réplique reste borné et cohérent avec le principe de §6 de
 `outil_repetition/ARCHITECTURE.md` : jamais de reconstruction du DOM, une
-écriture de classe (`.actif`, ancre du défilement et sélecteur de taille de
-police, §8.2) plus un nombre constant d'écritures de style. Un défilement
-doux (`scrollIntoView`) recentre la diapo courante à chaque navigation.
+écriture de classe (`.actif`, ancre du défilement, §8.2) plus un nombre
+constant d'écritures de style. Un défilement doux (`scrollIntoView`)
+recentre la diapo courante à chaque navigation.
+
+**Troisième révision : un zoom réellement continu.** Le dégradé ci-dessus
+faisait déjà varier `--echelle` en continu, mais chaque genre de diapo
+(scène, réplique, `.qui`…) portait *en plus* une règle `.actif.kind-X` qui
+faisait sauter sa taille de police entre deux valeurs fixes à l'activation.
+Les deux effets superposés — un saut de police, adouci par un zoom déjà en
+cours — produisaient un rendu moins fluide que voulu. Retiré : la taille de
+police redevient une valeur **unique et fixe** par genre de diapo (celle
+qu'on veut voir à l'échelle 1, c'est-à-dire active), et c'est `--echelle`
+seul — déjà continu, déjà piloté par `appliquerGradient` — qui la fait
+paraître plus grande ou plus petite selon la distance à la position
+courante. Un zoom sans palier nulle part, du centre vers les bords.
 
 ### 8.2 Couleur et étiquette
 

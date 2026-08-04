@@ -249,25 +249,31 @@
 
   .diapo.actif { opacity: 1; transform: scale(1); }
 
+  /*
+   * Retour d'usage, deuxième passe sur le dégradé : la taille de police
+   * sautait entre deux valeurs fixes à l'activation (`.actif`), alors que
+   * `transform: scale(var(--echelle))` ci-dessus fait déjà varier la
+   * taille *visuelle* en continu. Les deux combinés produisaient un double
+   * effet — un saut, adouci par un zoom. Supprimé : la taille de police
+   * est désormais fixe (celle qu'on veut voir à l'échelle 1, c'est-à-dire
+   * active) et c'est `--echelle`, seul, qui la fait grandir ou rétrécir
+   * progressivement selon la distance à la position courante — un zoom
+   * réellement continu, sans palier nulle part.
+   */
   .diapo.kind-scene {
-    font-size: clamp(0.9rem, 2.2vw, 1.8rem);
+    font-size: clamp(1.2rem, 3vw, 2.4rem);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--attenue);
   }
 
-  .diapo.actif.kind-scene { font-size: clamp(1.2rem, 3vw, 2.4rem); }
-
   .diapo.kind-lieu,
   .diapo.kind-didascalie {
     font-style: italic;
     color: var(--attenue);
-    font-size: clamp(0.8rem, 1.6vw, 1.4rem);
+    font-size: clamp(1rem, 2.2vw, 1.8rem);
     max-width: 80%;
   }
-
-  .diapo.actif.kind-lieu,
-  .diapo.actif.kind-didascalie { font-size: clamp(1rem, 2.2vw, 1.8rem); }
 
   .diapo.kind-texte-sans-personnage {
     font-size: clamp(0.8rem, 1.6vw, 1.4rem);
@@ -299,41 +305,33 @@
     flex-wrap: wrap;
     justify-content: center;
     gap: 0.5em;
-    margin-bottom: 0.6em;
+    margin-bottom: 0.9em;
     max-width: 92%;
   }
 
-  .diapo.actif.kind-replique .entete-replique { margin-bottom: 0.9em; }
-
   .diapo.kind-replique .qui {
-    font-size: clamp(0.7rem, 1.1vw, 1.2rem);
+    font-size: clamp(1rem, 2vw, 2rem);
     font-weight: bold;
     padding: 0.3em 1em;
     border-radius: 999px;
   }
 
-  .diapo.actif.kind-replique .qui { font-size: clamp(1rem, 2vw, 2rem); }
-
-  .diapo.kind-replique .texte {
-    font-size: clamp(0.9rem, 1.8vw, 1.6rem);
-    line-height: 1.35;
-    max-width: 90%;
-    border-left: 0.4vw solid var(--couleur, #555);
-    padding-left: 1.2vw;
-  }
-
   /*
-   * Taille de la réplique en cours : fixe, jamais dépendante de la longueur
-   * du texte (troisième révision à l'usage, §8.1). Une réplique fusionnée
-   * sur plusieurs pages (§8.5) se lit en un seul défilement continu — la
+   * Taille de la réplique : fixe, jamais dépendante de la longueur du texte
+   * (troisième révision à l'usage, §8.1). Une réplique fusionnée sur
+   * plusieurs pages (§8.5) se lit en un seul défilement continu — la
    * taille n'a donc plus besoin de compenser une longueur qui « ne tient
    * pas à l'écran » : c'est précisément ce que le défilement par ancres
    * résout. La faire dépendre du nombre de mots produisait l'effet inverse
    * de celui voulu : une longue tirade active paraissait plus petite qu'une
    * courte réplique voisine simplement non active.
    */
-  .diapo.actif.kind-replique .texte {
+  .diapo.kind-replique .texte {
     font-size: clamp(1.2rem, 2.4vw, 2.2rem);
+    line-height: 1.35;
+    max-width: 90%;
+    border-left: 0.4vw solid var(--couleur, #555);
+    padding-left: 1.2vw;
   }
 
   .didascalie-interne {
