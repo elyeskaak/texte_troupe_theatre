@@ -591,6 +591,48 @@ class TestInferenceHierarchie(unittest.TestCase):
         self.assertIs(index.type_de("1"), TypeLigne.TITRE_SCENE)
         self.assertIs(index.type_de("3"), TypeLigne.TITRE_SCENE)
 
+    def test_figurants_numerotes_repetes_ne_sont_pas_des_actes(self):
+        """
+        Cas réel : « 1789 » (Théâtre du Soleil / Théâtre JOB), scène de la
+        prise de la Bastille, racontée par des figurants anonymes numérotés
+        « 1. » à « 9. », réutilisés et mélangés au fil des répliques.
+
+        Sans lexique ACTE, la règle 3 les prenait pour le premier niveau de
+        la hiérarchie — un saut de page à chaque intervention. La séquence
+        n'étant ni à occurrence unique ni croissante, elle doit être jugée
+        incohérente et chaque jeton retomber sur les règles normales (ici,
+        la règle 5 : suivi d'une réplique).
+        """
+        texte = (
+            "**1.**\nJ'y étais.\n\n**2.**\nMoi aussi.\n\n**1.**\nOn y retourne.\n\n"
+            "**3.**\nEt moi aussi.\n\n**2.**\nEncore.\n"
+        )
+
+        index = construire_index_structure(texte)
+
+        self.assertIs(index.type_de("1"), TypeLigne.PERSONNAGE)
+        self.assertIs(index.type_de("2"), TypeLigne.PERSONNAGE)
+        self.assertIs(index.type_de("3"), TypeLigne.PERSONNAGE)
+
+    def test_un_seul_jeton_repete_disqualifie_toute_la_numerotation(self):
+        """
+        Le contrôle porte sur l'ensemble des jetons, non sur chacun isolément.
+
+        Si « 1 » et « 2 » n'apparaissent qu'une fois mais que « 3 » revient
+        deux fois, aucun des trois n'est un titre certain : rien ne dit que
+        « 1 » et « 2 » sont eux des actes plutôt que, par exemple, deux
+        figurants qui n'auraient simplement pas eu l'occasion de reparler.
+        """
+        texte = (
+            "**1.**\nA.\n\n**2.**\nB.\n\n**3.**\nC.\n\n**3.**\nD.\n"
+        )
+
+        index = construire_index_structure(texte)
+
+        self.assertIs(index.type_de("1"), TypeLigne.PERSONNAGE)
+        self.assertIs(index.type_de("2"), TypeLigne.PERSONNAGE)
+        self.assertIs(index.type_de("3"), TypeLigne.PERSONNAGE)
+
 
 class TestSurcharges(unittest.TestCase):
     """Règle 0 : la surcharge manuelle prime sur toute heuristique."""

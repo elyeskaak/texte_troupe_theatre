@@ -361,10 +361,30 @@ MAX_LIGNES_DISTRIBUTION = 60
 # Surcharges manuelles, prioritaires sur toute heuristique.
 # Renseigner d'après la table d'inspection affichée avant génération.
 # Écrire les labels en capitales sans accents : {"LA VOIX", "LE MESSAGER"}
+#
+# Ces deux ensembles étaient auparavant appliqués « à la volée », en
+# surchargeant `config.PERSONNAGES_FORCES` depuis un script avant d'appeler
+# `docx_export.executer()`. Une régression l'a montré : toute relance de
+# l'étape edition réassemble `EDIT.txt`, mais rien ne rejoue une surcharge
+# à la volée oubliée — le classement retombe alors silencieusement sur
+# l'heuristique par défaut. Les rendre permanentes ici les fait vivre au
+# même endroit que le reste de la configuration, relues à chaque génération.
 # ------------------------------------------------------------
 PERSONNAGES_FORCES: frozenset[str] = frozenset()
 TITRES_ACTE_FORCES: frozenset[str] = frozenset()
-TITRES_SCENE_FORCES: frozenset[str] = frozenset()
+TITRES_SCENE_FORCES: frozenset[str] = frozenset({
+    # Bertolt Brecht, « Le Cercle de craie caucasien » — chaque scène porte
+    # un numéro (« Scène 1 », lexicalement reconnu) suivi d'un sous-titre sur
+    # sa propre ligne (« La vallée en litige »). Le sous-titre ne correspond
+    # à aucun lexique ni à une numérotation : sans cette surcharge, il
+    # retombe en « personnage, incertaine » et perd le style de titre.
+    "LA VALLEE EN LITIGE",
+    "L'AUGUSTE ENFANT",
+    "LA FUITE VERS LES MONTAGNES DU NORD",
+    "DANS LES MONTAGNES DU NORD",
+    "L'HISTOIRE DU JUGE",
+    "LE CERCLE DE CRAIE",
+})
 
 
 # ============================================================

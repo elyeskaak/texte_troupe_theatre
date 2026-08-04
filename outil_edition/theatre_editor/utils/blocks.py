@@ -1368,8 +1368,16 @@ def construire_index_structure(
     index = IndexStructure(lignes_distribution=lignes_distribution)
 
     # Titres purement numérotés : ce sont des titres certains, mais dont le
-    # niveau ne peut être décidé qu'au vu du document entier (passe C).
+    # niveau ne peut être décidé qu'au vu du document entier (passe C) —
+    # sauf si la numérotation ne ressemble pas à un vrai découpage (voir
+    # `_numerotation_coherente`), auquel cas ces labels sont traités par les
+    # règles suivantes (4 à 7) comme n'importe quel autre label.
     a_resoudre: list[str] = []
+
+    candidats_numerotes = [
+        label for label in observations if est_jeton_numerotation(label)
+    ]
+    numerotation_coherente = _numerotation_coherente(candidats_numerotes, observations)
 
     for label, observation in observations.items():
         decision = _appliquer_regles(
@@ -1380,6 +1388,7 @@ def construire_index_structure(
             forces_acte=forces_acte,
             forces_scene=forces_scene,
             seuil=seuil,
+            numerotation_coherente=numerotation_coherente,
         )
 
         if decision is None:
@@ -1449,6 +1458,42 @@ def _defaut(valeur, repli):
     return repli if valeur is None else valeur
 
 
+def _numerotation_coherente(
+    labels: list[str],
+    observations: dict[str, _Observation],
+) -> bool:
+    """
+    Vrai si un ensemble de jetons de numérotation ressemble à un vrai
+    découpage en actes ou en scènes : chacun n'apparaît qu'une fois, dans
+    l'ordre croissant de sa valeur au fil du document.
+
+    C'est le comportement d'un découpage réel par construction — on
+    n'écrit jamais deux fois « ACTE II », et les actes se succèdent dans
+    l'ordre de lecture. Un procédé choral qui réutilise « 1. » à « 9. »
+    comme labels de figurants anonymes s'en écarte sur les deux plans : ces
+    jetons reviennent plusieurs fois chacun, et dans un ordre quelconque
+    (« 1, 2, 3, 6, 3, 1, 2… »), au fil des répliques.
+
+    Distinguer les deux cas est ce qui évite qu'une pièce sans lexique ACTE,
+    comme « 1789 » (Théâtre du Soleil / Théâtre JOB), n'infligeât un saut de
+    page à chaque intervention de ces figurants — la règle 3 les prenant
+    sinon pour le premier niveau de la hiérarchie documentaire (§9.1).
+
+    Un ensemble vide est trivialement cohérent : il n'y a alors aucun titre
+    numéroté à classer, et la passe C n'a rien à faire.
+    """
+    if not labels:
+        return True
+
+    if any(observations[label].occurrences != 1 for label in labels):
+        return False
+
+    ordre_lecture = sorted(labels, key=lambda label: observations[label].premier_index)
+    ordre_valeur = sorted(labels, key=valeur_numerotation)
+
+    return ordre_lecture == ordre_valeur
+
+
 def _appliquer_regles(
     *,
     label: str,
@@ -1458,6 +1503,7 @@ def _appliquer_regles(
     forces_acte: frozenset[str],
     forces_scene: frozenset[str],
     seuil: int,
+    numerotation_coherente: bool = True,
 ) -> ClassementLabel | None:
     """
     Applique les règles 0 à 6 à un label.
@@ -1509,7 +1555,12 @@ def _appliquer_regles(
         return classer(TypeLigne.TITRE_SCENE, Confiance.CERTAINE, "lexique scène")
 
     # Règle 3 — pur jeton de numérotation : titre certain, niveau à déterminer.
-    if est_jeton_numerotation(label):
+    #
+    # Seulement si l'ensemble des jetons du document forme une numérotation
+    # cohérente (`_numerotation_coherente`) : sinon, ce ne sont probablement
+    # pas des titres du tout — un figurant anonyme numéroté « 1. », par
+    # exemple — et les règles suivantes s'appliquent normalement.
+    if numerotation_coherente and est_jeton_numerotation(label):
         return None
 
     # Règle 4 — présent dans la distribution : le meilleur signal disponible.
