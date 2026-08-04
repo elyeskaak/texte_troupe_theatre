@@ -447,6 +447,20 @@
       <input type="file" id="import-fichier" accept="application/json,.json">
     </p>
     <p id="erreur-import" class="message-erreur" hidden></p>
+
+    <!-- Google Drive (§4.3 de ARCHITECTURE.md) : dossier partagé choisi par
+         l'utilisateur, pour retrouver ses pièces sans dossier local ni fichier
+         à réimporter à chaque fois — une commodité de plus, jamais requise.
+         Montée seulement si pieces/drive.js a pu être importé (§2.2, §4.3) :
+         absent en `file://`, où seul l'import de fichier ci-dessus fonctionne. -->
+    <div id="section-drive" hidden>
+      <p style="margin-top:14px; color:var(--attenue)">ou depuis Google Drive :</p>
+      <button id="bouton-drive-connecter" type="button">Se connecter à Google Drive</button>
+      <button id="bouton-drive-changer-dossier" type="button" hidden>Changer de dossier</button>
+      <p id="drive-dossier-actuel" style="color:var(--attenue)" hidden></p>
+      <div id="liste-pieces-drive"></div>
+      <p id="erreur-drive" class="message-erreur" hidden></p>
+    </div>
   </section>
 
   <section id="section-mode">
@@ -599,6 +613,19 @@ const CONFIG = Object.freeze({
    * une diapo retombe sur le plancher visuel défini en CSS.
    */
   PORTEE_GRADIENT: 6,
+
+  // --- Google Drive (../pieces/drive.js, §4.3) ----------------------
+  /**
+   * Ni l'un ni l'autre n'est un secret (§4.3) : la sécurité vient des
+   * origines JavaScript autorisées côté Google Cloud et du consentement
+   * utilisateur, pas de leur confidentialité — identiques à ceux
+   * d'`outil_repetition` (même projet Google Cloud, §3.3 de son
+   * ARCHITECTURE.md).
+   */
+  DRIVE_CLIENT_ID:
+    '865511393898-i692e2218d8u8hb4rd5afhjjhfb9opec.apps.googleusercontent.com',
+  DRIVE_API_KEY: 'AIzaSyBKHu8igUEGgbNAACvjYZbCPppHi8nc8VU',
+  DRIVE_SCOPE: 'https://www.googleapis.com/auth/drive.file',
 });
 
 // ============================================================
@@ -2529,6 +2556,50 @@ if (MODE_FENETRE === 'projection') (() => {
 
   appliquerModeAffichage();
 
+  /**
+   * Traite un texte de `REPET.json`, quelle que soit sa provenance (fichier
+   * importé, ou depuis le 2025-08-05 Google Drive, §4.3) : même validation,
+   * même écran d'attribution — aucun cas particulier selon la source.
+   *
+   * @param {string} texte
+   * @param {(message: string) => void} signalerErreur affiche le message
+   *   d'erreur au bon endroit (l'import fichier et Drive ont chacun leur
+   *   propre zone, §4.3)
+   * @returns {boolean} vrai si la pièce a été acceptée
+   */
+  function traiterTexteDePiece(texte, signalerErreur) {
+    let donnees;
+
+    try {
+      donnees = JSON.parse(texte);
+    } catch (erreur) {
+      signalerErreur(`Ce n'est pas du JSON valide : ${erreur.message}`);
+      return false;
+    }
+
+    const resultat = validerRepet(donnees);
+
+    if (!resultat.valide) {
+      signalerErreur(resultat.erreur);
+      return false;
+    }
+
+    piece = resultat.piece;
+    personnagesCourants = piece.personnages;
+
+    // La table d'attribution ne sert qu'en mode distribution (§6) : en mode
+    // solo, rien à construire, le bouton de démarrage direct suffit (branché
+    // dans appliquerModeAffichage).
+    if (caseDistribution.checked) {
+      const castSauvegarde = lire(cleStockage(`cast:${pieceSlug(piece.piece)}`)) || {};
+      construireTableAttribution(corpsAttribution, personnagesCourants, castSauvegarde, prenoms);
+      rafraichirEtatDemarrage();
+    }
+
+    appliquerModeAffichage();
+    return true;
+  }
+
   importFichier.addEventListener('change', (evenement) => {
     const fichier = evenement.target.files[0];
 
@@ -2542,41 +2613,176 @@ if (MODE_FENETRE === 'projection') (() => {
     const lecteur = new FileReader();
 
     lecteur.onload = () => {
-      let donnees;
-
-      try {
-        donnees = JSON.parse(lecteur.result);
-      } catch (erreur) {
+      traiterTexteDePiece(lecteur.result, (message) => {
         erreurImport.hidden = false;
-        erreurImport.textContent = `Le fichier n'est pas un JSON valide : ${erreur.message}`;
-        return;
-      }
-
-      const resultat = validerRepet(donnees);
-
-      if (!resultat.valide) {
-        erreurImport.hidden = false;
-        erreurImport.textContent = resultat.erreur;
-        return;
-      }
-
-      piece = resultat.piece;
-      personnagesCourants = piece.personnages;
-
-      // La table d'attribution ne sert qu'en mode distribution (§6) : en
-      // mode solo, rien à construire, le bouton de démarrage direct suffit
-      // (branché dans appliquerModeAffichage).
-      if (caseDistribution.checked) {
-        const castSauvegarde = lire(cleStockage(`cast:${pieceSlug(piece.piece)}`)) || {};
-        construireTableAttribution(corpsAttribution, personnagesCourants, castSauvegarde, prenoms);
-        rafraichirEtatDemarrage();
-      }
-
-      appliquerModeAffichage();
+        erreurImport.textContent = message;
+      });
     };
 
     lecteur.readAsText(fichier, 'utf-8');
   });
+
+  // --- Google Drive (§4.3) --------------------------------------------
+  //
+  // import() dynamique, entouré d'un try/catch : la seule façon de charger un
+  // module ES dans un fichier par ailleurs fait de scripts classiques (§2.2).
+  // Sous file:// (double-clic), cet import échoue — c'est attendu, capté ici,
+  // et traité comme un mode de fonctionnement normal (§11) : la section Drive
+  // ne se monte simplement pas, sans message d'erreur ni bouton inerte.
+  (async () => {
+    let drive;
+
+    try {
+      drive = await import('../pieces/drive.js');
+    } catch {
+      return;
+    }
+
+    const sectionDrive = document.getElementById('section-drive');
+    const boutonConnecter = document.getElementById('bouton-drive-connecter');
+    const boutonChangerDossier = document.getElementById('bouton-drive-changer-dossier');
+    const dossierActuel = document.getElementById('drive-dossier-actuel');
+    const listeFichiers = document.getElementById('liste-pieces-drive');
+    const erreurDrive = document.getElementById('erreur-drive');
+
+    sectionDrive.hidden = false;
+
+    /** Jeton d'accès de la session en cours, jamais persisté (§4.3). */
+    let jetonDrive = null;
+
+    function signalerErreurDrive(erreur) {
+      erreurDrive.hidden = false;
+      erreurDrive.textContent =
+        erreur instanceof drive.ErreurDrive
+          ? erreur.message
+          : `erreur inattendue : ${erreur.message}`;
+    }
+
+    function afficherDossierDriveActuel() {
+      const dossier = lire(cleStockage('drive-dossier'));
+
+      dossierActuel.hidden = !dossier;
+      boutonChangerDossier.hidden = !dossier;
+
+      if (dossier) {
+        dossierActuel.textContent = `Dossier : ${dossier.nom}`;
+      }
+    }
+
+    function carteDeFichierDrive(fichier) {
+      const carte = document.createElement('p');
+      const bouton = document.createElement('button');
+
+      bouton.type = 'button';
+      bouton.textContent = `Charger « ${fichier.name.replace(/_REPET\.json$/, '')} »`;
+      bouton.addEventListener('click', () => chargerDepuisDrive(fichier, bouton));
+
+      carte.appendChild(bouton);
+
+      return carte;
+    }
+
+    async function rafraichirPiecesDrive(dossierId) {
+      listeFichiers.innerHTML = '';
+
+      const fichiers = await drive.listerFichiers(jetonDrive, dossierId);
+
+      for (const fichier of fichiers) {
+        listeFichiers.appendChild(carteDeFichierDrive(fichier));
+      }
+    }
+
+    async function chargerDepuisDrive(fichier, bouton) {
+      erreurDrive.hidden = true;
+      bouton.disabled = true;
+      bouton.textContent = 'Chargement…';
+
+      try {
+        const texte = await drive.lireFichier(jetonDrive, fichier.id);
+        traiterTexteDePiece(texte, (message) => signalerErreurDrive(new Error(message)));
+      } catch (erreur) {
+        signalerErreurDrive(erreur);
+      } finally {
+        bouton.disabled = false;
+        bouton.textContent = `Charger « ${fichier.name.replace(/_REPET\.json$/, '')} »`;
+      }
+    }
+
+    /**
+     * Connexion, puis choix du dossier s'il n'y en a pas déjà un de retenu.
+     * Toujours une nouvelle authentification (§4.3) : le jeton expire de
+     * toute façon en ~1h, et une reconnexion silencieuse n'est pas garantie
+     * sur Safari/iPhone (ITP).
+     */
+    async function connecterDrive() {
+      erreurDrive.hidden = true;
+      boutonConnecter.disabled = true;
+      boutonConnecter.textContent = 'Connexion…';
+
+      try {
+        jetonDrive = await drive.authentifier({
+          clientId: CONFIG.DRIVE_CLIENT_ID,
+          scope: CONFIG.DRIVE_SCOPE,
+        });
+
+        let dossier = lire(cleStockage('drive-dossier'));
+
+        if (!dossier) {
+          const choisi = await drive.choisirDossier({
+            apiKey: CONFIG.DRIVE_API_KEY,
+            accessToken: jetonDrive,
+          });
+
+          if (!choisi) {
+            erreurDrive.hidden = false;
+            erreurDrive.textContent = 'Aucun dossier choisi.';
+            return;
+          }
+
+          ecrire(cleStockage('drive-dossier'), choisi);
+          dossier = choisi;
+        }
+
+        afficherDossierDriveActuel();
+        await rafraichirPiecesDrive(dossier.id);
+      } catch (erreur) {
+        signalerErreurDrive(erreur);
+      } finally {
+        boutonConnecter.disabled = false;
+        boutonConnecter.textContent = 'Se connecter à Google Drive';
+      }
+    }
+
+    async function changerDossierDrive() {
+      erreurDrive.hidden = true;
+
+      if (!jetonDrive) {
+        return connecterDrive();
+      }
+
+      try {
+        const choisi = await drive.choisirDossier({
+          apiKey: CONFIG.DRIVE_API_KEY,
+          accessToken: jetonDrive,
+        });
+
+        if (!choisi) {
+          return;
+        }
+
+        ecrire(cleStockage('drive-dossier'), choisi);
+        afficherDossierDriveActuel();
+        await rafraichirPiecesDrive(choisi.id);
+      } catch (erreur) {
+        signalerErreurDrive(erreur);
+      }
+    }
+
+    boutonConnecter.addEventListener('click', connecterDrive);
+    boutonChangerDossier.addEventListener('click', changerDossierDrive);
+
+    afficherDossierDriveActuel();
+  })();
 })();
 </script>
 </body>

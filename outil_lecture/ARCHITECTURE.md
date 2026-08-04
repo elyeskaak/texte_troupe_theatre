@@ -1081,7 +1081,7 @@ de §11 et n'a donc pas besoin d'être mentionné dans le modèle de §5.
 
 | # | Décision | Retenu | Où cela se lit |
 |---|---|---|---|
-| 5 | Distribution de l'outil | **Publié sur GitHub Pages**, en plus du double-clic local ; le double-clic reste pleinement fonctionnel pour l'import manuel | §1, §2.2 |
+| 5 | Distribution de l'outil | **Publié sur GitHub Pages**, en plus du double-clic local ; le double-clic reste pleinement fonctionnel pour l'import manuel. Constaté à l'implémentation : rien à activer, la publication du dépôt entier (faite pour `outil_repetition`) couvrait déjà `outil_lecture` | §1, §2.2 |
 | 6 | Source Drive, portée de l'accès | **Google Picker + scope `drive.file`**, identique à `outil_repetition` | §4.3 |
 | 7 | Emplacement du client Drive | **Module partagé `pieces/drive.js`**, importé dynamiquement, plutôt que dupliqué | §4.1, §4.2, §4.3 |
 
@@ -1101,7 +1101,7 @@ DOM.
 | 4 | ✅ *fait* — écran de préparation + attribution personnage → slot (§6), reprise de session | import → attribution → démarrage → reprise, vérifié de bout en bout |
 | 5 | ✅ *fait* — fenêtre de contrôle + `BroadcastChannel` (§7) | prénom diffusé, popup bloquée gérée |
 | 6 | ✅ *fait* — `README.md`, `.gitignore` (`outil_lecture/pieces/`), lien depuis le `README.md` racine | relecture |
-| 7 | ⬜ *à faire* — publication GitHub Pages, `import('../pieces/drive.js')` + section « Charger depuis Google Drive » (§4.3, §13 pts 5-7) | pièce chargée depuis Drive sur ordinateur et sur iPhone/iPad, `file://` toujours fonctionnel en repli |
+| 7 | ✅ *fait* — `import('../pieces/drive.js')` + section « Charger depuis Google Drive » (§4.3, §13 pts 5-7). La publication GitHub Pages était déjà active (le repo entier y est servi depuis `outil_repetition`) | `file://` toujours fonctionnel en repli ; **reste à éprouver Drive en vrai** sur ordinateur et iPhone/iPad |
 
 **Les six premières étapes sont livrées.** Reste, à l'usage réel
 (vidéoprojecteur, deuxième écran, plusieurs lecteurs), à confirmer la

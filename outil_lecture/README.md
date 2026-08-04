@@ -11,9 +11,14 @@ particulier §2 (pourquoi cet outil lit un `REPET.json` plutôt que le format
 
 ## Usage
 
-1. Ouvrir `index.html` par double-clic — aucune installation, aucun serveur.
-2. Charger un `<Pièce>_REPET.json`, produit par `outil_edition` (même fichier
-   que celui utilisé par `outil_repetition`).
+1. Ouvrir `index.html` par double-clic (aucune installation, aucun serveur),
+   ou depuis sa version publiée en HTTPS — nécessaire pour Google Drive
+   ci-dessous (§4.3 de `ARCHITECTURE.md`).
+2. Charger un `<Pièce>_REPET.json` : soit un fichier choisi à la main (produit
+   par `outil_edition`, même fichier que celui utilisé par `outil_repetition`),
+   soit **« Se connecter à Google Drive »** — visible seulement en HTTPS —
+   pour choisir un dossier une fois et retrouver ses pièces à chaque ouverture
+   sans réimporter de fichier.
 3. Attribuer chaque personnage détecté à un slot (H1-H5, F1-F5) — plusieurs
    personnages peuvent partager le même slot.
 4. Optionnel : ouvrir la fenêtre de contrôle et la déplacer sur le deuxième
