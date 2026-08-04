@@ -251,6 +251,15 @@ MOTIF_AVANT_PAGE = re.compile(r"(?=^\s*\[PAGE\s+\d+\]\s*$)", re.MULTILINE | re.I
 MOTIF_ROMAIN = re.compile(r"^[IVXLCDM]+$")
 MOTIF_ARABE = re.compile(r"^\d+$")
 
+# Numéro suivi d'un titre sur la même ligne : « I. L'évasion. », « 3 - Le
+# duel ». Convention courante au théâtre moderne (Koltès, entre autres),
+# absente du lexique ACTE/SCÈNE mais tout aussi certaine qu'un numéro seul —
+# voir `_numero_pur`. Restreint aux chiffres romains et arabes : un numéro
+# écrit en toutes lettres entrerait en collision avec de vrais noms de
+# personnages récurrents du répertoire classique (« PREMIER GARDIEN »,
+# « SECOND GARDIEN »), qui ne sont pas des titres numérotés.
+MOTIF_NUMERO_AVEC_TITRE = re.compile(r"^([IVXLCDM]+|\d+)\s*[.\-:)]\s+\S")
+
 # Ponctuation finale retirée lors de la normalisation d'un label.
 MOTIF_PONCTUATION_FINALE = re.compile(r"[.:;,!?\s]+$")
 
@@ -997,31 +1006,55 @@ def est_ligne_de_replique(ligne: str) -> bool:
 # ============================================================
 
 
+def _numero_pur(label: str) -> str:
+    """
+    Réduit un label à son seul jeton de numéro, titre éventuel retiré.
+
+    « I. L'évasion » perd son titre et devient « I » ; « I » et « PREMIER »,
+    déjà purs, sont rendus tels quels. C'est le point de passage unique par
+    lequel `style_numerotation` et `valeur_numerotation` ignorent un titre
+    accolé, sans avoir chacune à savoir le repérer.
+    """
+    correspondance = MOTIF_NUMERO_AVEC_TITRE.match(label)
+
+    return label if correspondance is None else correspondance.group(1)
+
+
 def style_numerotation(label: str) -> str | None:
     """
     Identifie le style de numérotation d'un label, s'il en est un.
 
+    Reconnaît aussi bien un numéro seul (« UN », « II », « 3 ») qu'un numéro
+    suivi d'un titre sur la même ligne (« I. L'évasion. ») : dans les deux
+    cas, c'est un titre certain dont seul le niveau — acte ou scène — reste à
+    déterminer par `_resoudre_niveaux`.
+
     Returns:
-        « romain », « arabe », « ecrit », ou None si le label n'est pas un pur
-        jeton de numérotation.
+        « romain », « arabe », « ecrit », ou None si le label n'est pas un
+        jeton de numérotation, titre accolé ou non.
     """
     if not label:
         return None
 
-    if label in config.NOMBRES_ECRITS:
+    numero = _numero_pur(label)
+
+    if numero in config.NOMBRES_ECRITS:
         return "ecrit"
 
-    if MOTIF_ROMAIN.match(label):
+    if MOTIF_ROMAIN.match(numero):
         return "romain"
 
-    if MOTIF_ARABE.match(label):
+    if MOTIF_ARABE.match(numero):
         return "arabe"
 
     return None
 
 
 def est_jeton_numerotation(label: str) -> bool:
-    """Vrai si le label n'est qu'un numéro (« UN », « II », « 3 »)."""
+    """
+    Vrai si le label est un numéro, seul (« UN », « II », « 3 ») ou suivi d'un
+    titre sur la même ligne (« I. L'évasion. »).
+    """
     return style_numerotation(label) is not None
 
 
@@ -1039,17 +1072,23 @@ def _valeur_romaine(label: str) -> int:
 
 
 def valeur_numerotation(label: str) -> int | None:
-    """Valeur entière d'un jeton de numérotation, ou None."""
+    """
+    Valeur entière d'un jeton de numérotation, ou None.
+
+    Un titre accolé (« I. L'évasion. ») est retiré avant conversion, comme
+    dans `style_numerotation` — voir `_numero_pur`.
+    """
     style = style_numerotation(label)
+    numero = _numero_pur(label)
 
     if style == "arabe":
-        return int(label)
+        return int(numero)
 
     if style == "romain":
-        return _valeur_romaine(label)
+        return _valeur_romaine(numero)
 
     if style == "ecrit":
-        return _VALEURS_ECRITES.get(label)
+        return _VALEURS_ECRITES.get(numero)
 
     return None
 

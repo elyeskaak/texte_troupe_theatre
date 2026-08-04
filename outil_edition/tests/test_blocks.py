@@ -332,6 +332,76 @@ class TestNumerotation(unittest.TestCase):
         self.assertIsNone(valeur_numerotation("JAN"))
 
 
+class TestNumeroAvecTitre(unittest.TestCase):
+    """
+    « I. L'évasion. » — un numéro suivi d'un titre sur la même ligne, convention
+    de scène numérotée courante au théâtre moderne (Koltès, entre autres).
+
+    Le cas typique : `Roberto Zucco` numérote ses quinze scènes ainsi, sans le
+    mot « Acte » ni « Scène ». Sans cette reconnaissance, chaque en-tête
+    devenait un faux personnage d'une réplique — silencieusement, aucune scène
+    ne se formait, et la pièce entière s'affichait comme une unité unique.
+    """
+
+    def test_romain_avec_titre_est_reconnu(self):
+        self.assertEqual(style_numerotation("I. L'EVASION"), "romain")
+        self.assertTrue(est_jeton_numerotation("I. L'EVASION"))
+
+    def test_arabe_avec_titre_est_reconnu(self):
+        self.assertEqual(style_numerotation("3 - LE DUEL"), "arabe")
+
+    def test_la_valeur_est_celle_du_numero_seul(self):
+        self.assertEqual(valeur_numerotation("XIV. L'ARRESTATION"), 14)
+        self.assertEqual(valeur_numerotation("3 - LE DUEL"), 3)
+
+    def test_un_nom_de_personnage_nest_pas_confondu(self):
+        """
+        « PREMIER GARDIEN » ne doit jamais devenir un titre numéroté : c'est un
+        rôle récurrent du répertoire classique, pas une scène numérotée en
+        toutes lettres. D'où la restriction de `MOTIF_NUMERO_AVEC_TITRE` aux
+        seuls chiffres romains et arabes, qui ne collisionnent pas avec un nom.
+        """
+        self.assertIsNone(style_numerotation("PREMIER GARDIEN"))
+        self.assertFalse(est_jeton_numerotation("PREMIER GARDIEN"))
+        self.assertIsNone(style_numerotation("SECOND GARDIEN"))
+
+    def test_un_numero_seul_reste_inchange(self):
+        """Le comportement déjà couvert par TestNumerotation ne doit pas bouger."""
+        self.assertEqual(style_numerotation("III"), "romain")
+        self.assertEqual(valeur_numerotation("III"), 3)
+
+    def test_un_titre_colle_sans_separateur_n_est_pas_reconnu(self):
+        """Sans ponctuation après le numéro, l'ambiguïté est trop grande."""
+        self.assertIsNone(style_numerotation("I EVASION"))
+
+    def test_classe_comme_titre_de_bout_en_bout(self):
+        """
+        Contrôle de bout en bout, comme pour un numéro seul : le classement
+        réel sur un texte complet, pas seulement la fonction isolée.
+        """
+        texte = (
+            "**I. L'évasion.**\n"
+            "Le chemin de ronde.\n"
+            "\n"
+            "**PREMIER GARDIEN.**\n"
+            "Tu as entendu quelque chose ?\n"
+            "\n"
+            "**II. Meurtre de la mère.**\n"
+            "Dans la cuisine.\n"
+            "\n"
+            "**PREMIER GARDIEN.**\n"
+            "Encore.\n"
+        )
+        index = construire_index_structure(texte)
+        lignes = classifier_document(texte, index)
+
+        titres = [l.texte for l in lignes if l.type is TypeLigne.TITRE_ACTE]
+        personnages = {l.texte for l in lignes if l.type is TypeLigne.PERSONNAGE}
+
+        self.assertEqual(titres, ["I. L'évasion.", "II. Meurtre de la mère."])
+        self.assertEqual(personnages, {"PREMIER GARDIEN."})
+
+
 # ============================================================
 # 6. RECENSEMENT DE LA DISTRIBUTION
 # ============================================================

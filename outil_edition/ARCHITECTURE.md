@@ -913,7 +913,7 @@ statistiques qu'en dernier ressort.
 | 0 bis | Correspond à `ETIQUETTES_DISTRIBUTION` | **DISTRIBUTION** | certaine |
 | 1 | Correspond à `LEXIQUE_ACTE` | **ACTE** | certaine |
 | 2 | Correspond à `LEXIQUE_SCENE` | **SCÈNE** | certaine |
-| 3 | Est un pur jeton de numérotation (`UN`, `II`, `3`, `PREMIÈRE`) | titre → passe C | déduite |
+| 3 | Est un jeton de numérotation, seul (`UN`, `II`, `3`) ou suivi d'un titre sur la même ligne (`I. L'évasion.`) | titre → passe C | déduite |
 | 4 | Figure dans la liste de personnages relevée en tête d'ouvrage | **PERSONNAGE** | certaine |
 | 5 | Est suivi au moins une fois d'une ligne de réplique | **PERSONNAGE** | probable |
 | 6 | Apparaît ≥ `SEUIL_OCCURRENCES_PERSONNAGE` fois | **PERSONNAGE** | probable |
@@ -955,10 +955,14 @@ existe, `recenser_personnages()` l'analyse et alimente `personnages_connus` : la
 classification devient alors quasi certaine pour tous les rôles, y compris ceux
 qui ne parlent qu'une fois.
 
-#### Passe C — résoudre le niveau d'un titre purement numéroté
+#### Passe C — résoudre le niveau d'un titre numéroté
 
 Reste le cas de `**UN.**` : titre certain, mais acte ou scène ? Il se tranche par
-l'**inférence de hiérarchie**, au niveau du document entier :
+l'**inférence de hiérarchie**, au niveau du document entier. La même question se
+pose, et se résout de la même façon, pour un numéro suivi d'un titre sur la même
+ligne (`**I. L'évasion.**`, convention de Koltès entre autres) : `_numero_pur()`
+retire le titre avant que `style_numerotation()` et `valeur_numerotation()`
+n'examinent le jeton, si bien que tout ce qui suit ignore la distinction.
 
 1. **Si des titres lexicaux `ACTE` existent** et que des titres numérotés
    existent aussi → les titres numérotés sont des **scènes** imbriquées.
