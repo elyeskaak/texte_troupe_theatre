@@ -223,9 +223,11 @@
    * l'impression que deux répliques se disputaient l'attention, plutôt
    * qu'une vraie mise en avant de la seule réplique courante. Remplacé par
    * un dégradé continu : `--opacite` et `--echelle` sont calculées par
-   * `appliquerGradient()` (§8.1) selon la distance à la position courante,
-   * et décroissent progressivement au lieu de sauter entre deux valeurs.
-   * Une diapo hors de portée du dégradé retombe sur les valeurs par défaut
+   * `mettreAJourDegrade()` (§9.1) à partir de la distance réelle en pixels
+   * entre chaque diapo et le centre de l'écran — recalculée à chaque frame
+   * de défilement, pas seulement quand la diapo la plus proche du centre
+   * change, pour un zoom continu plutôt qu'un rattrapage par à-coups. Une
+   * diapo hors de portée du dégradé retombe sur les valeurs par défaut
    * ci-dessous (le cas normal : la grande majorité de la pièce, à tout
    * instant).
    */
@@ -1531,79 +1533,19 @@ function mettreAJourPrenoms(container, prenoms) {
 }
 
 /**
- * Fenêtre d'indices affectée par le dégradé au tour précédent
- * (`{ debut, fin }`), pour l'effacer proprement au tour suivant sans
- * parcourir toute la liste de diapos. Voir `appliquerGradient`.
- */
-let _porteeGradient = null;
-
-/**
- * Calcule et applique un dégradé continu de taille/opacité autour de la
- * position courante (§8.1, révisé une seconde fois à l'usage) : la réplique
- * courante est pleine taille, les voisines diminuent progressivement avec
- * la distance, jusqu'à un plancher au-delà de `CONFIG.PORTEE_GRADIENT`
- * diapos. Remplace l'ancien système à trois paliers fixes (actif / suivant
- * / reste), qui donnait l'impression que deux répliques se disputaient
- * l'attention plutôt qu'un vrai fondu vers la réplique courante.
- *
- * N'écrit que sur une fenêtre bornée autour de la position (2 × portée + 1
- * indices), jamais sur la liste entière : le coût reste constant même sur
- * une pièce de plusieurs milliers d'éléments. La fenêtre précédente est
- * effacée (`removeProperty`, retour au plancher défini en CSS) avant
- * d'appliquer la nouvelle — sans quoi un grand saut (clic, sommaire, §8.6)
- * laisserait une diapo lointaine agrandie par erreur.
- *
- * Plusieurs index consécutifs peuvent partager le même `element` (les
- * pages d'une réplique fusionnée, §8.5) : les indices sont donc parcourus
- * **du plus éloigné vers le plus proche** de `position`, pour qu'un
- * élément partagé reçoive en définitive la valeur de son sous-index le
- * plus proche — sans cet ordre, la dernière écriture pourrait provenir
- * d'une page plus lointaine et sous-évaluer la mise en avant du bloc.
- */
-function appliquerGradient(diapos, position) {
-  const portee = CONFIG.PORTEE_GRADIENT;
-  const debut = Math.max(0, position - portee);
-  const fin = Math.min(diapos.length - 1, position + portee);
-
-  if (_porteeGradient) {
-    for (let i = _porteeGradient.debut; i <= _porteeGradient.fin; i += 1) {
-      if (i < debut || i > fin) {
-        diapos[i].element.style.removeProperty('--opacite');
-        diapos[i].element.style.removeProperty('--echelle');
-      }
-    }
-  }
-
-  const indices = [];
-
-  for (let i = debut; i <= fin; i += 1) {
-    indices.push(i);
-  }
-
-  indices.sort((a, b) => Math.abs(b - position) - Math.abs(a - position));
-
-  for (const i of indices) {
-    const t = Math.min(1, Math.abs(i - position) / portee);
-    diapos[i].element.style.setProperty('--opacite', (1 - t * 0.75).toFixed(3));
-    diapos[i].element.style.setProperty('--echelle', (1 - t * 0.5).toFixed(3));
-  }
-
-  _porteeGradient = { debut, fin };
-}
-
-/**
- * Change l'élément mis en avant : dégradé continu (`appliquerGradient`) plus
- * la classe `.actif`, qui sert de sélecteur pour la taille de police de la
- * réplique courante (§8.2). Posée sur `diapos[position].element` : pour une
- * réplique fusionnée sur plusieurs pages (§8.5), c'est le même élément pour
- * toutes ses pages, qui reste donc `.actif` tant qu'on y navigue.
+ * Change l'élément mis en avant : classe `.actif` (sélecteur CSS, §8.2),
+ * plus le défilement qui l'amène à l'écran. Le dégradé de taille/opacité
+ * n'est plus calculé ici (§9.1, révisé à l'usage) : il dépend de la
+ * position réelle en pixels dans la fenêtre, mesurée en continu pendant
+ * le défilement lui-même (`mettreAJourDegrade`, câblé dans la projection),
+ * pas seulement au moment où la position logique change.
  *
  * @param {boolean} defiler par défaut `true` (clavier, clic, sommaire) :
  *   fait défiler vers `diapos[position].ancre` — le conteneur entier pour
  *   une première page, une ancre interne sinon (§8.5). À `false` quand
- *   l'appelant est le suivi de défilement libre (§9, `suivreDefilement`) :
- *   la position visible a déjà été choisie par le geste de la personne qui
- *   lit (roulette, tactile), la contrarier avec un second défilement
+ *   l'appelant est le suivi de défilement libre (§9.1) : la position
+ *   visible a déjà été choisie par le geste de la personne qui lit
+ *   (roulette, tactile), la contrarier avec un second défilement
  *   programmatique serait exactement l'inverse de ce qui est demandé.
  *
  * Le défilement recentre l'ancre (`block: 'center'`) — sauf si le bloc
@@ -1618,8 +1560,6 @@ function afficherPosition(diapos, position, defiler = true) {
   diapos.forEach(({ element }) => {
     element.classList.toggle('actif', element === actif);
   });
-
-  appliquerGradient(diapos, position);
 
   if (!defiler) {
     return;
@@ -2171,24 +2111,41 @@ if (MODE_FENETRE === 'projection') (() => {
     rafraichirProgression();
     planifierEcritureSession();
     diffuserPosition();
+    // Synchronise le dégradé tout de suite : si la diapo visée est déjà à
+    // l'écran, `scrollIntoView` ne déclenche aucun événement `scroll` pour
+    // le recalculer autrement (§9.1).
+    planifierMiseAJourDegrade();
   }
 
-  // --- défilement libre : roulette de souris, tactile (iPhone…) ----------
-  // Retour d'usage : le clavier n'existe pas sur iPhone, et rien ne
-  // recalait la position quand on défilait simplement à la roulette sur
-  // ordinateur — `#contenu-projection` défile nativement (`overflow-y:
-  // auto`, §8.1) mais rien ne suivait ce défilement. Un IntersectionObserver
-  // détecte quelle diapo occupe le centre de l'écran et la rend active,
-  // sans jamais imposer son propre défilement (`afficherPosition(…, false)`)
-  // — on suit le geste de lecture, on ne le contrarie jamais.
+  // --- défilement libre et dégradé continu : pilotés par la position ------
+  // --- reelle en pixels, recalculee a chaque frame de defilement ----------
+  //
+  // Retour d'usage, deux fois : (1) le clavier n'existe pas sur iPhone, et
+  // rien ne recalait la position quand on défilait simplement à la roulette
+  // sur ordinateur ; (2) le dégradé, calculé seulement quand une NOUVELLE
+  // diapo franchissait le centre (IntersectionObserver), ne bougeait pas
+  // entre deux franchissements — un effet de rattrapage saccadé, pas un
+  // zoom continu, alors même que le geste de défilement, lui, est continu.
+  //
+  // Un seul mécanisme résout les deux : `mettreAJourDegrade`, rappelé à
+  // chaque événement `scroll` (limité à une fois par frame via
+  // `requestAnimationFrame`), mesure la position réelle en pixels de
+  // chaque diapo proche et en déduit à la fois la diapo la plus proche du
+  // centre (position logique, §9) et un dégradé d'opacité/échelle
+  // continu — pas par étapes d'index, par distance réelle à l'écran.
 
-  let observateurDefilement = null;
+  let derniereFenetreDegrade = null;
+  let rafDegradeEnAttente = null;
   let defilementProgrammatiqueJusqua = 0;
 
   /**
-   * Fenêtre pendant laquelle le suivi de défilement libre s'ignore
-   * lui-même : la durée d'une animation `scrollIntoView({behavior:
-   * 'smooth'})` n'est pas standardisée, 600 ms est une marge confortable.
+   * Fenêtre pendant laquelle un changement de diapo la plus proche du
+   * centre ne déclenche pas `suivreDefilement` : la durée d'une animation
+   * `scrollIntoView({behavior: 'smooth'})` n'est pas standardisée, 600 ms
+   * est une marge confortable. Le dégradé visuel, lui, continue de se
+   * recalculer normalement pendant cette fenêtre — l'animation programmée
+   * fait défiler l'écran comme un défilement libre ferait, le zoom doit
+   * rester continu pendant qu'elle se déroule.
    */
   function marquerDefilementProgrammatique() {
     defilementProgrammatiqueJusqua = Date.now() + 600;
@@ -2218,58 +2175,117 @@ if (MODE_FENETRE === 'projection') (() => {
   }
 
   /**
-   * (Re)construit l'observateur de défilement sur les diapos actuellement
-   * montées — appelé une fois par pièce démarrée (§10b), après le montage.
-   * Absent silencieusement replié (§11) si `IntersectionObserver` n'existe
-   * pas : la navigation clavier, le clic et le sommaire restent utilisables
-   * sans lui, ce n'est un confort en plus, jamais le seul chemin.
+   * Mesure, pour chaque diapo dans une fenêtre bornée autour du CENTRE
+   * RÉEL de l'écran, la distance en pixels entre son centre et le centre
+   * de l'écran — pas un nombre d'index, une position physique. En déduit
+   * un dégradé continu d'opacité/échelle (`t = distance / demi-hauteur
+   * d'écran`), et repère quelle diapo est la plus proche du centre pour
+   * mettre à jour la position logique (§9) si elle a changé, sauf
+   * pendant un défilement programmatique en cours.
+   *
+   * La fenêtre est centrée sur `document.elementFromPoint` (la diapo
+   * réellement affichée au centre de l'écran à cet instant), PAS sur
+   * l'ancienne `position` : un grand saut de défilement (un flick rapide,
+   * ou un saut de plusieurs écrans) peut faire sortir la position logique
+   * de toute fenêtre bornée autour d'elle-même — dans ce cas une fenêtre
+   * centrée sur la position ne verrait jamais la nouvelle zone visible et
+   * resterait bloquée indéfiniment. `elementFromPoint` retrouve toujours
+   * la bonne diapo quel que soit l'ampleur du saut.
+   *
+   * Toutes les lectures de mise en page (`getBoundingClientRect`) sont
+   * groupées avant les écritures de style (`setProperty`), même principe
+   * que `mesurerMotsParPage` (§8.5) : entrelacer les deux forcerait une
+   * mise en page du navigateur par diapo au lieu d'une par frame.
+   *
+   * Coût borné à `2 × (portée + 2) + 1` mesures, jamais toute la pièce :
+   * reste rapide même appelé à chaque frame pendant un défilement rapide.
    */
-  function activerSuiviDefilement() {
-    if (typeof IntersectionObserver === 'undefined') {
+  function mettreAJourDegrade() {
+    rafDegradeEnAttente = null;
+
+    if (diapos.length === 0) {
       return;
     }
 
-    if (observateurDefilement) {
-      observateurDefilement.disconnect();
+    const rectConteneur = contenu.getBoundingClientRect();
+    const centreEcran = rectConteneur.top + rectConteneur.height / 2;
+    const demiHauteur = rectConteneur.height / 2 || 1;
+    const portee = CONFIG.PORTEE_GRADIENT;
+
+    let indexCentre = position;
+    if (typeof document.elementFromPoint === 'function') {
+      const centreX = rectConteneur.left + rectConteneur.width / 2;
+      const elementAuCentre = document.elementFromPoint(centreX, centreEcran);
+      const diapoAuCentre = elementAuCentre && elementAuCentre.closest
+        ? elementAuCentre.closest('.diapo')
+        : null;
+
+      if (diapoAuCentre && diapoAuCentre.dataset.index !== undefined) {
+        indexCentre = Number(diapoAuCentre.dataset.index);
+      }
     }
 
-    const indexParElement = new Map();
+    const debut = Math.max(0, indexCentre - portee - 2);
+    const fin = Math.min(diapos.length - 1, indexCentre + portee + 2);
 
-    diapos.forEach((diapo, index) => {
-      if (!indexParElement.has(diapo.element)) {
-        indexParElement.set(diapo.element, index);
+    const distanceParElement = new Map();
+    let plusProche = indexCentre;
+    let distanceMinimale = Infinity;
+
+    for (let i = debut; i <= fin; i += 1) {
+      const { element, ancre } = diapos[i];
+      const rect = ancre.getBoundingClientRect();
+      const centreAncre = rect.top + rect.height / 2;
+      const distance = Math.abs(centreAncre - centreEcran);
+
+      // Une réplique fusionnée sur plusieurs pages (§8.5) partage un même
+      // `element` entre plusieurs index : on ne garde que la distance la
+      // plus courte parmi ses pages, celle qui représente le mieux à quel
+      // point ce bloc est proche du centre.
+      const distanceExistante = distanceParElement.get(element);
+
+      if (distanceExistante === undefined || distance < distanceExistante) {
+        distanceParElement.set(element, distance);
       }
-    });
 
-    // `rootMargin` négatif en haut et en bas : seule une bande fine autour
-    // du centre vertical de l'écran compte comme « intersectante ». C'est
-    // cette bande, pas le viewport entier, qui définit « la diapo qu'on
-    // regarde ».
-    observateurDefilement = new IntersectionObserver(
-      (entrees) => {
-        if (Date.now() < defilementProgrammatiqueJusqua) {
-          return;
+      if (distance < distanceMinimale) {
+        distanceMinimale = distance;
+        plusProche = i;
+      }
+    }
+
+    if (derniereFenetreDegrade) {
+      for (let i = derniereFenetreDegrade.debut; i <= derniereFenetreDegrade.fin; i += 1) {
+        if (i < debut || i > fin) {
+          diapos[i].element.style.removeProperty('--opacite');
+          diapos[i].element.style.removeProperty('--echelle');
         }
+      }
+    }
 
-        const entree = entrees.find((e) => e.isIntersecting);
+    for (const [element, distance] of distanceParElement) {
+      const t = Math.min(1, distance / demiHauteur);
+      element.style.setProperty('--opacite', (1 - t * 0.75).toFixed(3));
+      element.style.setProperty('--echelle', (1 - t * 0.5).toFixed(3));
+    }
 
-        if (!entree) {
-          return;
-        }
+    derniereFenetreDegrade = { debut, fin };
 
-        const index = indexParElement.get(entree.target);
-
-        if (index !== undefined) {
-          suivreDefilement(index);
-        }
-      },
-      { root: contenu, rootMargin: '-45% 0px -45% 0px', threshold: 0 }
-    );
-
-    for (const element of indexParElement.keys()) {
-      observateurDefilement.observe(element);
+    if (Date.now() >= defilementProgrammatiqueJusqua && plusProche !== position) {
+      suivreDefilement(plusProche);
     }
   }
+
+  /** Limite `mettreAJourDegrade` à une fois par frame (§9.1). */
+  function planifierMiseAJourDegrade() {
+    if (rafDegradeEnAttente) {
+      return;
+    }
+
+    rafDegradeEnAttente = requestAnimationFrame(mettreAJourDegrade);
+  }
+
+  contenu.addEventListener('scroll', planifierMiseAJourDegrade, { passive: true });
 
   /**
    * @param {object} piecePreparee
@@ -2303,6 +2319,11 @@ if (MODE_FENETRE === 'projection') (() => {
     diapos = monterProjection(contenu, elements, cast, prenoms, couleursSlotCourant);
     construirePanneauSommaire(panneauSommaire, sommaire);
 
+    // Remis à zéro à chaque démarrage (§9.1) : une pièce précédente, plus
+    // courte, pourrait avoir laissé une fenêtre référençant des index hors
+    // bornes pour celle-ci.
+    derniereFenetreDegrade = null;
+
     // Jamais démarrer sur une transition de scène (§9, eviterScene) : on
     // avance directement à la première réplique réelle de la pièce (ou de
     // la scène reprise, si une position sauvegardée y correspond).
@@ -2321,10 +2342,7 @@ if (MODE_FENETRE === 'projection') (() => {
     afficherPosition(diapos, position);
     rafraichirProgression();
     diffuserPosition();
-
-    // Après le montage, jamais avant : l'observateur a besoin des diapos
-    // réellement dans le DOM pour mesurer leurs positions (§9).
-    activerSuiviDefilement();
+    planifierMiseAJourDegrade();
   }
 
   document.addEventListener('keydown', (evenement) => {

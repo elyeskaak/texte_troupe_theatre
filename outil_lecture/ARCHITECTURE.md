@@ -461,6 +461,14 @@ seul — déjà continu, déjà piloté par `appliquerGradient` — qui la fait
 paraître plus grande ou plus petite selon la distance à la position
 courante. Un zoom sans palier nulle part, du centre vers les bords.
 
+**Devenu depuis (§9.1) :** `appliquerGradient` calculait ce dégradé à partir
+d'une distance d'*index* (nombre de diapos d'écart), recalculée seulement
+quand la position changeait. Remplacé par `mettreAJourDegrade`, qui calcule
+la même idée à partir d'une distance réelle en *pixels*, recalculée en
+continu pendant le geste de défilement lui-même — voir §9.1 pour le détail
+et la raison du changement (retour d'usage : « le défilement reste
+saccadé »).
+
 ### 8.2 Couleur et étiquette
 
 Palette fixe de 10 couleurs (§12), indexée par slot, jamais par prénom : une
@@ -764,36 +772,90 @@ clic. Sur iPhone, sans clavier physique, c'était plus grave : la flèche
 n'existe pas, donc la seule navigation restante (clic, sommaire) imposait
 de viser précisément une diapo à chaque geste.
 
-`activerSuiviDefilement()` observe toutes les diapos montées avec un
-`IntersectionObserver`, `rootMargin` réduit à une bande fine autour du
-centre vertical de l'écran (`-45% 0px -45% 0px`) : la diapo qui traverse
-cette bande devient active via `suivreDefilement(index)` — même écriture de
-classe et dégradé que la navigation habituelle (`afficherPosition`), mais
-**sans jamais déclencher son propre défilement** (`afficherPosition(diapos,
-position, false)`, §8.1) : on suit le geste de la personne qui lit, on ne
-le contrarie jamais avec un second défilement programmatique qui
-partirait dans une autre direction.
+Une première version suivait toutes les diapos montées avec un
+`IntersectionObserver` (`rootMargin` réduit à une bande fine autour du
+centre vertical de l'écran). **Retour d'usage : « Le défilement reste
+saccadé ».** Cause racine : un `IntersectionObserver` ne notifie que par
+à-coups — quand une diapo *franchit* le seuil de la bande — jamais en
+continu pendant le geste de défilement lui-même. Le dégradé (zoom/opacité)
+ne se recalculait donc qu'à ces franchissements discrets, produisant un
+effet de rattrapage brusque au lieu d'un zoom/dézoom progressif.
+
+**Remplacement complet par un système piloté au pixel près,** sur
+l'événement natif `scroll` de `#contenu-projection` plutôt que sur les
+seuils d'un `IntersectionObserver` :
+
+- `mettreAJourDegrade()` mesure, pour chaque diapo dans une fenêtre bornée
+  (`2 × CONFIG.PORTEE_GRADIENT + 5` diapos), la distance réelle en pixels
+  entre son centre (`getBoundingClientRect`) et le centre de l'écran, et en
+  déduit un dégradé continu (`t = distance / demi-hauteur d'écran`,
+  `--opacite = 1 - t·0.75`, `--echelle = 1 - t·0.5`) — une vraie interpolation
+  physique, pas un palier par index ;
+- `planifierMiseAJourDegrade()` limite l'exécution à une fois par frame
+  (`requestAnimationFrame`), pour rester fluide même pendant un défilement
+  rapide ;
+- toutes les lectures de mise en page sont groupées avant les écritures de
+  style, même principe que `mesurerMotsParPage` (§8.5), pour ne forcer
+  qu'une seule mise en page du navigateur par frame.
+
+**Trouver quelle diapo est au centre — pas seulement lui appliquer un
+dégradé.** Une première mouture de cette réécriture centrait la fenêtre de
+mesure sur l'ancienne position logique (`position ± portée`), en supposant
+un défilement progressif, quelques diapos à la fois. **Bug détecté par un
+test simulant un grand saut de défilement** (un flick rapide, ou un saut de
+plusieurs écrans en une frame) : la fenêtre restait centrée sur l'ancienne
+position, ne voyait donc jamais la nouvelle zone visible, et la position
+logique restait bloquée indéfiniment — aucune diapo n'était jamais assez
+proche pour être détectée comme centre. Corrigé en retrouvant la diapo
+réellement affichée au centre via `document.elementFromPoint(x, y)` (fiable
+quelle que soit l'ampleur du saut, car indépendant de toute fenêtre bornée),
+puis en centrant la fenêtre de mesure du dégradé sur *cette* diapo plutôt
+que sur l'ancienne position. Si `elementFromPoint` ne retourne rien de
+pertinent (ex. très vieux navigateur), repli silencieux sur l'ancienne
+position — un défilement peut alors rester temporairement moins précis,
+jamais bloqué (§11).
 
 **Point délicat : distinguer un défilement libre d'un défilement
 programmatique.** `allerA` et le démarrage appellent aussi
 `scrollIntoView` (via `afficherPosition`, `defiler = true`) pour amener la
 diapo choisie par flèche/clic/sommaire à l'écran — et cette animation
-traverse elle aussi la bande centrale, donc déclencherait l'observateur en
-retour si rien ne l'en empêchait, avec le risque qu'une diapo intermédiaire
-croisée en cours d'animation supplante la cible réelle.
-`marquerDefilementProgrammatique()` pose une fenêtre de 600 ms (une
+génère elle aussi des événements `scroll`, qui déclencheraient
+`suivreDefilement` en retour si rien ne l'en empêchait, avec le risque
+qu'une diapo intermédiaire croisée en cours d'animation supplante la cible
+réelle. `marquerDefilementProgrammatique()` pose une fenêtre de 600 ms (une
 animation `smooth` n'a pas de durée standardisée, cette marge est
-confortable) pendant laquelle l'observateur s'ignore lui-même. Vérifié avec
-un `IntersectionObserver` simulé en Node (pas de vrai layout hors
-navigateur, §8.5) : une intersection simulée pendant la fenêtre
-programmatique n'a aucun effet ; une fois la fenêtre passée, elle déplace
-correctement la diapo active.
+confortable) pendant laquelle `mettreAJourDegrade` continue de mettre à
+jour le dégradé visuel (le zoom reste fluide pendant l'animation
+programmatique elle-même), mais n'appelle plus `suivreDefilement` pour
+changer la position logique.
 
-**Repli, jamais un blocage :** si `IntersectionObserver` est absent (très
-vieux navigateur), `activerSuiviDefilement` ne fait rien silencieusement —
-la navigation clavier, le clic et le sommaire restent pleinement
-utilisables sans lui (§11), le défilement libre n'est qu'un confort de
-plus, jamais le seul chemin.
+Vérifié avec un DOM simulé en Node (`getBoundingClientRect` et
+`elementFromPoint` reproduits à partir d'un `scrollTop` simulé, §8.5) : un
+défilement libre progressif met à jour le dégradé en continu (valeurs
+intermédiaires, pas de palier) et fait suivre la position logique une fois
+la diapo la plus proche identifiée ; un défilement pendant la fenêtre
+programmatique n'a aucun effet sur la position logique ; une fois la
+fenêtre passée, le défilement libre reprend la main normalement. Un second
+test, sur la pièce complète (§8.5, 1248 diapos), a exercé une série de
+sauts de défilement variés — petits, grands, et un saut artificiellement
+énorme — sans qu'aucune exception ne survienne. **Piège méthodologique
+rencontré en écrivant ce test :** un `requestAnimationFrame` simulé de façon
+purement synchrone (`fn(); return 1;`) inverse l'ordre réel du navigateur,
+où l'identifiant de frame est renvoyé (et donc affecté par l'appelant)
+*avant* que le callback ne s'exécute — jamais après. Cet ordre est
+justement ce dont dépend le garde anti-réentrance de
+`planifierMiseAJourDegrade` ; une version synchrone naïve le casse en
+figeant `rafDegradeEnAttente` après le premier appel. Corrigé en simulant
+`requestAnimationFrame` avec `queueMicrotask` (l'appelant reçoit son
+identifiant avant l'exécution du callback), et en attendant explicitement
+un tour de micro-tâches (`attendreFrame()`) après chaque événement simulé
+dans le test.
+
+**Repli, jamais un blocage :** si `document.elementFromPoint` est absent
+(très vieux navigateur), le calcul retombe sur l'ancienne position comme
+centre — la navigation clavier, le clic et le sommaire restent pleinement
+utilisables dans tous les cas (§11), le défilement libre n'est qu'un
+confort de plus, jamais le seul chemin.
 
 **Limite assumée sur iOS :** `requestFullscreen()` n'existe pas dans Safari
 iOS pour un élément arbitraire (limite de la plate-forme, pas de contournement
