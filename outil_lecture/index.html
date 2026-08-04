@@ -249,20 +249,31 @@
   }
 
   /*
-   * En-tête fusionné (retour d'usage) : personnage d'abord, lecteur entre
-   * parenthèses — « Clarissa (Caroline — H1) » — remplace l'ancien duo
-   * pastille de slot + sous-titre personnage séparé.
+   * En-tête fusionné (retour d'usage) : personnage d'abord, prénom du
+   * lecteur entre parenthèses — « Clarissa (Caroline) ». Un badge `.qui`
+   * par personnage (§2.1) : `.entete-replique` les aligne côte à côte,
+   * avec repli à la ligne si plusieurs voix ne tiennent pas sur une seule
+   * (réplique à plusieurs personnages, schéma `repetition/2`).
    */
+  .diapo.kind-replique .entete-replique {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.5em;
+    margin-bottom: 0.6em;
+    max-width: 92%;
+  }
+
+  .diapo.actif.kind-replique .entete-replique { margin-bottom: 0.9em; }
+
   .diapo.kind-replique .qui {
     font-size: clamp(0.7rem, 1.1vw, 1.2rem);
     font-weight: bold;
     padding: 0.3em 1em;
     border-radius: 999px;
-    margin-bottom: 0.6em;
-    max-width: 90%;
   }
 
-  .diapo.actif.kind-replique .qui { font-size: clamp(1rem, 2vw, 2rem); margin-bottom: 0.9em; }
+  .diapo.actif.kind-replique .qui { font-size: clamp(1rem, 2vw, 2rem); }
 
   .diapo.kind-replique .texte {
     font-size: clamp(0.9rem, 1.8vw, 1.6rem);
@@ -424,8 +435,13 @@
 // ============================================================
 
 const CONFIG = Object.freeze({
-  /** Version de schéma acceptée pour un REPET.json. Toute autre est refusée. */
-  SCHEMA_ACCEPTE: 'repetition/1',
+  /**
+   * Versions de schéma acceptées pour un REPET.json. Toute autre est
+   * refusée. `repetition/2` ajoute les répliques à plusieurs personnages
+   * (`personnages: string[]` remplace `personnage: string`) ; `repetition/1`
+   * reste accepté pour les pièces déjà exportées avec l'ancien schéma.
+   */
+  SCHEMAS_ACCEPTES: Object.freeze(['repetition/1', 'repetition/2']),
 
   /** Les dix slots possibles, dans l'ordre d'affichage de la fenêtre de contrôle. */
   SLOTS: Object.freeze(['H1', 'H2', 'H3', 'H4', 'H5', 'F1', 'F2', 'F3', 'F4', 'F5']),
@@ -519,11 +535,11 @@ function validerRepet(donnees) {
     return _refusValidation('le fichier ne contient pas un objet JSON.');
   }
 
-  if (donnees.schema !== CONFIG.SCHEMA_ACCEPTE) {
+  if (!CONFIG.SCHEMAS_ACCEPTES.includes(donnees.schema)) {
     return _refusValidation(
       `schéma « ${donnees.schema ?? 'absent'} » non reconnu — cette page ` +
-      `attend « ${CONFIG.SCHEMA_ACCEPTE} ». Régénérez le fichier avec la ` +
-      'version correspondante d’outil_edition.'
+      `attend l'un de : ${CONFIG.SCHEMAS_ACCEPTES.join(', ')}. Régénérez le ` +
+      'fichier avec la version correspondante d’outil_edition.'
     );
   }
 
@@ -595,10 +611,23 @@ function _validerElement(element, ou, position) {
     return typeof element.texte === 'string' ? null : `${situe} : champ « texte » absent.`;
   }
 
-  for (const champ of ['id', 'personnage', 'texte']) {
+  for (const champ of ['id', 'texte']) {
     if (typeof element[champ] !== 'string' || element[champ] === '') {
       return `${situe} : réplique sans « ${champ} ».`;
     }
+  }
+
+  // `personnage` (schéma repetition/1, une voix) ou `personnages` (schéma
+  // repetition/2, une ou plusieurs voix) — l'un des deux, jamais ni l'un ni
+  // l'autre, jamais un tableau vide.
+  const aUnePersonnage = typeof element.personnage === 'string' && element.personnage !== '';
+  const aPlusieursPersonnages =
+    Array.isArray(element.personnages) &&
+    element.personnages.length > 0 &&
+    element.personnages.every((p) => typeof p === 'string' && p !== '');
+
+  if (!aUnePersonnage && !aPlusieursPersonnages) {
+    return `${situe} : réplique sans « personnage » ni « personnages » valide.`;
   }
 
   return null;
@@ -646,7 +675,11 @@ function _elementAplati(el, uniteId) {
       kind: 'replique',
       uniteId,
       id: el.id,
-      personnage: el.personnage,
+      // Normalisé en tableau ici, une fois pour toutes : `repetition/1`
+      // donne `personnage` (une voix), `repetition/2` donne `personnages`
+      // (une ou plusieurs). Tout le reste du code ne connaît plus que ce
+      // tableau — jamais les deux formes du schéma d'origine.
+      personnages: Array.isArray(el.personnages) ? el.personnages : [el.personnage],
       texte: el.texte,
       vers: Boolean(el.vers),
       didascaliesInternes: el.didascalies_internes ?? [],
@@ -820,14 +853,18 @@ function creerCanalSynchro() {
   return new BroadcastChannel(CONFIG.CANAL_SYNCHRO);
 }
 
-/** Libellé de rappel affiché dans la fenêtre de contrôle (§7.3). */
-function texteRappelControle(scene, slotQuiParle, prenoms) {
-  if (!slotQuiParle) {
+/**
+ * Libellé de rappel affiché dans la fenêtre de contrôle (§7.3). `slots`
+ * est un tableau — une réplique à plusieurs personnages (§2.1) met
+ * plusieurs slots en jeu à la fois, joints par « + ».
+ */
+function texteRappelControle(scene, slots, prenoms) {
+  if (!slots || slots.length === 0) {
     return scene || '—';
   }
 
-  const libelleSlot = (prenoms && prenoms[slotQuiParle]) || slotQuiParle;
-  return `${scene || '—'}  ·  ${libelleSlot} (${slotQuiParle})`;
+  const libelles = slots.map((slot) => `${(prenoms && prenoms[slot]) || slot} (${slot})`);
+  return `${scene || '—'}  ·  ${libelles.join(' + ')}`;
 }
 
 // ============================================================
@@ -1134,14 +1171,37 @@ function grouperPagesReplique(elements) {
 }
 
 /**
+ * Construit un badge `.qui` pour un seul personnage d'une réplique (§2.1 de
+ * ARCHITECTURE.md : `personnages` est toujours un tableau depuis
+ * `_elementAplati`, même pour une seule voix). Une réplique à plusieurs
+ * personnages (schéma `repetition/2`) affiche un badge par personnage,
+ * chacun dans la couleur de son propre slot — retour d'usage : une seule
+ * couleur pour tout le groupe aurait effacé la distinction entre les voix.
+ */
+function _construireBadgeQui(personnage, cast, prenoms) {
+  const slot = cast[personnage] || null;
+  const couleur = slot ? CONFIG.COULEURS_SLOT[slot] : '#555555';
+
+  const badge = document.createElement('span');
+  badge.className = 'qui';
+  badge.dataset.slot = slot || '';
+  badge.dataset.personnage = personnage;
+  badge.textContent = etiquetteReplique(personnage, slot, prenoms);
+  badge.style.background = couleur;
+  badge.style.color = couleurTexteContrastee(couleur);
+
+  return badge;
+}
+
+/**
  * Construit le conteneur DOM d'une réplique, fusionnant toutes ses pages
- * (une seule si non paginée) en un seul bloc continu : un en-tête unique
- * (`.qui` + `.personnage`), un seul `.texte` qui concatène les segments de
- * toutes les pages. Une ancre invisible (`<span class="ancre-page">`) est
- * insérée à chaque frontière de page — c'est elle, et non le conteneur
- * entier, que la navigation cible pour les pages 2 et suivantes (§8.1) :
- * la flèche droite fait alors défiler *à l'intérieur* du même bloc, sans
- * jamais montrer de coupure.
+ * (une seule si non paginée) en un seul bloc continu : un en-tête (un badge
+ * `.qui` par personnage, §2.1 — un seul dans le cas courant), un seul
+ * `.texte` qui concatène les segments de toutes les pages. Une ancre
+ * invisible (`<span class="ancre-page">`) est insérée à chaque frontière
+ * de page — c'est elle, et non le conteneur entier, que la navigation
+ * cible pour les pages 2 et suivantes (§8.1) : la flèche droite fait alors
+ * défiler *à l'intérieur* du même bloc, sans jamais montrer de coupure.
  *
  * @param {object[]} elementsDuGroupe pages d'une même réplique, dans l'ordre
  * @returns {{diapo: HTMLElement, ancres: HTMLElement[]}} `ancres[0]` n'est
@@ -1150,8 +1210,12 @@ function grouperPagesReplique(elements) {
  */
 function construireDiapoRepliqueFusionnee(elementsDuGroupe, cast, prenoms) {
   const elPremiere = elementsDuGroupe[0];
-  const slot = cast[elPremiere.personnage] || null;
-  const couleur = slot ? CONFIG.COULEURS_SLOT[slot] : '#555555';
+  // Barre d'accent de `.texte` (--couleur) : celle du premier personnage du
+  // groupe. Simplification assumée pour une réplique à plusieurs voix — ce
+  // sont les badges de l'en-tête qui portent la distinction utile, pas
+  // cette bordure décorative.
+  const premierSlot = cast[elPremiere.personnages[0]] || null;
+  const couleur = premierSlot ? CONFIG.COULEURS_SLOT[premierSlot] : '#555555';
 
   const segmentsParPage = elementsDuGroupe.map(
     (el) => el.segments || segmenterAvecDidascalies(el.texte, el.didascaliesInternes)
@@ -1159,19 +1223,16 @@ function construireDiapoRepliqueFusionnee(elementsDuGroupe, cast, prenoms) {
 
   const diapo = document.createElement('div');
   diapo.className = 'diapo kind-replique';
-  diapo.dataset.slot = slot || '';
-  diapo.dataset.personnage = elPremiere.personnage;
   diapo.style.setProperty('--couleur', couleur);
 
-  // En-tête fusionné (retour d'usage) : le personnage d'abord — ce qu'on
-  // lit —, le lecteur entre parenthèses — qui le joue. Remplace l'ancien
-  // duo pastille de slot (en avant) + sous-titre personnage (en petit).
-  const qui = document.createElement('div');
-  qui.className = 'qui';
-  qui.textContent = etiquetteReplique(elPremiere.personnage, slot, prenoms);
-  qui.style.background = couleur;
-  qui.style.color = couleurTexteContrastee(couleur);
-  diapo.appendChild(qui);
+  const entete = document.createElement('div');
+  entete.className = 'entete-replique';
+
+  for (const personnage of elPremiere.personnages) {
+    entete.appendChild(_construireBadgeQui(personnage, cast, prenoms));
+  }
+
+  diapo.appendChild(entete);
 
   const texte = document.createElement('div');
   texte.className = elPremiere.vers ? 'texte vers' : 'texte';
@@ -1315,21 +1376,17 @@ function monterProjection(container, elements, cast, prenoms) {
 }
 
 /**
- * Met à jour l'en-tête de toutes les répliques affichées, sans reconstruire
- * le DOM (§8.2) : appelée quand la fenêtre de contrôle diffuse de nouveaux
- * prénoms (§7.2). L'en-tête fusionne personnage et lecteur
- * (`etiquetteReplique`) : `data-personnage`, posé sur la diapo au montage,
- * est ce qui permet de la recalculer entièrement ici sans redemander le
- * `cast` complet.
+ * Met à jour l'étiquette de tous les badges affichés, sans reconstruire le
+ * DOM (§8.2) : appelée quand la fenêtre de contrôle diffuse de nouveaux
+ * prénoms (§7.2). Un badge par personnage (§2.1, réplique à une ou
+ * plusieurs voix) : `data-slot` et `data-personnage`, posés sur chaque
+ * badge au montage, sont ce qui permet de le recalculer sans redemander le
+ * `cast` complet — et sans toucher aux autres badges de la même réplique.
  */
 function mettreAJourPrenoms(container, prenoms) {
   for (const slot of CONFIG.SLOTS) {
-    container.querySelectorAll(`[data-slot="${slot}"]`).forEach((diapo) => {
-      const qui = diapo.querySelector('.qui');
-
-      if (qui) {
-        qui.textContent = etiquetteReplique(diapo.dataset.personnage, slot, prenoms);
-      }
+    container.querySelectorAll(`.qui[data-slot="${slot}"]`).forEach((badge) => {
+      badge.textContent = etiquetteReplique(badge.dataset.personnage, slot, prenoms);
     });
   }
 }
@@ -1732,7 +1789,7 @@ function demarrerFenetreControle() {
       const message = evenement.data;
 
       if (message && message.type === 'position') {
-        rappel.textContent = texteRappelControle(message.scene, message.slotQuiParle, prenoms);
+        rappel.textContent = texteRappelControle(message.scene, message.slots, prenoms);
 
         if (message.roles) {
           roles = message.roles;
@@ -1822,11 +1879,17 @@ if (MODE_FENETRE === 'projection') (() => {
 
     const diapo = diapos[position].element;
     const entree = scenePourPosition(sommaire, position);
+    // Une réplique à plusieurs personnages (§2.1) porte plusieurs badges
+    // .qui, chacun avec son propre slot — on les recueille tous, jamais un
+    // seul supposé.
+    const slots = Array.from(diapo.querySelectorAll('.qui'))
+      .map((badge) => badge.dataset.slot)
+      .filter(Boolean);
 
     canal.postMessage({
       type: 'position',
       scene: entree ? libelleScene(entree.acte, entree.scene) : null,
-      slotQuiParle: diapo && diapo.dataset.slot ? diapo.dataset.slot : null,
+      slots,
       // Envoyé à chaque navigation, pas seulement en réponse à « bonjour »
       // (§10a) : couvre aussi bien une fenêtre de contrôle déjà ouverte
       // quand une pièce démarre qu'une fenêtre ouverte après coup. Coût

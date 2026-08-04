@@ -194,7 +194,7 @@ produit une liste plate, unité de navigation et de rendu :
   { kind: 'lieu', texte },
   { kind: 'didascalie', texte },
   { kind: 'texte_sans_personnage', texte },              // §11, style distinct + avertissement
-  { kind: 'replique', id, personnage, texte, vers, didascaliesInternes },
+  { kind: 'replique', id, personnages, texte, vers, didascaliesInternes },
   …
 ]
 ```
@@ -203,6 +203,19 @@ C'est cette liste, pas `piece.unites` directement, que la navigation clavier
 parcourt par index : un `kind: 'scene'` en tête de chaque unité non implicite
 donne gratuitement la marque de transition de scène demandée par le prompt
 (§8 du prompt initial), sans logique de détection séparée.
+
+**Révision à l'usage — deux schémas, une seule forme interne :** le
+`REPET.json` a changé de schéma en cours de route (`repetition/1` →
+`repetition/2`) pour distinguer une réplique dite par un seul personnage
+d'une réplique dite par plusieurs à la fois (une exclamation collective,
+par exemple) : `personnage: string` devient `personnages: string[]`.
+`_elementAplati` absorbe cette différence à la source — `personnages:
+Array.isArray(el.personnages) ? el.personnages : [el.personnage]` — pour
+que **tout le reste du code** (pagination, rendu, cast, contrôle) ne
+connaisse plus qu'un tableau, jamais les deux formes d'origine. `validerRepet`
+accepte les deux schémas (`CONFIG.SCHEMAS_ACCEPTES`) et, au niveau de chaque
+réplique, l'un ou l'autre champ — jamais aucun des deux, jamais un tableau
+vide.
 
 `calculerSommaire(piece)` — `[{ uniteId, acte, scene, position }]` — sert à la
 barre de progression (§8.4) : « scène 2 / 5 » se lit par recherche de la
@@ -563,6 +576,43 @@ personne qui navigue regarde cet écran, pas un deuxième — lui refuser une
 aide à la navigation directement là où elle regarde n'aurait servi qu'une
 pureté de principe, pas l'usage.
 
+### 8.7 Réplique à plusieurs personnages
+
+Ajouté avec le schéma `repetition/2` (§5) : une réplique peut être dite par
+plusieurs personnages à la fois (une exclamation collective, dans la pièce
+réelle testée — deux ou quatre personnages selon les cas). Décision prise
+avec l'utilisateur : **un badge `.qui` par personnage**, chacun dans la
+couleur de son propre slot, plutôt qu'une couleur unique pour tout le
+groupe qui aurait effacé la distinction entre les voix.
+
+`_construireBadgeQui(personnage, cast, prenoms)` construit un badge —
+`etiquetteReplique`, couleur, `data-slot` et `data-personnage` posés sur le
+badge lui-même, pas sur la diapo — et `construireDiapoRepliqueFusionnee`
+en pose un par entrée de `elPremiere.personnages` dans un conteneur
+`.entete-replique` (`display: flex; flex-wrap: wrap`, pour que plusieurs
+badges se répartissent ou reviennent à la ligne sans jamais déborder). La
+barre d'accent de `.texte` (`--couleur`) reste simplifiée à la couleur du
+premier personnage du groupe — les badges portent la distinction utile,
+cette bordure n'est que décorative.
+
+Conséquence sur les fonctions qui parlaient jusqu'ici « du » slot d'une
+réplique, désormais potentiellement plusieurs :
+
+- `mettreAJourPrenoms` interroge directement `.qui[data-slot="H1"]` (les
+  badges), plus `[data-slot="H1"] .qui` (la diapo puis son unique badge) —
+  chaque badge se recalcule indépendamment, sans toucher aux autres badges
+  de la même réplique ;
+- `diffuserPosition` recueille tous les badges de la diapo active
+  (`diapo.querySelectorAll('.qui')`) et diffuse un tableau `slots`, plus un
+  seul `slotQuiParle` ;
+- `texteRappelControle(scene, slots, prenoms)` joint les lecteurs concernés
+  par « + » dans le rappel de la fenêtre de contrôle.
+
+L'écran d'attribution (§6) n'a besoin d'aucun changement : `piece.personnages`
+liste déjà chaque personnage individuellement, qu'il parle seul ou en groupe
+dans telle ou telle réplique — l'attribution reste un slot par personnage,
+jamais par groupe.
+
 ---
 
 ## 9. Navigation
@@ -706,7 +756,7 @@ JavaScript qui la peuple la rend déjà visible au bon moment
 
 ```js
 const CONFIG = Object.freeze({
-  SCHEMA_ACCEPTE: 'repetition/1',
+  SCHEMAS_ACCEPTES: Object.freeze(['repetition/1', 'repetition/2']), // §5, §8.7
   SLOTS: Object.freeze(['H1','H2','H3','H4','H5','F1','F2','F3','F4','F5']),
   COULEURS_SLOT: Object.freeze({ H1: '#…', H2: '#…', /* … 10 couleurs contrastées */ }),
   PREFIXE_STOCKAGE: 'lecture:v1',
