@@ -147,6 +147,7 @@ outil_repetition/
 │   ├── texte.js        PUR  normalisation, amorces, découpage en mots
 │   ├── comparaison.js  PUR  alignement mot à mot, score
 │   ├── modele.js       PUR  index dérivé : tops, mes scènes, spot check
+│   ├── manifeste.js    PUR  pièces du dossier partagé pas encore importées
 │   ├── tirage.js       PUR  générateur pseudo-aléatoire à graine (§10.4)
 │   ├── etat.js         PUR  état + transitions
 │   ├── stockage.js          localStorage, export / import
@@ -154,14 +155,17 @@ outil_repetition/
 │   ├── rendu.js             DOM
 │   └── app.js               câblage, écouteurs, orchestration
 │
-├── tests/
-│   ├── purete.test.js       contrôle mécanique de la pureté (§13)
-│   ├── contrat.test.js      le contrat avec outil_edition (§13.1)
-│   ├── exemple-repet.json   REPET.json réel, produit par repet_export.py
-│   └── <module>.test.js     un fichier par module pur
-│
-└── pieces/                  JAMAIS versionné (.gitignore) — usage local
+└── tests/
+    ├── purete.test.js       contrôle mécanique de la pureté (§13)
+    ├── contrat.test.js      le contrat avec outil_edition (§13.1)
+    ├── exemple-repet.json   REPET.json réel, produit par repet_export.py
+    └── <module>.test.js     un fichier par module pur
 ```
+
+Le dossier des pièces vit désormais **hors de `outil_repetition/`**, en
+`../pieces/` à la racine du dépôt — **partagé avec `outil_lecture`**, qui
+consomme le même `REPET.json`. Jamais versionné (`.gitignore`), sauf
+`pieces/LISEZ-MOI.md` : voir §11.2 et `outil_edition/outils/docx_vers_repet.py`.
 
 **`package.json` ne déclare aucune dépendance.** Il existe pour une seule
 raison : sans `"type": "module"`, Node traite les `.js` comme du CommonJS et

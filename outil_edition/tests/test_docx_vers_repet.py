@@ -23,20 +23,20 @@ if str(RACINE) not in sys.path:
 
 import docx  # noqa: E402
 
-from outils.docx_vers_repet import regenerer_repet  # noqa: E402
+from outils.docx_vers_repet import main, regenerer_manifeste, regenerer_repet  # noqa: E402
 from theatre_editor import config  # noqa: E402
 from theatre_editor.utils import io  # noqa: E402
 
 
-def _ecrire_docx_minimal(chemin: Path) -> None:
+def _ecrire_docx_minimal(chemin: Path, *, nom: str = "JAN", texte: str = "Nous y sommes enfin.") -> None:
     """Un DOCX minimal, avec exactement ce que `docx_vers_edit` sait lire."""
     document = docx.Document()
     document.add_paragraph("ACTE PREMIER", style="Heading 1")
 
     personnage = document.add_paragraph()
-    personnage.add_run("JAN").bold = True
+    personnage.add_run(nom).bold = True
 
-    document.add_paragraph("Nous y sommes enfin.")
+    document.add_paragraph(texte)
 
     document.save(str(chemin))
 
@@ -111,6 +111,113 @@ class ContenuDuRepet(unittest.TestCase):
         self.assertEqual(len(repliques), 1)
         self.assertEqual(repliques[0]["personnages"], ["JAN"])
         self.assertEqual(repliques[0]["texte"], "Nous y sommes enfin.")
+
+
+class Manifeste(unittest.TestCase):
+    """
+    `manifest.json` — la liste des pièces disponibles dans le dossier partagé,
+    lue par `outil_repetition` et `outil_lecture` au démarrage.
+    """
+
+    def test_recense_les_pieces_presentes(self):
+        with tempfile.TemporaryDirectory() as brut:
+            dossier = Path(brut)
+            source = dossier / "source" / "Ma pièce.docx"
+            source.parent.mkdir(parents=True)
+            _ecrire_docx_minimal(source)
+
+            travail = dossier / "travail"
+            regenerer_repet(source, travail)
+
+            chemin_manifeste = regenerer_manifeste(travail)
+            manifeste = json.loads(chemin_manifeste.read_text(encoding="utf-8"))
+
+            self.assertEqual(len(manifeste["pieces"]), 1)
+            entree = manifeste["pieces"][0]
+            self.assertEqual(entree["piece"], "Ma pièce")
+            self.assertEqual(entree["fichier"], "Ma pièce_REPET.json")
+            self.assertEqual(entree["unites"], 1)
+            self.assertEqual(entree["repliques"], 1)
+            self.assertEqual(entree["personnages"], 1)
+            self.assertIn("genere_le", manifeste)
+
+    def test_recense_tout_le_dossier_pas_seulement_le_dernier_lot(self):
+        """
+        Le manifeste reflète l'état du dossier, pas l'historique des appels :
+        une pièce convertie hier doit rester listée aujourd'hui, même si on ne
+        relance la conversion que d'une autre pièce.
+        """
+        with tempfile.TemporaryDirectory() as brut:
+            dossier = Path(brut)
+            travail = dossier / "travail"
+
+            source_a = dossier / "source" / "Piece A.docx"
+            source_a.parent.mkdir(parents=True)
+            _ecrire_docx_minimal(source_a)
+            regenerer_repet(source_a, travail)
+            regenerer_manifeste(travail)
+
+            source_b = dossier / "source" / "Piece B.docx"
+            _ecrire_docx_minimal(source_b)
+            regenerer_repet(source_b, travail)
+
+            chemin_manifeste = regenerer_manifeste(travail)
+            manifeste = json.loads(chemin_manifeste.read_text(encoding="utf-8"))
+
+            noms = {p["piece"] for p in manifeste["pieces"]}
+            self.assertEqual(noms, {"Piece A", "Piece B"})
+
+    def test_un_repet_illisible_est_ignore_sans_faire_echouer_le_reste(self):
+        with tempfile.TemporaryDirectory() as brut:
+            dossier = Path(brut)
+            source = dossier / "source" / "Ma pièce.docx"
+            source.parent.mkdir(parents=True)
+            _ecrire_docx_minimal(source)
+
+            travail = dossier / "travail"
+            travail.mkdir()
+            regenerer_repet(source, travail)
+
+            casse = travail / "Cassee_REPET.json"
+            casse.write_text("{ceci n'est pas du JSON", encoding="utf-8")
+
+            chemin_manifeste = regenerer_manifeste(travail)
+            manifeste = json.loads(chemin_manifeste.read_text(encoding="utf-8"))
+
+            self.assertEqual(len(manifeste["pieces"]), 1)
+            self.assertEqual(manifeste["pieces"][0]["piece"], "Ma pièce")
+
+
+class MainEtManifeste(unittest.TestCase):
+    """L'écriture du manifeste depuis le point d'entrée CLI."""
+
+    def test_avec_dossier_le_manifeste_est_ecrit(self):
+        with tempfile.TemporaryDirectory() as brut:
+            dossier = Path(brut)
+            source = dossier / "source" / "Ma pièce.docx"
+            source.parent.mkdir(parents=True)
+            _ecrire_docx_minimal(source)
+
+            travail = dossier / "travail"
+            code = main([str(source), "--dossier", str(travail)])
+
+            self.assertEqual(code, 0)
+            self.assertTrue((travail / "manifest.json").exists())
+
+    def test_dossier_est_obligatoire(self):
+        """
+        `--dossier` n'a pas de valeur par défaut qui fonctionne : le dossier du
+        DOCX collisionnerait toujours avec le garde-fou de `convertir_fichier`
+        (§ son docstring). Autant le rendre obligatoire plutôt que de laisser
+        échouer chaque appel avec un message qui n'explique pas pourquoi.
+        """
+        with tempfile.TemporaryDirectory() as brut:
+            dossier = Path(brut)
+            source = dossier / "Ma pièce.docx"
+            _ecrire_docx_minimal(source)
+
+            with self.assertRaises(SystemExit):
+                main([str(source)])
 
 
 if __name__ == "__main__":  # pragma: no cover

@@ -53,12 +53,14 @@ lancé.**
 ### Servir la page en local
 
 Les modules ES ne se chargent pas depuis `file://`. Pour ouvrir la page sur son
-poste :
+poste, servir depuis la **racine du dépôt** — et non depuis `outil_repetition/` :
+la découverte automatique des pièces (`js/manifeste.js`) va lire
+`../pieces/manifest.json`, un dossier **frère** de `outil_repetition/`, pas un
+de ses sous-dossiers.
 
 ```bash
-cd outil_repetition
 python -m http.server 8000
-# puis http://localhost:8000/
+# puis http://localhost:8000/outil_repetition/
 ```
 
 `localhost` est un *secure context* : le micro y fonctionne aussi.
@@ -75,8 +77,11 @@ La pièce d'essai est écrite pour ce test, donc libre de droits.
 
 ## Ce qui ne doit jamais entrer dans le dépôt
 
-`pieces/` et tout `*_REPET.json` sont exclus par `.gitignore` : un `REPET.json`
-contient le texte intégral d'une œuvre. Même motif que `exemples/`.
+`../pieces/` (à la racine du dépôt, partagé avec `outil_lecture`) et tout
+`*_REPET.json` sont exclus par `.gitignore` : un `REPET.json` contient le texte
+intégral d'une œuvre. Même motif que `exemples/`. Voir
+`pieces/LISEZ-MOI.md` et `outil_edition/outils/docx_vers_repet.py` pour
+régénérer une pièce.
 
 C'est une leçon coûteuse : la première version de cet outil embarquait 188 Ko du
 texte d'une pièce sous droits, en base64, dans un dépôt public. Le retirer a

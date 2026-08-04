@@ -19,6 +19,7 @@ import * as voix from './voix.js';
 import { comparer } from './comparaison.js';
 import { graineDepuis, tirerPondere } from './tirage.js';
 import { creerStockage, ErreurStockage, idDePiece } from './stockage.js';
+import { piecesNonImportees } from './manifeste.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -140,6 +141,45 @@ function rafraichirListePieces() {
   for (const entree of parDate) {
     liste.appendChild(carteDePiece(entree));
   }
+
+  // Asynchrone et non bloquant : les pièces déjà importées s'affichent tout
+  // de suite, celles du dossier partagé rejoignent la liste un instant après
+  // — jamais l'inverse, une commodité ne doit pas retarder l'essentiel.
+  rafraichirPiecesDisponibles(enregistrees);
+}
+
+/**
+ * Complète l'accueil avec les pièces du dossier partagé `../pieces/` non
+ * encore importées sur cet appareil.
+ *
+ * Échoue en silence côté réseau (page ouverte sans serveur local, dossier
+ * partagé vide ou absent) : c'est une commodité, jamais une condition pour
+ * répéter. `chargerDepuisTexte` fait déjà tout le travail de validation —
+ * une pièce chargée depuis le manifeste n'est pas traitée différemment d'une
+ * pièce collée ou importée par fichier.
+ */
+async function rafraichirPiecesDisponibles(enregistrees) {
+  const bloc = $('bloc-pieces-disponibles');
+  const liste = $('liste-pieces-disponibles');
+  const manifeste = await recupererManifeste();
+  const disponibles = piecesNonImportees(manifeste, enregistrees, idDePiece);
+
+  liste.innerHTML = '';
+  bloc.hidden = disponibles.length === 0;
+
+  for (const entree of disponibles) {
+    liste.appendChild(carteDePieceDisponible(entree));
+  }
+}
+
+async function recupererManifeste() {
+  try {
+    const reponse = await fetch('../pieces/manifest.json', { cache: 'no-store' });
+
+    return reponse.ok ? await reponse.json() : null;
+  } catch {
+    return null;
+  }
 }
 
 function carteDePiece(entree) {
@@ -187,6 +227,58 @@ function carteDePiece(entree) {
   carte.append(gauche, droite);
 
   return carte;
+}
+
+/** Carte d'une pièce du manifeste, pas encore importée sur cet appareil. */
+function carteDePieceDisponible(entree) {
+  const carte = document.createElement('div');
+  carte.className = 'carte';
+
+  const gauche = document.createElement('div');
+  const titre = document.createElement('div');
+  titre.className = 'titre';
+  titre.textContent = entree.piece;
+  gauche.append(titre);
+
+  const charger = document.createElement('button');
+  charger.className = 'btn btn-fantome btn-mini';
+  charger.textContent = 'Charger';
+  charger.addEventListener('click', () => chargerDepuisManifeste(entree.fichier, charger));
+
+  const droite = document.createElement('div');
+  droite.className = 'rangee';
+  droite.append(charger);
+
+  carte.append(gauche, droite);
+
+  return carte;
+}
+
+/**
+ * Récupère un `REPET.json` du dossier partagé et le charge comme s'il venait
+ * d'être collé ou importé par fichier — `chargerDepuisTexte` ne sait pas
+ * d'où vient son texte, et n'a pas à le savoir.
+ */
+async function chargerDepuisManifeste(fichier, bouton) {
+  effacerMessage('message-accueil');
+  bouton.disabled = true;
+  bouton.textContent = 'Chargement…';
+
+  try {
+    const reponse = await fetch(`../pieces/${encodeURIComponent(fichier)}`, {
+      cache: 'no-store',
+    });
+
+    if (!reponse.ok) {
+      throw new Error(`fichier introuvable (HTTP ${reponse.status})`);
+    }
+
+    chargerDepuisTexte(await reponse.text());
+  } catch (erreur) {
+    afficherMessage('message-accueil', `Chargement impossible : ${erreur.message}`);
+    bouton.disabled = false;
+    bouton.textContent = 'Charger';
+  }
 }
 
 // ============================================================

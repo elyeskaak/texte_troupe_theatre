@@ -380,7 +380,7 @@ def convertir_fichier(chemin_docx: Path, dossier: Path | None = None) -> Path:
             f"  sortie  {chemins.docx}\n\n"
             f"Convertissez vers un autre dossier, par exemple :\n"
             f'  python outils/docx_vers_edit.py "{chemin_docx}" '
-            f"--dossier ../outil_repetition/pieces"
+            f"--dossier ../pieces"
         )
 
     print(f"Conversion : {chemin_docx.name}")

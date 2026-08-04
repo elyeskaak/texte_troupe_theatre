@@ -24,7 +24,7 @@
  * invisible sur le téléphone, indéfiniment. C'est le piège classique du service
  * worker, et la seule protection est de ne pas oublier cette ligne.
  */
-const VERSION = 'repetition-v21';
+const VERSION = 'repetition-v22';
 
 const FICHIERS = [
   './',
@@ -35,6 +35,7 @@ const FICHIERS = [
   './js/comparaison.js',
   './js/config.js',
   './js/etat.js',
+  './js/manifeste.js',
   './js/modele.js',
   './js/rendu.js',
   './js/schema.js',

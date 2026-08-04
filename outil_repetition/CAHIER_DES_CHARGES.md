@@ -178,13 +178,19 @@ jamais apparaître dans la distribution `personnages` de tête de document.
 
 ### 3.3 Charger une pièce dans l'outil
 
-Trois voies, par ordre de confort sur iPhone :
+Quatre voies, par ordre de confort sur iPhone :
 
-1. **Coller** le contenu du JSON dans une zone de texte. Marche partout,
+1. **Découverte automatique** depuis `../pieces/manifest.json` : au
+   démarrage, l'outil propose en un clic (« Charger ») toute pièce du
+   dossier partagé pas encore importée sur cet appareil. Réservé à l'usage
+   local avec serveur (`js/manifeste.js`) — voir §3.2 et §11.2. Sans
+   manifeste accessible (page ouverte sans serveur local, ou dossier
+   partagé vide), les trois voies suivantes restent disponibles.
+2. **Coller** le contenu du JSON dans une zone de texte. Marche partout,
    y compris depuis un JSON reçu par message.
-2. **Importer un fichier** (`<input type="file" accept=".json,application/json">`)
+3. **Importer un fichier** (`<input type="file" accept=".json,application/json">`)
    — depuis l'app Fichiers ou iCloud Drive sur iPhone.
-3. **Déposer le JSON dans le dossier de la page** et le charger par `fetch`.
+4. **Déposer le JSON dans le dossier de la page** et le charger par `fetch`.
    Réservé à l'usage local : ce dossier **ne doit jamais être versionné**
    (§11.2).
 
@@ -491,9 +497,13 @@ purge exige donc du réseau.
 
 ### 11.2 Le dossier des pièces n'est pas versionné
 
-Un `outil_repetition/pieces/` peut servir localement (§3.3, voie 3). Il rejoint
-`.gitignore` au même titre qu'`exemples/`. Publier un `REPET.json` reviendrait à
-publier le texte intégral d'une œuvre sous droits sur une URL indexable.
+Un `../pieces/` (à la racine du dépôt, **partagé avec `outil_lecture`** — même
+schéma, même fichier, pas de raison d'en garder deux copies) peut servir
+localement (§3.3, voies 1 et 4). Il rejoint `.gitignore` au même titre
+qu'`exemples/`, `manifest.json` compris — seul `pieces/LISEZ-MOI.md` reste
+versionné, pure documentation sans texte d'œuvre. Publier un `REPET.json`
+reviendrait à publier le texte intégral d'une œuvre sous droits sur une URL
+indexable.
 
 ### 11.3 La pièce embarquée est retirée
 

@@ -648,6 +648,15 @@
       <div id="liste-pieces" class="pile"></div>
     </div>
 
+    <!-- Pièces trouvées dans le dossier partagé pieces/ (manifest.json),
+         pas encore importées sur cet appareil. Absent tant qu'aucun
+         manifeste n'est accessible (page ouverte sans serveur local, ou
+         dossier partagé vide) : ce n'est qu'une commodité, jamais requis. -->
+    <div id="bloc-pieces-disponibles" hidden>
+      <label class="champ" for="liste-pieces-disponibles">Disponibles</label>
+      <div id="liste-pieces-disponibles" class="pile"></div>
+    </div>
+
     <!-- L'ajout est replié : un comédien ne doit pas voir de JSON pour répéter.
          L'import de fichier vient en premier, le collage en second recours. -->
     <div class="rangee" style="margin-top:22px">

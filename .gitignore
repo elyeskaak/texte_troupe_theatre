@@ -53,9 +53,17 @@ journal_*.json
 exemples/
 gap_1789.txt
 
-# Pièces chargées localement dans l'outil de répétition. Un REPET.json
-# contient le texte intégral d'une œuvre : même motif que exemples/.
-outil_repetition/pieces/
+# Dossier partagé des REPET.json, entre outil_repetition et outil_lecture
+# (voir pieces/LISEZ-MOI.md). Le contenu variable est déjà couvert par les
+# règles génériques ci-dessus (*_REPET.json, temp/) ; seul le manifeste de
+# découverte automatique a besoin de sa propre règle, ancrée à la racine pour
+# ne pas ignorer un futur outil_lecture/pieces/manifest.json par erreur.
+# LISEZ-MOI.md reste versionné intentionnellement : pure documentation, sans
+# texte d'œuvre.
+/pieces/manifest.json
+
+# Ancien emplacement, propre à outil_lecture — à retirer une fois ce dossier
+# migré vers le dossier partagé ci-dessus.
 outil_lecture/pieces/
 
 # ============================================================

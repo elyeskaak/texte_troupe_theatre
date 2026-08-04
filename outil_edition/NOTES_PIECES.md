@@ -3,9 +3,10 @@
 Ce fichier recense les cas où une pièce a demandé une correction **manuelle**
 du `REPET.json`, en plus (ou à la place) de ce que `docx_vers_repet.py` sait
 produire automatiquement. Il existe pour une raison précise : ces corrections
-vivent dans `outil_repetition/pieces/*_REPET.json`, qui n'est **jamais
-versionné** (`.gitignore`) — sans cette note, la prochaine régénération
-écraserait la correction sans que personne ne s'en souvienne.
+vivent dans `pieces/*_REPET.json` (dossier partagé, à la racine du dépôt —
+voir `pieces/LISEZ-MOI.md`), qui n'est **jamais versionné** (`.gitignore`) —
+sans cette note, la prochaine régénération écraserait la correction sans que
+personne ne s'en souvienne.
 
 **Avant de relancer `docx_vers_repet.py` sur une pièce listée ici**, relisez sa
 section : soit le docx a depuis été corrigé à la source (auquel cas la note
