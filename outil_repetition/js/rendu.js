@@ -371,7 +371,16 @@ export function afficherComparaison(replique, resultat, seuilReussite = 90) {
   score.className = 'score';
   score.dataset.niveau =
     resultat.score >= 90 ? 'haut' : resultat.score >= 60 ? 'moyen' : 'bas';
-  score.textContent = `${resultat.score} % — ${resultat.corrects} mot(s) sur ${resultat.attendus}`;
+  // Les mots en trop sont dits à part. Sans cette mention, un score bas obtenu en
+  // brodant serait incompréhensible : on compterait ses mots justes, on
+  // trouverait le compte bon, et on croirait le score faux.
+  const enTrop =
+    resultat.ajoutes > 0
+      ? ` · ${resultat.ajoutes} mot${resultat.ajoutes > 1 ? 's' : ''} en trop`
+      : '';
+
+  score.textContent =
+    `${resultat.score} % — ${resultat.corrects} mot(s) sur ${resultat.attendus}${enTrop}`;
   zone.appendChild(score);
 
   // Validation manuelle : la transcription n'est pas fiable, et un score bas ne

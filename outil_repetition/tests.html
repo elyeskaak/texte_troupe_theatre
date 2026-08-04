@@ -181,6 +181,30 @@ function chargerPage() {
   });
 }
 
+/**
+ * Ferme la page sous test, et attend qu'elle soit vraiment partie.
+ *
+ * **Indispensable avant d'écrire dans le stockage.** L'application diffère ses
+ * écritures de `DELAI_ECRITURE_MS` (800 ms) pour ne pas écrire trois fois quand on
+ * coche trois statuts d'affilée. Une page encore vivante réveille donc son minuteur
+ * *après* qu'on a semé une progression, et l'écrase avec la sienne.
+ *
+ * C'est ce qui m'est arrivé : le parcours de la file de révision lisait « jamais
+ * récitée » sur les trois répliques que je venais de renseigner. Le diagnostic ne
+ * pouvait pas venir du test lui-même — il fallait aller lire le débounce.
+ */
+async function fermerPage() {
+  const cadre = document.getElementById('scene');
+
+  await new Promise((resoudre) => {
+    cadre.onload = resoudre;
+    cadre.src = 'about:blank';
+  });
+
+  // L'écriture forcée au déchargement passe elle aussi par la file des tâches.
+  await new Promise((r) => setTimeout(r, 50));
+}
+
 const $ = (page, id) => page.document.getElementById(id);
 
 /** Clique un élément par identifiant, et vérifie au passage qu'il existe. */
@@ -497,6 +521,108 @@ parcours('le sommaire liste mes scènes et y ramène', async (page) => {
   await jusqua(() => ecran(page) === 'ecran-repetition', 'on revient au texte');
 });
 
+parcours('la file de révision classe par difficulté, et y mène', async (page) => {
+  await jusquAuTexte(page, 'CLARISSA');
+
+  // Trois répliques de CLARISSA, trois difficultés calculées à la main avec
+  // POIDS_FAIBLESSE = 0,7 et POIDS_ANCIENNETE = 0,3 sur un horizon de 30 jours :
+  //
+  //   faible    30 % aujourd'hui      → 0,7 × 0,7 + 0        = 0,49
+  //   vieille  100 % il y a 60 jours  → 0       + 0,3 × 1     = 0,30
+  //   fraiche  100 % aujourd'hui      → 0       + 0           = 0
+  //
+  // L'ordre attendu ne dépend donc pas de l'implémentation : il se relit ici.
+  const maintenant = Date.now();
+  const JOUR = 86400000;
+  const idPiece = JSON.parse(localStorage.getItem(CLE.index()))[0].id;
+
+  // La page doit mourir avant qu'on écrive : sinon son écriture différée écrase
+  // l'amorce 800 ms plus tard, et la file affiche « jamais récitée ».
+  await fermerPage();
+
+  localStorage.setItem(
+    CLE.progres(idPiece, 'CLARISSA'),
+    JSON.stringify({
+      r_64cc8d4c7567: {
+        statut: 'maitrisee',
+        verifiee_le: maintenant,
+        scores: [{ le: maintenant, score: 100 }],
+      },
+      r_ff6d8ebb9c56: {
+        statut: 'en_cours',
+        verifiee_le: maintenant,
+        scores: [{ le: maintenant, score: 30 }],
+      },
+      r_abf669b491bf: {
+        statut: 'a_reviser',
+        verifiee_le: maintenant - 60 * JOUR,
+        scores: [{ le: maintenant - 60 * JOUR, score: 100 }],
+      },
+    }),
+  );
+
+  const rechargee = await chargerPage();
+
+  await ouvrirPieceEnregistree(rechargee);
+  await jusqua(() => ecran(rechargee) === 'ecran-repetition', 'droit au texte');
+
+  clic(rechargee, 'btn-sommaire');
+  await jusqua(() => ecran(rechargee) === 'ecran-bilan', 'la progression s’ouvre');
+
+  const lignes = [...$(rechargee, 'file-revision').children];
+
+  egal(lignes.length, 3, 'mes trois répliques sont dans la file');
+  egal(
+    lignes.map((l) => l.querySelector('.compte').textContent),
+    ['30 % · aujourd’hui', '100 % · il y a 60 j', '100 % · aujourd’hui'],
+    'la plus faible d’abord, puis la plus vieille, puis la fraîche',
+  );
+
+  // L'extrait doit être le texte de l'auteur, et rien d'autre. Ce test manquait,
+  // et son absence a laissé passer un défaut visible à l'œil nu : `.texte`
+  // contient aussi l'acronyme du mode du même nom, si bien que la liste affichait
+  // « Je vous ai vu venir de loin…J v a v v… », les deux versions collées.
+  egal(
+    lignes.map((l) => l.querySelector('.extrait').textContent),
+    [
+      // Apostrophe droite : c'est celle de `exemple-repet.json`. Le rendu ne
+      // retouche pas la typographie de l'auteur, et il a raison de ne pas le faire.
+      "Je vous ai vu venir de loin,\nEt je n'ai pas bougé.",
+      'Oui.',
+      'Vous ne savez pas ce que vous dites.',
+    ],
+    'l’extrait est le texte de l’auteur, sans l’acronyme',
+  );
+
+  // Toucher une ligne doit mener à *cette* réplique, en aveugle — arriver sur une
+  // réplique lisible ne réviserait rien.
+  lignes[0].click();
+  await jusqua(() => ecran(rechargee) === 'ecran-repetition', 'on va au texte');
+  egal($(rechargee, 'app').dataset.mode, 'aveugle', 'la révision se fait en aveugle');
+});
+
+parcours('« Réviser la plus difficile » vise la tête de file', async (page) => {
+  await jusquAuTexte(page, 'CLARISSA');
+
+  clic(page, 'btn-sommaire');
+  await jusqua(() => ecran(page) === 'ecran-bilan', 'la progression s’ouvre');
+
+  // Rien n'a encore été récité : toutes les répliques valent 1, et l'ordre de jeu
+  // tranche. La tête de file est donc la première réplique de CLARISSA.
+  const premiere = $(page, 'file-revision').children[0];
+
+  affirmer(premiere, 'la file est vide alors que rien n’a été récité');
+  egal(
+    premiere.querySelector('.compte').textContent,
+    'jamais récitée',
+    'le motif dit pourquoi elle est là',
+  );
+
+  clic(page, 'btn-reviser');
+  await jusqua(() => ecran(page) === 'ecran-repetition', 'le bouton mène au texte');
+  egal($(page, 'app').dataset.mode, 'aveugle', 'en aveugle également');
+});
+
 // ============================================================
 //  Exécution
 // ============================================================
@@ -557,6 +683,13 @@ for (const { nom, corps } of cas) {
   let erreur = null;
 
   try {
+    // On ferme avant de vider, jamais l'inverse. La page du parcours précédent est
+    // encore vivante à cet instant, et son écriture différée réécrirait sa
+    // progression 800 ms après le `clear()` — donc au milieu du parcours suivant,
+    // qui hériterait de données qu'il n'a pas semées. C'est exactement ce qui
+    // faisait lire « 30 % » là où l'on attendait « jamais récitée », et une telle
+    // fuite est le point de départ classique d'une suite intermittente.
+    await fermerPage();
     localStorage.clear();
     await corps(await chargerPage());
   } catch (e) {
@@ -569,6 +702,12 @@ for (const { nom, corps } of cas) {
   inscrire(resultat);
 }
 
+// La dernière page doit mourir avant qu'on rende le stockage, pour la raison
+// exposée dans `fermerPage()` : vivante, elle réécrirait sa progression par-dessus
+// celle qu'on vient de restituer. Sans cette ligne, lancer la suite laissait le
+// stockage dans l'état du dernier parcours — et j'ai perdu une bonne demi-heure à
+// croire que l'application ne relisait pas une progression semée à la main.
+await fermerPage();
 rendreStockage();
 
 const echecs = resultats.filter((r) => r.erreur).length;

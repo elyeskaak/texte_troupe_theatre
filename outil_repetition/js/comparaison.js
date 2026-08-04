@@ -15,9 +15,22 @@
  * fusion, « chaise » dit à la place de « chaire » compterait deux fautes au lieu
  * d'une, et le score chuterait deux fois plus vite que la mémoire ne défaille.
  *
- * **Les mots en trop ne pèsent pas sur le score.** Réciter juste en glissant un
- * « eh bien » n'est pas une faute de mémoire. Ils apparaissent dans le détail
- * affiché, pas au dénominateur.
+ * **Les mots en trop pèsent sur le score.** Ce module a d'abord fait l'inverse,
+ * au motif qu'un « eh bien » glissé n'est pas une faute de mémoire. À l'usage
+ * c'était faux, et pour une raison qui n'a rien à voir avec le confort : au
+ * théâtre, broder est une faute réelle. Un mot ajouté décale le rythme, mange le
+ * top du partenaire, et se paie en répétition. Le score doit dire ce que dirait
+ * un metteur en scène, non ce qui ménage l'amour-propre.
+ *
+ * Le dénominateur est donc le nombre de mots **jugés** : les attendus, plus les
+ * ajoutés. Chaque écart compte une fois et une seule — un oubli, une
+ * substitution ou un ajout. Réciter exactement le texte donne 100 %, et rien
+ * d'autre ne le donne.
+ *
+ * La contrepartie est réelle : la transcription iOS insère parfois un mot
+ * fantôme, et le score en souffre alors sans faute du récitant. C'est ce que le
+ * bouton « c'était juste » existe pour rattraper, et c'est aussi pourquoi il
+ * n'est pas un aveu de faiblesse mais une pièce du dispositif.
  */
 
 import { CONFIG } from './config.js';
@@ -45,6 +58,8 @@ export const ETAT = Object.freeze({
  *   score: number,
  *   attendus: number,
  *   corrects: number,
+ *   ajoutes: number,
+ *   juges: number,
  *   tronque: boolean,
  *   details: Array<{mot: string, etat: string, dit?: string}>
  * }}
@@ -67,7 +82,15 @@ export function comparer(attendu, recite) {
     // Rien à réciter, donc rien à scorer. Ne se produit pas sur un REPET.json
     // valide — `repet_export` n'écrit pas de réplique vide — mais un score de
     // 100 % sur du vide serait un mensonge commode.
-    return { score: 0, attendus: 0, corrects: 0, tronque, details: [] };
+    return {
+      score: 0,
+      attendus: 0,
+      corrects: 0,
+      ajoutes: 0,
+      juges: 0,
+      tronque,
+      details: [],
+    };
   }
 
   // La comparaison porte sur les **sons**, non sur les lettres. Réciter est un
@@ -81,10 +104,12 @@ export function comparer(attendu, recite) {
 
   const details = [];
   let corrects = 0;
+  let ajoutes = 0;
   let index = 0;
 
   for (const operation of operations) {
     if (operation.etat === ETAT.AJOUTE) {
+      ajoutes += 1;
       details.push({ mot: operation.dit, etat: ETAT.AJOUTE });
       continue;
     }
@@ -102,10 +127,17 @@ export function comparer(attendu, recite) {
     }
   }
 
+  // Les mots jugés : ceux du texte, plus ceux que j'ai ajoutés. Un ajout n'a pas
+  // de place dans le texte, il s'en crée une — et le dénominateur doit la compter,
+  // sinon broder resterait gratuit.
+  const juges = gauche.length + ajoutes;
+
   return {
-    score: Math.round((corrects / gauche.length) * 100),
+    score: Math.round((corrects / juges) * 100),
     attendus: gauche.length,
     corrects,
+    ajoutes,
+    juges,
     tronque,
     details,
   };

@@ -588,6 +588,113 @@ export function candidatsSpotCheck(index, progres, maintenant) {
 }
 
 /**
+ * Réglages du calcul de difficulté.
+ *
+ * Exportés pour que les tests et l'interface parlent des mêmes nombres, et pour
+ * qu'ils se corrigent en un seul endroit.
+ */
+export const REVISION = Object.freeze({
+  /**
+   * Au-delà de cet âge, une réplique est « aussi vieille que possible ».
+   *
+   * Sans plafond, une réplique vue il y a un an écraserait tout le reste et la
+   * file ne parlerait plus que d'ancienneté. Trente jours est l'horizon au-delà
+   * duquel l'oubli est de toute façon acquis : distinguer 40 de 300 jours
+   * n'apprend plus rien.
+   */
+  HORIZON_JOURS: 30,
+
+  /**
+   * Un mauvais score compte plus que l'ancienneté.
+   *
+   * Le score est une **mesure directe** de la difficulté : je me suis trompé,
+   * c'est un fait. L'ancienneté n'est qu'une **présomption** d'oubli, qui peut
+   * être fausse — on n'oublie pas une réplique jouée cent fois. On pèse donc plus
+   * lourdement ce que l'on sait que ce que l'on suppose.
+   */
+  POIDS_FAIBLESSE: 0.7,
+  POIDS_ANCIENNETE: 0.3,
+});
+
+const JOUR_MS = 86400000;
+
+/**
+ * Difficulté d'une réplique, entre 0 (sue et fraîche) et 1 (au pire).
+ *
+ * Deux termes, et deux seulement, parce que ce sont les deux raisons qu'on a de
+ * revoir une réplique : **je l'ai mal dite**, ou **il y a longtemps**.
+ *
+ * **Le score retenu est le plus récent, non la moyenne.** C'est la règle qui
+ * gouverne déjà le statut : un échec récent défait une maîtrise. Une moyenne
+ * absoudrait la faute d'hier au nom de trois réussites du mois dernier, alors que
+ * c'est précisément la faute d'hier qu'il faut aller retravailler.
+ *
+ * **Jamais récitée vaut le maximum sur les deux termes**, donc 1. Ces répliques
+ * passent devant celles qu'on récite mal, et c'est voulu : une réplique jamais
+ * essayée est un trou noir, une réplique à 30 % est un chantier ouvert. Le premier
+ * coûte plus cher en scène.
+ *
+ * @param {{scores?: Array<{le: number, score: number}>, verifiee_le?: number}} suivi
+ * @param {number} maintenant - horodatage, injecté pour garder la fonction pure
+ * @param {typeof REVISION} reglages
+ * @returns {{difficulte: number, score: number|null, jours: number|null}}
+ */
+export function difficulte(suivi, maintenant, reglages = REVISION) {
+  // `scores` est trié du plus récent au plus ancien par `ajouterScore`.
+  const dernier = suivi?.scores?.[0] ?? null;
+  const vueLe = suivi?.verifiee_le ?? dernier?.le ?? null;
+
+  const score = dernier ? dernier.score : null;
+  const jours =
+    typeof vueLe === 'number' ? Math.max(0, (maintenant - vueLe) / JOUR_MS) : null;
+
+  const faiblesse =
+    score === null ? 1 : Math.min(1, Math.max(0, (100 - score) / 100));
+  const anciennete = jours === null ? 1 : Math.min(1, jours / reglages.HORIZON_JOURS);
+
+  return {
+    difficulte:
+      reglages.POIDS_FAIBLESSE * faiblesse + reglages.POIDS_ANCIENNETE * anciennete,
+    score,
+    jours,
+  };
+}
+
+/**
+ * Mes répliques, de la plus difficile à la moins difficile.
+ *
+ * Sert la file de révision : commencer par ce qui résiste, plutôt que de relire la
+ * pièce du début à chaque fois — ce qui fait qu'on connaît très bien l'acte I et
+ * mal le dernier.
+ *
+ * **L'ordre de jeu tranche les égalités.** Deux répliques d'égale difficulté
+ * doivent sortir dans un ordre stable, sinon la file se réordonne à chaque
+ * ouverture et l'on ne sait plus où l'on en était. `mesRepliques` étant déjà dans
+ * l'ordre de la pièce, il suffit de ne pas le perdre : le tri de JS est stable
+ * depuis ES2019, mais on l'assure explicitement par le rang — s'appuyer sur une
+ * garantie qu'on n'énonce pas est le meilleur moyen de la voir disparaître au
+ * prochain remaniement.
+ *
+ * @param {object} index
+ * @param {Record<string, object>} progres
+ * @param {number} maintenant
+ * @param {{reglages?: typeof REVISION}} options
+ * @returns {Array<{id: string, difficulte: number, score: number|null,
+ *                  jours: number|null, statut: string}>}
+ */
+export function filePrioritaire(index, progres, maintenant, { reglages } = {}) {
+  return index.mesRepliques
+    .map((id, rang) => ({
+      id,
+      rang,
+      statut: progres[id]?.statut ?? STATUT.A_APPRENDRE,
+      ...difficulte(progres[id], maintenant, reglages),
+    }))
+    .sort((a, b) => b.difficulte - a.difficulte || a.rang - b.rang)
+    .map(({ rang, ...reste }) => reste);
+}
+
+/**
  * Fusionne deux progressions — jamais d'écrasement.
  *
  * Appelée à l'import d'une sauvegarde. **L'import fusionne, il n'écrase pas** :

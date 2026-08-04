@@ -14,12 +14,15 @@ import {
   corrigerDerniereRecitation,
   bilan,
   candidatsSpotCheck,
+  difficulte,
+  filePrioritaire,
   chercher,
   fusionnerProgres,
   indexer,
   MOTIF_SANS_TOP,
   repliqueVoisine,
   prochaineRevision,
+  REVISION,
   statutDepuisScores,
   statutDUnite,
   STATUT,
@@ -904,5 +907,126 @@ describe('validation manuelle d’une récitation', () => {
     };
 
     assert.equal(prochaineRevision(suivi, REGLES), T + 7 * JOUR);
+  });
+});
+
+describe('difficulte', () => {
+  const T = 1_800_000_000_000;
+  const JOUR = 86400000;
+
+  test('une reponse parfaite et fraiche donne zero', () => {
+    const suivi = { scores: [{ le: T, score: 100 }], verifiee_le: T };
+
+    assert.equal(difficulte(suivi, T).difficulte, 0);
+  });
+
+  test('jamais recitee vaut le maximum', () => {
+    // Les deux termes sont au plus haut : on ne sait rien, et depuis toujours.
+    assert.equal(difficulte(undefined, T).difficulte, 1);
+    assert.equal(difficulte({ scores: [] }, T).difficulte, 1);
+  });
+
+  test('le dernier score compte, non la moyenne', () => {
+    // Trois reussites puis un echec : c'est l'echec qui doit peser, exactement
+    // comme pour le statut. Une moyenne donnerait 0,225 de faiblesse au lieu de 0,9.
+    const suivi = {
+      scores: [
+        { le: T, score: 10 },
+        { le: T - JOUR, score: 100 },
+        { le: T - 2 * JOUR, score: 100 },
+        { le: T - 3 * JOUR, score: 100 },
+      ],
+      verifiee_le: T,
+    };
+
+    assert.equal(difficulte(suivi, T).score, 10);
+    assert.equal(
+      Math.round(difficulte(suivi, T).difficulte * 1000) / 1000,
+      REVISION.POIDS_FAIBLESSE * 0.9,
+    );
+  });
+
+  test('l anciennete plafonne a l horizon', () => {
+    // Sans plafond, une replique tres vieille ecraserait toute la file.
+    const vieille = { scores: [{ le: T, score: 100 }], verifiee_le: T };
+    const auHorizon = difficulte(vieille, T + REVISION.HORIZON_JOURS * JOUR);
+    const bienApres = difficulte(vieille, T + 300 * JOUR);
+
+    assert.equal(auHorizon.difficulte, REVISION.POIDS_ANCIENNETE);
+    assert.equal(bienApres.difficulte, auHorizon.difficulte);
+  });
+
+  test('un score futur ou negatif ne sort pas des bornes', () => {
+    // Le score vient d'un calcul, donc d'un possible defaut : la difficulte doit
+    // rester dans [0, 1] quoi qu'on lui donne.
+    for (const score of [-50, 0, 50, 100, 150]) {
+      const d = difficulte({ scores: [{ le: T, score }], verifiee_le: T }, T).difficulte;
+
+      assert.ok(d >= 0 && d <= 1, `hors bornes pour ${score} : ${d}`);
+    }
+
+    // Une date dans le futur ne doit pas rendre l'anciennete negative.
+    assert.equal(
+      difficulte({ scores: [{ le: T, score: 100 }], verifiee_le: T + JOUR }, T)
+        .difficulte,
+      0,
+    );
+  });
+});
+
+describe('filePrioritaire', () => {
+  const T = 1_800_000_000_000;
+  const JOUR = 86400000;
+
+  /** Index minimal : seul `mesRepliques` compte ici. */
+  const index = { mesRepliques: ['a', 'b', 'c', 'd'] };
+
+  test('les plus difficiles sortent en tete', () => {
+    const progres = {
+      a: { scores: [{ le: T, score: 100 }], verifiee_le: T, statut: STATUT.MAITRISEE },
+      b: { scores: [{ le: T, score: 20 }], verifiee_le: T, statut: STATUT.EN_COURS },
+      c: {
+        scores: [{ le: T - 60 * JOUR, score: 100 }],
+        verifiee_le: T - 60 * JOUR,
+        statut: STATUT.A_REVISER,
+      },
+      // `d` n'a jamais ete recitee : elle passe devant tout le monde.
+    };
+
+    assert.deepEqual(
+      filePrioritaire(index, progres, T).map((e) => e.id),
+      ['d', 'b', 'c', 'a'],
+    );
+  });
+
+  test('l ordre de jeu tranche les egalites', () => {
+    // Aucune replique recitee : toutes a 1. La file doit alors rendre l'ordre de
+    // la piece, et non un ordre imprevisible qui changerait a chaque ouverture.
+    const file = filePrioritaire(index, {}, T);
+
+    assert.deepEqual(file.map((e) => e.id), ['a', 'b', 'c', 'd']);
+    assert.ok(file.every((e) => e.difficulte === 1));
+  });
+
+  test('chaque entree porte de quoi expliquer son rang', () => {
+    // L'interface doit pouvoir dire *pourquoi* une replique est la : sans cela,
+    // l'ordre parait arbitraire et l'on cesse de s'y fier.
+    const progres = {
+      a: { scores: [{ le: T - 3 * JOUR, score: 40 }], verifiee_le: T - 3 * JOUR },
+    };
+    const entree = filePrioritaire(index, progres, T).find((e) => e.id === 'a');
+
+    assert.equal(entree.score, 40);
+    assert.equal(Math.round(entree.jours), 3);
+    assert.equal(entree.statut, STATUT.A_APPRENDRE, 'statut par defaut si absent');
+  });
+
+  test('toutes mes repliques figurent dans la file, une seule fois', () => {
+    // Une file qui perd des repliques laisserait des trous invisibles : on
+    // croirait avoir tout revu.
+    const ids = filePrioritaire(index, {}, T).map((e) => e.id);
+
+    assert.equal(ids.length, index.mesRepliques.length);
+    assert.deepEqual([...new Set(ids)].sort(), [...index.mesRepliques].sort());
   });
 });

@@ -95,6 +95,15 @@ export const CONFIG = Object.freeze({
    */
   INTERVALLES_REVISION_JOURS: Object.freeze([7, 16, 35]),
 
+  /**
+   * Répliques affichées dans la file de révision.
+   *
+   * Volontairement court. La file complète ferait plusieurs centaines de lignes
+   * sur *La toile d'araignée*, et une liste qu'on ne peut pas finir ne donne pas
+   * envie de la commencer. Douze, c'est une séance.
+   */
+  REPLIQUES_A_REVISER: 12,
+
   // --- Données -----------------------------------------------------
   /** Version de schéma acceptée. Toute autre est refusée, jamais devinée. */
   SCHEMA_ACCEPTE: 'repetition/1',

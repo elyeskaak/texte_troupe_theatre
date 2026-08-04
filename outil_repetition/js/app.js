@@ -1206,6 +1206,8 @@ function ouvrirBilan() {
     `${compte.en_cours} en cours, ${compte.a_apprendre} à apprendre — ` +
     `sur ${compte.total}, pour ${etat.roleActif.join(' & ')}.`;
 
+  remplirFileRevision(index, progres);
+
   const liste = $('bilan-scenes');
   liste.innerHTML = '';
 
@@ -1273,6 +1275,107 @@ function spotCheck() {
 }
 
 // ============================================================
+// FILE DE RÉVISION
+// ============================================================
+
+/**
+ * Va réviser une réplique précise, en aveugle.
+ *
+ * Le mode aveugle est imposé, comme pour le spot check : arriver sur une réplique
+ * déjà lisible ne réviserait rien, on se contenterait de la relire en croyant la
+ * savoir.
+ */
+function allerAReviser(idReplique) {
+  etat = etatSession.changerMode(etat, etatSession.MODE.AVEUGLE);
+  etat = etatSession.allerA(etat, { replique: idReplique });
+
+  appliquer();
+  synchroniserCommandes();
+  montrer('ecran-repetition');
+
+  document
+    .querySelector(`.replique[data-id="${idReplique}"]`)
+    ?.scrollIntoView({ block: 'center' });
+}
+
+/**
+ * Dit en une phrase pourquoi une réplique est dans la file.
+ *
+ * **Sans cette phrase, l'ordre paraîtrait arbitraire.** La difficulté est une
+ * somme pondérée de deux termes : personne ne peut la vérifier de tête, et un
+ * classement qu'on ne comprend pas est un classement auquel on cesse de se fier.
+ * Afficher le motif rend la pondération discutable — donc corrigeable.
+ */
+function motifDeRevision({ score, jours }) {
+  if (score === null) {
+    return 'jamais récitée';
+  }
+
+  const quand =
+    jours < 1
+      ? 'aujourd’hui'
+      : jours < 2
+        ? 'hier'
+        : `il y a ${Math.round(jours)} j`;
+
+  return `${score} % · ${quand}`;
+}
+
+/** Remplit la liste des répliques à revoir, la plus difficile en tête. */
+function remplirFileRevision(index, progres) {
+  const liste = $('file-revision');
+  liste.innerHTML = '';
+
+  const file = modele
+    .filePrioritaire(index, progres, Date.now())
+    .slice(0, CONFIG.REPLIQUES_A_REVISER);
+
+  if (file.length === 0) {
+    $('btn-reviser').disabled = true;
+    return;
+  }
+
+  $('btn-reviser').disabled = false;
+  $('btn-reviser').dataset.cible = file[0].id;
+
+  for (const entree of file) {
+    const ligne = document.createElement('li');
+
+    const gauche = document.createElement('span');
+    const puce = document.createElement('span');
+    puce.className = 'puce-statut';
+    puce.dataset.statut = entree.statut;
+
+    // Le texte est lu dans le DOM, et non recalculé depuis la pièce. Le montage
+    // étant intégral (le masquage n'est que du CSS), la réplique est déjà là avec
+    // son texte complet : la relire ici évite une seconde manière de retrouver
+    // une réplique par son identifiant, donc une seconde manière de se tromper.
+    //
+    // **On vise `.plein`, et non `.texte`.** `.texte` contient aussi le `.acronyme`
+    // du mode du même nom, que le CSS seul écarte : son `textContent` rendait
+    // « Vous ne savez pas.V n s p. » — les deux versions collées. Lire dans le DOM
+    // reste le bon choix, mais il faut lire le bon nœud.
+    const texte =
+      document.querySelector(`.replique[data-id="${entree.id}"] .texte .plein`)
+        ?.textContent ?? '';
+
+    const extrait = document.createElement('span');
+    extrait.className = 'extrait';
+    extrait.textContent = texte.length > 60 ? `${texte.slice(0, 60)}…` : texte;
+    gauche.append(puce, extrait);
+
+    const droite = document.createElement('span');
+    droite.className = 'compte';
+    droite.textContent = motifDeRevision(entree);
+
+    ligne.append(gauche, droite);
+    ligne.style.cursor = 'pointer';
+    ligne.addEventListener('click', () => allerAReviser(entree.id));
+    liste.appendChild(ligne);
+  }
+}
+
+// ============================================================
 // SOMMAIRE, RECHERCHE, DÉFILEMENT — étape 9
 // ============================================================
 
@@ -1334,6 +1437,21 @@ function rechercher(fragment) {
 
 $('btn-sommaire').addEventListener('click', ouvrirBilan);
 $('btn-spot-check').addEventListener('click', spotCheck);
+
+/**
+ * Raccourci vers la plus difficile.
+ *
+ * La cible est relue dans `dataset` au moment du clic, et non capturée à la
+ * construction : la file se recalcule à chaque ouverture du bilan, et un
+ * identifiant figé enverrait vers la réplique la plus difficile d'avant-hier.
+ */
+$('btn-reviser').addEventListener('click', () => {
+  const cible = $('btn-reviser').dataset.cible;
+
+  if (cible) {
+    allerAReviser(cible);
+  }
+});
 $('btn-retour-texte').addEventListener('click', () => montrer('ecran-repetition'));
 
 $('recherche').addEventListener('input', (evenement) => {

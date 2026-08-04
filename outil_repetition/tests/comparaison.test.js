@@ -122,16 +122,28 @@ describe('substitutions', () => {
 });
 
 describe('mots en trop', () => {
-  test('un ajout est signalé mais ne pèse pas sur le score', () => {
-    // Réciter juste en glissant un « eh bien » n'est pas une faute de mémoire.
+  test('un ajout pèse sur le score', () => {
+    // Cette règle était inversée : un « eh bien » glissé donnait 100 %, au motif
+    // que ce n'est pas une faute de mémoire. Au théâtre, c'en est une — broder
+    // décale le rythme et mange le top du partenaire.
     const resultat = comparer('Nous y sommes.', 'Eh bien nous y sommes.');
 
-    assert.equal(resultat.score, 100);
     assert.equal(resultat.corrects, 3);
+    assert.equal(resultat.attendus, 3);
+    assert.equal(resultat.ajoutes, 2);
+    assert.equal(resultat.juges, 5, 'trois attendus, deux ajoutés');
+    assert.equal(resultat.score, 60, '3 justes sur 5 mots jugés');
     assert.equal(
       resultat.details.filter((d) => d.etat === ETAT.AJOUTE).length,
       2,
     );
+  });
+
+  test('seule la récitation exacte donne 100', () => {
+    // Le corollaire, et la raison d'être du dénominateur « jugés » : sans lui,
+    // deux récitations différentes obtiendraient la même note parfaite.
+    assert.equal(comparer('Nous y sommes.', 'Nous y sommes.').score, 100);
+    assert.equal(comparer('Nous y sommes.', 'Nous y sommes vraiment.').score, 75);
   });
 
   test('l’ajout porte le mot dit, pas un mot attendu', () => {

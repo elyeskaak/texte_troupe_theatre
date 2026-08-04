@@ -633,9 +633,24 @@ Classement issu de l'alignement : `correct`, `oublie`, `ajoute`, et **`substitue
 quand un oubli et un ajout sont adjacents** — sinon « chaise » dit à la place de
 « chaire » compterait deux fautes au lieu d'une.
 
-Score = `correct / mots attendus`, arrondi. Les mots en trop pèsent sur le
-détail affiché, pas sur le score : réciter juste en ajoutant un « eh bien » n'est
-pas une faute de mémoire.
+Score = `correct / mots jugés`, arrondi, où **mots jugés = attendus + ajoutés**.
+
+Cette règle était l'inverse : les mots en trop ne comptaient pas, au motif qu'un
+« eh bien » glissé n'est pas une faute de mémoire. C'était une erreur de cadre. Au
+théâtre, broder **est** une faute : un mot ajouté décale le rythme et mange le top
+du partenaire. Le score doit dire ce que dirait un metteur en scène.
+
+Chaque écart compte donc une fois et une seule — un oubli, une substitution ou un
+ajout — et **seule la récitation exacte donne 100 %**. C'est la propriété qui
+manquait : sous l'ancienne règle, deux récitations différentes obtenaient la même
+note parfaite.
+
+La contrepartie est réelle : la transcription iOS insère parfois un mot fantôme, et
+le score en souffre alors sans faute du récitant. C'est ce que « c'était juste »
+existe pour rattraper — le bouton n'est pas une commodité, c'est une pièce du
+dispositif. L'affichage précise « · N mots en trop », sans quoi un score bas obtenu
+en brodant serait incompréhensible : on compterait ses mots justes, on trouverait
+le compte bon, et on croirait le score faux.
 
 ### 9.1 Trois retraits décidés à l'usage
 
@@ -848,6 +863,51 @@ celles qu'on vient de vérifier. Le tirage est donc **pondéré par l'anciennet�
 de la dernière vérification : à maîtrise égale, la plus anciennement vue sort la
 première. C'est le seul comportement qui teste réellement la mémoire à long
 terme, et il ne coûte qu'un tri.
+
+### 10.9 La file de révision : deux raisons, deux poids
+
+Le spot check ne porte que sur les répliques **maîtrisées** : c'est un contrôle
+surprise, pas une séance de travail. Il manquait la question inverse — *par quoi
+commencer ?* — car relire la pièce du début à chaque fois donne une troupe qui
+connaît très bien l'acte I et mal le dernier.
+
+`modele.difficulte()` la tranche avec deux termes, et deux seulement, parce que ce
+sont les deux raisons qu'on a de revoir une réplique : **je l'ai mal dite**, ou **il
+y a longtemps**.
+
+```
+faiblesse   = (100 − dernier score) / 100      jamais récitée → 1
+ancienneté  = min(jours / 30, 1)               jamais récitée → 1
+difficulté  = 0,7 × faiblesse + 0,3 × ancienneté
+```
+
+Trois choix demandent justification.
+
+**Le score retenu est le plus récent, non la moyenne.** C'est la règle qui gouverne
+déjà le statut (§10.7) : un échec récent défait une maîtrise. Une moyenne
+absoudrait la faute d'hier au nom de trois réussites du mois dernier, alors que
+c'est précisément la faute d'hier qu'il faut retravailler.
+
+**La faiblesse pèse plus que l'ancienneté.** Le score est une *mesure directe* de
+la difficulté ; l'ancienneté n'est qu'une *présomption* d'oubli, qui peut être
+fausse — on n'oublie pas une réplique jouée cent fois. On pèse plus lourdement ce
+qu'on sait que ce qu'on suppose.
+
+**L'ancienneté plafonne à trente jours.** Sans plafond, une réplique vue il y a un
+an écraserait tout et la file ne parlerait plus que d'âge. Passé un mois, l'oubli
+est acquis : distinguer 40 de 300 jours n'apprend plus rien.
+
+Une réplique **jamais récitée** vaut 1 sur les deux termes, donc passe devant celles
+qu'on récite mal. C'est assumé : une réplique jamais essayée est un trou noir, une
+réplique à 30 % un chantier ouvert — le premier coûte plus cher en scène.
+
+**L'interface affiche le motif** (« 30 % · aujourd'hui », « jamais récitée »). Une
+somme pondérée ne se vérifie pas de tête, et un classement qu'on ne comprend pas est
+un classement auquel on cesse de se fier. Montrer le motif rend la pondération
+discutable, donc corrigeable — les trois constantes vivent dans `modele.REVISION`.
+
+L'ordre de jeu tranche les égalités, pour que la file ne se réordonne pas d'une
+ouverture à l'autre : une file instable fait perdre le fil de ce qu'on a déjà revu.
 
 ---
 
