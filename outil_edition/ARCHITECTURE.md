@@ -539,7 +539,7 @@ qui était jusqu'ici consommé puis jeté.
 
 ```json
 {
-  "schema": "repetition/1",
+  "schema": "repetition/2",
   "piece": "Le Malentendu",
   "genere_le": "2026-08-03T14:32:10",
   "outil": "outil_edition 1.0.0 — étape 4",
@@ -555,16 +555,18 @@ qui était jusqu'ici consommé puis jeté.
       "personnages": ["JAN", "MARTHA"],
       "elements": [
         { "type": "lieu", "texte": "Une auberge. Le soir." },
-        { "type": "replique", "id": "r_8f3a1c02d4e1", "personnage": "JAN",
+        { "type": "replique", "id": "r_8f3a1c02d4e1", "personnages": ["JAN"],
           "texte": "Je t'attendais depuis une heure.", "vers": false,
-          "didascalies_internes": [{ "avant_mot": 2, "texte": "elle se lève" }] }
+          "didascalies_internes": [{ "avant_mot": 2, "texte": "elle se lève" }] },
+        { "type": "replique", "id": "r_2b7e91a4c3d0", "personnages": ["JAN", "MARTHA"],
+          "texte": "Chippendale ?", "vers": false }
       ]
     }
   ]
 }
 ```
 
-Cinq propriétés portées par ce format.
+Six propriétés portées par ce format.
 
 **L'unité de premier niveau est l'« unité jouable », pas l'acte.** Une liste
 plate couvre les trois cas réels sans arborescence conditionnelle : la pièce
@@ -600,6 +602,18 @@ une réplique perdue y était indétectable.
 `construire_repet()` ne porte **aucun champ de date** : deux appels sur le même
 texte produisent des dictionnaires strictement égaux, ce qui rend le déterminisme
 testable. `genere_le` est ajouté au moment de l'écriture.
+
+**`personnages` d'une réplique est toujours une liste.** « SIR ROWLAND et
+CLARISSA. » ou « X ET Y. » joignent deux personnages dans un même label, et le
+texte est bien dit par les deux — les séparer en deux répliques identiques
+fausserait le compte. Un seul nom dans l'immense majorité des cas produit une
+liste à un élément, ce qui laisse l'identifiant inchangé (§ ci-dessus, la
+jonction d'une liste à un élément est ce nom-là). « TOUS. » est différent :
+il ne nomme personne, et qui est en scène n'est pas su à ce stade. Il se
+traduit par le joker `"*"` plutôt que par une énumération devinée, et ce
+joker vaut pour n'importe quel rôle choisi côté `outil_repetition` — sans
+jamais apparaître dans la distribution `personnages` de tête de document,
+qui ne liste que des rôles qu'on peut effectivement choisir de jouer.
 
 ### 5.8 Journaux `journal_<etape>.json`
 

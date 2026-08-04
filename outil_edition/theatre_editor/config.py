@@ -858,7 +858,7 @@ SUFFIXE_REPET = "_REPET.json"
 # L'outil de répétition refuse un schéma qu'il ne connaît pas, au lieu de
 # l'interpréter au mieux. À incrémenter dès qu'un champ change de sens — jamais
 # quand un champ est seulement ajouté.
-SCHEMA_REPET = "repetition/1"
+SCHEMA_REPET = "repetition/2"
 
 # ------------------------------------------------------------
 # Suffixes de l'ancienne disposition, à plat dans le dossier principal.

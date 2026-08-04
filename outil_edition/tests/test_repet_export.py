@@ -148,8 +148,8 @@ class Repliques(unittest.TestCase):
         """Aucune perte : c'est le défaut qu'on ne voit jamais."""
         self.assertEqual(len(self.repliques), 4)
         self.assertEqual(
-            [r["personnage"] for r in self.repliques],
-            ["JAN", "MARTHA", "JAN", "MARTHA"],
+            [r["personnages"] for r in self.repliques],
+            [["JAN"], ["MARTHA"], ["JAN"], ["MARTHA"]],
         )
 
     def test_la_didascalie_interne_sort_du_texte_a_reciter(self):
@@ -304,6 +304,82 @@ class Personnages(unittest.TestCase):
         document = construire("**JAN.**\nUn *il sort* deux.\n")
 
         self.assertEqual(document["personnages"][0]["mots"], 2)
+
+
+class RepliquesCollectives(unittest.TestCase):
+    """
+    Une réplique peut être dite par plusieurs personnages : « X et Y. » les
+    joint dans le label, « TOUS. » ne nomme personne en particulier.
+    """
+
+    def test_deux_personnages_joints_par_et(self):
+        document = construire("**SIR ROWLAND et CLARISSA.**\nChippendale ?\n")
+
+        self.assertEqual(
+            repliques(document)[0]["personnages"], ["SIR ROWLAND", "CLARISSA"]
+        )
+
+    def test_la_jonction_est_insensible_a_la_casse(self):
+        document = construire("**JAN ET MARTHA.**\nOui.\n")
+
+        self.assertEqual(repliques(document)[0]["personnages"], ["JAN", "MARTHA"])
+
+    def test_les_deux_personnages_apparaissent_dans_l_unite(self):
+        document = construire("**SIR ROWLAND et CLARISSA.**\nChippendale ?\n")
+
+        self.assertEqual(
+            document["unites"][0]["personnages"], ["SIR ROWLAND", "CLARISSA"]
+        )
+
+    def test_les_deux_personnages_sont_credites_dans_la_distribution(self):
+        document = construire("**JAN et MARTHA.**\nOui trois fois.\n")
+        par_nom = {p["nom"]: p for p in document["personnages"]}
+
+        self.assertEqual(par_nom["JAN"]["repliques"], 1)
+        self.assertEqual(par_nom["MARTHA"]["repliques"], 1)
+        self.assertEqual(par_nom["JAN"]["mots"], 3)
+        self.assertEqual(par_nom["MARTHA"]["mots"], 3)
+
+    def test_tous_devient_un_joker(self):
+        document = construire("**TOUS.**\nPlus sûr ?\n")
+
+        self.assertEqual(repliques(document)[0]["personnages"], [repet_export.JOKER_TOUS])
+
+    def test_le_joker_n_apparait_pas_dans_la_distribution(self):
+        """« TOUS » ne nomme personne : ce n'est pas un rôle qu'on peut choisir."""
+        document = construire("**JAN.**\nUn.\n\n**TOUS.**\nDeux.\n")
+        noms = [p["nom"] for p in document["personnages"]]
+
+        self.assertNotIn(repet_export.JOKER_TOUS, noms)
+
+    def test_le_joker_est_dans_les_personnages_de_l_unite(self):
+        """
+        L'outil de répétition en a besoin pour savoir qu'une unité me concerne
+        même si aucun de mes rôles n'y parle seul.
+        """
+        document = construire("**TOUS.**\nPlus sûr ?\n")
+
+        self.assertIn(repet_export.JOKER_TOUS, document["unites"][0]["personnages"])
+
+    def test_identifiant_a_un_seul_personnage_inchange_par_la_liste(self):
+        """
+        Le format évolue vers une liste de personnages, mais une réplique à un
+        seul personnage doit produire exactement l'identifiant d'avant : rien
+        ne doit se déplacer pour l'immense majorité des répliques déjà apprises.
+        """
+        seul = repet_export.identifiant_replique(["JAN"], "Bonjour.", 0)
+
+        self.assertEqual(
+            seul, repet_export.identifiant_replique(["JAN"], "Bonjour.", 0)
+        )
+        self.assertEqual(len(seul), len("r_") + repet_export.LONGUEUR_EMPREINTE)
+
+    def test_deux_repliques_collectives_identiques_ont_des_occurrences_distinctes(self):
+        texte = "**JAN et MARTHA.**\nOui.\n\n**JAN et MARTHA.**\nOui.\n"
+        trouvees = repliques(construire(texte))
+
+        self.assertEqual(len(trouvees), 2)
+        self.assertNotEqual(trouvees[0]["id"], trouvees[1]["id"])
 
 
 class RienDeJeteEnSilence(unittest.TestCase):
@@ -523,7 +599,7 @@ class NomDePersonnage(unittest.TestCase):
     def test_le_nom_apparait_sans_point_dans_le_document(self):
         document = construire("**JAN.**\nBonjour.\n")
 
-        self.assertEqual(repliques(document)[0]["personnage"], "JAN")
+        self.assertEqual(repliques(document)[0]["personnages"], ["JAN"])
         self.assertEqual(document["personnages"][0]["nom"], "JAN")
 
 

@@ -89,6 +89,17 @@ MOTIF_ESPACES = re.compile(r"\s+")
 # `nom_personnage` : sans cela, la même personne se dédouble.
 MOTIF_APOSTROPHES = re.compile(r"[’‘‛`´]")
 
+# Jonction de plusieurs personnages dans un même label : « X et Y. » ou
+# « X ET Y. ». Insensible à la casse, comme le reste de la saisie.
+MOTIF_JONCTION = re.compile(r"\s+et\s+", re.IGNORECASE)
+
+# Label qui ne nomme aucun personnage précis : toute la distribution parle.
+MARQUEUR_TOUS = "TOUS"
+
+# Marque une réplique comme appartenant à n'importe quel rôle choisi, plutôt
+# qu'à un personnage nommé. Voir `noms_personnages`.
+JOKER_TOUS = "*"
+
 
 # ============================================================
 # 1. IDENTIFIANTS
@@ -124,6 +135,25 @@ def nom_personnage(label: str) -> str:
     return MOTIF_APOSTROPHES.sub("'", sans_ponctuation).strip()
 
 
+def noms_personnages(label: str) -> list[str]:
+    """
+    Un ou plusieurs personnages parlant la même réplique.
+
+    « TOUS. » ne nomme personne : qui est en scène n'est pas su à ce stade, et
+    énumérer ici serait faux ou incomplet selon la scène. Il se traduit par
+    `JOKER_TOUS`, qui vaut pour n'importe quel rôle plutôt que pour un
+    personnage fantôme de plus dans la distribution.
+
+    « SIR ROWLAND et CLARISSA. » / « X ET Y. » nomme deux personnages
+    distincts qui parlent ensemble ; chacun est renormalisé comme s'il
+    parlait seul, pour ne pas se dédoubler avec ses répliques individuelles.
+    """
+    if nom_personnage(label).upper() == MARQUEUR_TOUS:
+        return [JOKER_TOUS]
+
+    return [nom_personnage(morceau) for morceau in MOTIF_JONCTION.split(label)]
+
+
 def normaliser_pour_identifiant(texte: str) -> str:
     """
     Normalise un texte pour en dériver un identifiant stable.
@@ -138,22 +168,31 @@ def normaliser_pour_identifiant(texte: str) -> str:
     return MOTIF_ESPACES.sub(" ", sans_emphase).strip().lower()
 
 
-def identifiant_replique(personnage: str, texte: str, occurrence: int) -> str:
+def identifiant_replique(
+    personnages: list[str], texte: str, occurrence: int
+) -> str:
     """
     Empreinte stable d'une réplique.
 
     Args:
-        personnage: nom du personnage, tel que classé.
+        personnages: personnage(s) disant la réplique, tels que classés — un
+            seul nom dans l'immense majorité des cas, plusieurs pour une
+            réplique collective.
         texte: texte parlé, didascalies internes exclues.
-        occurrence: rang de cette réplique parmi les répliques identiques du
-            même personnage, à partir de 0.
+        occurrence: rang de cette réplique parmi les répliques identiques des
+            mêmes personnages, à partir de 0.
 
     Le rang n'entre dans l'empreinte que **s'il est non nul**. Sans cette
     précaution, ajouter un second « Oui. » à MARTHA changerait l'identifiant du
     premier, qui existait pourtant déjà : ajouter une réplique ne doit jamais
     faire perdre le statut d'une autre.
+
+    Un seul personnage produit exactement l'empreinte d'avant l'introduction
+    des répliques collectives : la jonction d'une liste à un élément est ce
+    nom-là, donc aucun identifiant existant ne se déplace avec cette évolution
+    du format.
     """
-    graine = f"{personnage}|{normaliser_pour_identifiant(texte)}"
+    graine = f"{'/'.join(personnages)}|{normaliser_pour_identifiant(texte)}"
 
     if occurrence:
         graine = f"{graine}|{occurrence}"
@@ -297,8 +336,9 @@ class _Constructeur:
         self._scene: str | None = None
 
         # Réplique en cours : un PERSONNAGE ouvre, les TEXTE qui suivent
-        # l'alimentent, tout autre type la referme.
-        self._personnage: str | None = None
+        # l'alimentent, tout autre type la referme. Une liste et non un nom
+        # seul : une réplique peut être dite par plusieurs personnages.
+        self._personnages: list[str] | None = None
         self._lignes: list[str] = []
 
         # Comptages, pour la section « personnages » et les identifiants.
@@ -333,8 +373,16 @@ class _Constructeur:
             return
 
         if ligne.type is blocks.TypeLigne.PERSONNAGE:
-            self._personnage = nom_personnage(ligne.texte)
-            self._relever_graphie(ligne.texte, self._personnage)
+            self._personnages = noms_personnages(ligne.texte)
+
+            # Le joker ne provient d'aucune graphie à surveiller : « TOUS »
+            # n'est le nom de personne.
+            if self._personnages != [JOKER_TOUS]:
+                for brut, canonique in zip(
+                    MOTIF_JONCTION.split(ligne.texte), self._personnages
+                ):
+                    self._relever_graphie(brut, canonique)
+
             return
 
         nom_element = TYPES_ELEMENT_SIMPLE.get(ligne.type)
@@ -433,7 +481,7 @@ class _Constructeur:
 
     def _ajouter_texte(self, ligne: blocks.LigneClassee) -> None:
         """Une ligne de texte alimente la réplique en cours, ou se signale."""
-        if self._personnage is None:
+        if self._personnages is None:
             # Ni jetée, ni recollée à la réplique précédente : conservée sous un
             # type propre et signalée. C'est le seul comportement qui rende une
             # anomalie de structure visible plutôt qu'indétectable.
@@ -448,13 +496,13 @@ class _Constructeur:
 
     def _fermer_replique(self) -> None:
         """Clôt la réplique en cours et l'ajoute à l'unité."""
-        personnage = self._personnage
+        personnages = self._personnages
         lignes = self._lignes
 
-        self._personnage = None
+        self._personnages = None
         self._lignes = []
 
-        if personnage is None:
+        if personnages is None:
             return
 
         if not lignes:
@@ -473,14 +521,14 @@ class _Constructeur:
                 self._element({"type": "didascalie", "texte": didascalie["texte"]})
             return
 
-        cle = (personnage, normaliser_pour_identifiant(parole.texte))
+        cle = (tuple(personnages), normaliser_pour_identifiant(parole.texte))
         occurrence = self._occurrences.get(cle, 0)
         self._occurrences[cle] = occurrence + 1
 
         element = {
             "type": "replique",
-            "id": identifiant_replique(personnage, parole.texte, occurrence),
-            "personnage": personnage,
+            "id": identifiant_replique(personnages, parole.texte, occurrence),
+            "personnages": personnages,
             "texte": parole.texte,
             "vers": _est_en_vers(lignes),
         }
@@ -492,11 +540,20 @@ class _Constructeur:
 
         unite = self._unite_courante()
 
-        if personnage not in unite.personnages:
-            unite.personnages.append(personnage)
+        for personnage in personnages:
+            if personnage not in unite.personnages:
+                unite.personnages.append(personnage)
 
-        self._repliques[personnage] = self._repliques.get(personnage, 0) + 1
-        self._mots[personnage] = self._mots.get(personnage, 0) + len(_mots(parole.texte))
+            # Le joker ne compte pour personne en particulier : il n'a pas de
+            # volume propre, et l'inscrire gonflerait faussement le rôle de
+            # tout le monde.
+            if personnage == JOKER_TOUS:
+                continue
+
+            self._repliques[personnage] = self._repliques.get(personnage, 0) + 1
+            self._mots[personnage] = self._mots.get(personnage, 0) + len(
+                _mots(parole.texte)
+            )
 
     # --- sortie -----------------------------------------------------
 
