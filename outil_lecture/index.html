@@ -166,10 +166,22 @@
   body.mode-controle #ecran-projection { display: none; }
   body:not(.mode-controle) #ecran-controle { display: none; }
 
+  /*
+   * Retour d'usage : `0.9vw` s'effondre à quelques pixels sur un écran de
+   * téléphone (390px de large ≈ 3.5px), rendant le bouton illisible et
+   * impossible à toucher précisément. `clamp()` garantit une taille et une
+   * cible tactile minimales (~44px, repère d'accessibilité usuel) quelle
+   * que soit la largeur d'écran, tout en restant discret sur un grand
+   * écran de projection.
+   */
   #bouton-reouvrir-controle {
     background: none; border: 1px solid var(--bordure); color: var(--attenue);
-    border-radius: 0.3vw; cursor: pointer; font-size: 0.9vw; line-height: 1;
-    padding: 0.2em 0.5em;
+    border-radius: 0.4rem; cursor: pointer; line-height: 1;
+    font-size: clamp(1.1rem, 1.6vw, 1.4rem);
+    padding: 0.5em 0.7em;
+    min-width: 2.75rem; min-height: 2.75rem;
+    display: inline-flex; align-items: center; justify-content: center;
+    flex: none;
   }
 
   /* ------------------------------------------------------------
@@ -333,8 +345,8 @@
 
   #barre-progression {
     flex: none;
-    padding: 0.6vw 1.4vw;
-    font-size: 0.9vw;
+    padding: clamp(0.4rem, 0.6vw, 0.9rem) clamp(0.8rem, 1.4vw, 1.4rem);
+    font-size: clamp(0.75rem, 0.9vw, 1rem);
     color: var(--attenue);
     border-top: 1px solid #222;
     display: flex;
@@ -343,15 +355,24 @@
     justify-content: space-between;
   }
 
+  /* Même correctif que #bouton-reouvrir-controle ci-dessus : cible tactile
+     garantie sur petit écran, `0.9vw` seul y était illisible et impossible
+     à toucher précisément (retour d'usage, iPhone). */
   #bouton-sommaire {
     background: none;
-    border: 1px solid #333;
+    border: 1px solid var(--bordure);
     color: var(--attenue);
-    border-radius: 0.3vw;
+    border-radius: 0.4rem;
     cursor: pointer;
-    font-size: 0.9vw;
     line-height: 1;
-    padding: 0.2em 0.5em;
+    font-size: clamp(1.1rem, 1.6vw, 1.4rem);
+    padding: 0.5em 0.7em;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
   }
 
   /* Sommaire cliquable des actes/scènes (§9, retour d'usage) : recouvre la

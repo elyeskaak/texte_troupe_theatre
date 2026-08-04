@@ -501,6 +501,17 @@ l'absence de suite de tests formelle (§2.2).
 de `calculerSommaire` (§5). Discrète, en pied de fenêtre, jamais superposée au
 texte en cours.
 
+**Bug corrigé à l'usage (iPhone) :** ses boutons (`#bouton-sommaire`,
+`#bouton-reouvrir-controle`) et son texte étaient dimensionnés en `vw` seul
+(`0.9vw`) — pensé pour un écran de projection large, ça s'effondre à
+quelques pixels sur un téléphone (`0.9vw` d'un écran de 390 px ≈ 3,5 px) :
+texte illisible, bouton impossible à toucher précisément, y compris celui
+qui permet de revenir à une scène antérieure via le sommaire. Corrigé avec
+`clamp()` : une taille et une cible tactile plancher garanties (~44 px, le
+repère d'accessibilité usuel pour un doigt), quelle que soit la largeur
+d'écran, qui ne grandissent que modestement sur un grand écran de
+projection — jamais l'inverse d'un problème qu'on vient de résoudre.
+
 ### 8.5 Pagination des longues tirades
 
 **Révision à l'usage :** une tirade longue, même réduite en taille (§8.1),
