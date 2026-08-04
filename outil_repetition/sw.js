@@ -131,11 +131,20 @@ const CACHABLES = new Set(
  * Le prix est un aller-retour réseau au démarrage quand on est connecté. Sur
  * douze fichiers de quelques kilo-octets, il est imperceptible ; et l'exigence
  * était de s'ouvrir **sans** réseau, pas de s'ouvrir instantanément avec.
+ *
+ * **`cache: 'no-store'` sur le `fetch`, et c'est délibéré.** GitHub Pages sert
+ * ces fichiers avec `Cache-Control: max-age=600` : sans cette option, ce
+ * `fetch` reste soumis au cache HTTP ordinaire du navigateur et peut resservir
+ * une réponse vieille de dix minutes **sans aller au réseau du tout** — donc
+ * sans jamais voir un correctif tout juste déployé, malgré la stratégie
+ * « réseau d'abord ». Repéré exactement de cette façon : un correctif poussé,
+ * `VERSION` incrémentée, et pourtant invisible pendant les dix minutes
+ * suivantes sur un navigateur qui avait déjà chargé la page.
  */
 async function reseauDAbord(requete) {
   try {
     const reponse = await Promise.race([
-      fetch(requete),
+      fetch(requete, { cache: 'no-store' }),
       new Promise((_, rejeter) =>
         setTimeout(() => rejeter(new Error('délai réseau dépassé')), DELAI_RESEAU_MS),
       ),
