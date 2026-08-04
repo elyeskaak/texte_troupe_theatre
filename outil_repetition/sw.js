@@ -33,7 +33,7 @@
  * garde-fou reste utile, mais il n'est plus la seule ligne de défense — il l'a été,
  * et cela n'a pas suffi.
  */
-const VERSION = 'repetition-v23';
+const VERSION = 'repetition-v24';
 
 const FICHIERS = [
   './',

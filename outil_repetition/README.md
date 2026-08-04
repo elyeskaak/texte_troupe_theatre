@@ -24,6 +24,18 @@ Le code est public, **les textes ne le sont pas** : les pièces sont chargées s
 l'appareil et vivent dans son navigateur. C'est ce qui rend le déploiement
 compatible avec les droits d'auteur.
 
+## Retrouver ses pièces sans dossier local : Google Drive
+
+Sur l'écran d'accueil, **« Se connecter à Google Drive »** ouvre un sélecteur
+Google pour choisir un dossier (une seule fois — il est ensuite retenu sur cet
+appareil), puis liste ses `_REPET.json` avec un bouton « Charger » chacun,
+exactement comme un fichier importé à la main. Voir
+[`ARCHITECTURE.md`](ARCHITECTURE.md) §3.3 pour le mécanisme complet et ses
+limites (Safari/iPhone notamment).
+
+C'est une commodité de plus, jamais requise : le dossier partagé local (ci-dessus)
+et l'import manuel continuent de fonctionner sans elle.
+
 ## Attention : Safari purge le stockage
 
 Depuis iOS 13.4, Safari efface `localStorage` après **7 jours sans interaction**

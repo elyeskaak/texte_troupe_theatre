@@ -657,6 +657,24 @@
       <div id="liste-pieces-disponibles" class="pile"></div>
     </div>
 
+    <!-- Google Drive (§3.3 de ARCHITECTURE.md) : dossier partagé choisi par
+         l'utilisateur, pour retrouver ses pièces sans dossier local — une
+         commodité de plus, jamais requise, comme le bloc ci-dessus. -->
+    <div id="bloc-drive">
+      <label class="champ">Google Drive</label>
+      <div class="rangee">
+        <button id="btn-drive-connecter" class="btn btn-fantome btn-mini">
+          Se connecter à Google Drive
+        </button>
+        <button id="btn-drive-changer-dossier" class="btn btn-fantome btn-mini" hidden>
+          Changer de dossier
+        </button>
+      </div>
+      <p id="drive-dossier-actuel" class="aide" hidden></p>
+      <div id="liste-pieces-drive" class="pile"></div>
+      <p id="message-drive" class="message" hidden></p>
+    </div>
+
     <!-- L'ajout est replié : un comédien ne doit pas voir de JSON pour répéter.
          L'import de fichier vient en premier, le collage en second recours. -->
     <div class="rangee" style="margin-top:22px">

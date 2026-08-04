@@ -20,6 +20,7 @@ import { comparer } from './comparaison.js';
 import { graineDepuis, tirerPondere } from './tirage.js';
 import { creerStockage, ErreurStockage, idDePiece } from './stockage.js';
 import { piecesNonImportees } from './manifeste.js';
+import * as drive from '../pieces/drive.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -276,6 +277,170 @@ async function chargerDepuisManifeste(fichier, bouton) {
     chargerDepuisTexte(await reponse.text());
   } catch (erreur) {
     afficherMessage('message-accueil', `Chargement impossible : ${erreur.message}`);
+    bouton.disabled = false;
+    bouton.textContent = 'Charger';
+  }
+}
+
+// ============================================================
+// GOOGLE DRIVE (§3.3 de ARCHITECTURE.md)
+// ============================================================
+
+/**
+ * Jeton d'accès de la session en cours, jamais persisté (§3.3 : il expire de
+ * toute façon en ~1h, et n'a rien à faire dans `localStorage` — seul
+ * `{ id, nom }` du dossier choisi y vit, via `stockage.ecrireDossierDrive`).
+ */
+let jetonDrive = null;
+
+/** Affiche le dossier retenu, s'il y en a un, au chargement de l'écran d'accueil. */
+function afficherDossierDriveActuel() {
+  const dossier = stockage.lireDossierDrive();
+
+  $('drive-dossier-actuel').hidden = !dossier;
+  $('btn-drive-changer-dossier').hidden = !dossier;
+
+  if (dossier) {
+    $('drive-dossier-actuel').textContent = `Dossier : ${dossier.nom}`;
+  }
+}
+
+/**
+ * Message d'une `ErreurDrive`, ou message générique pour toute autre erreur.
+ *
+ * Même logique que `avecStockage` : jamais un `catch` qui avale, toujours un
+ * message affiché (P3).
+ */
+function messageDrive(erreur) {
+  return erreur instanceof drive.ErreurDrive
+    ? erreur.message
+    : `erreur inattendue : ${erreur.message}`;
+}
+
+/**
+ * Connexion à Google Drive, puis choix du dossier s'il n'y en a pas déjà un
+ * de retenu.
+ *
+ * Toujours une nouvelle authentification, jamais un jeton réutilisé au-delà
+ * de la session : le jeton expire de toute façon en ~1h (§3.3), et une
+ * reconnexion silencieuse n'est de toute façon pas garantie sur Safari/iPhone
+ * (ITP). Un clic de plus au pire, jamais une donnée perdue.
+ */
+async function connecterDrive() {
+  effacerMessage('message-drive');
+
+  const bouton = $('btn-drive-connecter');
+  bouton.disabled = true;
+  bouton.textContent = 'Connexion…';
+
+  try {
+    jetonDrive = await drive.authentifier({
+      clientId: CONFIG.DRIVE_CLIENT_ID,
+      scope: CONFIG.DRIVE_SCOPE,
+    });
+
+    let dossier = stockage.lireDossierDrive();
+
+    if (!dossier) {
+      const choisi = await drive.choisirDossier({
+        apiKey: CONFIG.DRIVE_API_KEY,
+        accessToken: jetonDrive,
+      });
+
+      if (!choisi) {
+        afficherMessage('message-drive', 'Aucun dossier choisi.', 'avertissement');
+        return;
+      }
+
+      avecStockage(() => stockage.ecrireDossierDrive(choisi), 'message-drive');
+      dossier = choisi;
+    }
+
+    afficherDossierDriveActuel();
+    await rafraichirPiecesDrive(dossier.id);
+  } catch (erreur) {
+    afficherMessage('message-drive', messageDrive(erreur));
+  } finally {
+    bouton.disabled = false;
+    bouton.textContent = 'Se connecter à Google Drive';
+  }
+}
+
+/** Choisit un autre dossier que celui retenu, sans redemander l'authentification si elle est encore valide. */
+async function changerDossierDrive() {
+  effacerMessage('message-drive');
+
+  if (!jetonDrive) {
+    return connecterDrive();
+  }
+
+  try {
+    const choisi = await drive.choisirDossier({
+      apiKey: CONFIG.DRIVE_API_KEY,
+      accessToken: jetonDrive,
+    });
+
+    if (!choisi) {
+      return;
+    }
+
+    avecStockage(() => stockage.ecrireDossierDrive(choisi), 'message-drive');
+    afficherDossierDriveActuel();
+    await rafraichirPiecesDrive(choisi.id);
+  } catch (erreur) {
+    afficherMessage('message-drive', messageDrive(erreur));
+  }
+}
+
+async function rafraichirPiecesDrive(dossierId) {
+  const liste = $('liste-pieces-drive');
+  liste.innerHTML = '';
+
+  const fichiers = await drive.listerFichiers(jetonDrive, dossierId);
+
+  for (const fichier of fichiers) {
+    liste.appendChild(carteDeFichierDrive(fichier));
+  }
+}
+
+function carteDeFichierDrive(fichier) {
+  const carte = document.createElement('div');
+  carte.className = 'carte';
+
+  const gauche = document.createElement('div');
+  const titre = document.createElement('div');
+  titre.className = 'titre';
+  titre.textContent = fichier.name.replace(/_REPET\.json$/, '');
+  gauche.append(titre);
+
+  const charger = document.createElement('button');
+  charger.className = 'btn btn-fantome btn-mini';
+  charger.textContent = 'Charger';
+  charger.addEventListener('click', () => chargerDepuisDrive(fichier, charger));
+
+  const droite = document.createElement('div');
+  droite.className = 'rangee';
+  droite.append(charger);
+
+  carte.append(gauche, droite);
+
+  return carte;
+}
+
+/**
+ * Récupère un `REPET.json` depuis Drive et le charge comme s'il venait d'être
+ * collé ou importé par fichier (§3.3 : même chemin de validation, aucun cas
+ * particulier).
+ */
+async function chargerDepuisDrive(fichier, bouton) {
+  effacerMessage('message-drive');
+  bouton.disabled = true;
+  bouton.textContent = 'Chargement…';
+
+  try {
+    chargerDepuisTexte(await drive.lireFichier(jetonDrive, fichier.id));
+  } catch (erreur) {
+    afficherMessage('message-drive', messageDrive(erreur));
     bouton.disabled = false;
     bouton.textContent = 'Charger';
   }
@@ -960,6 +1125,9 @@ function lireFichier(input, suite) {
 // ÉCOUTEURS
 // ============================================================
 
+$('btn-drive-connecter').addEventListener('click', connecterDrive);
+$('btn-drive-changer-dossier').addEventListener('click', changerDossierDrive);
+
 $('btn-ouvrir-ajout').addEventListener('click', () => {
   const bloc = $('bloc-ajout');
   const ouvert = bloc.hidden;
@@ -1172,6 +1340,7 @@ function basculerRecitation(replique) {
 
 rafraichirBandeaux();
 rafraichirListePieces();
+afficherDossierDriveActuel();
 
 // Le bandeau d'inertie est visible dans le HTML : l'atteindre prouve que les
 // modules se sont chargés et que les écouteurs sont posés. C'est donc la

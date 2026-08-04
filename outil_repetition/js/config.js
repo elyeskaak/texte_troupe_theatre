@@ -115,4 +115,21 @@ export const CONFIG = Object.freeze({
    * choisi — voir `modele.estMienne`.
    */
   JOKER_TOUS: '*',
+
+  // --- Google Drive (../pieces/drive.js, §3.3 de ARCHITECTURE.md) --
+  /**
+   * Ni l'un ni l'autre n'est un secret (§3.3) : la sécurité vient des
+   * origines JavaScript autorisées côté Google Cloud et du consentement
+   * utilisateur, pas de leur confidentialité — ils peuvent rester en clair
+   * ici, dans le code public.
+   */
+  DRIVE_CLIENT_ID:
+    '865511393898-i692e2218d8u8hb4rd5afhjjhfb9opec.apps.googleusercontent.com',
+  DRIVE_API_KEY: 'AIzaSyBKHu8igUEGgbNAACvjYZbCPppHi8nc8VU',
+  /**
+   * Accès restreint à ce que l'utilisateur choisit explicitement dans le
+   * sélecteur Google (Picker), jamais un accès large à tout son Drive
+   * (`drive.readonly`) — décision retenue en §3.3.
+   */
+  DRIVE_SCOPE: 'https://www.googleapis.com/auth/drive.file',
 });

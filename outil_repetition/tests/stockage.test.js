@@ -405,6 +405,21 @@ describe('session et réglages', () => {
   });
 });
 
+describe('dossier Google Drive retenu (§3.3)', () => {
+  test('aller-retour', () => {
+    stockage.ecrireDossierDrive({ id: 'DOSSIER123', nom: 'Pièces Troupe 122' });
+
+    assert.deepEqual(stockage.lireDossierDrive(), {
+      id: 'DOSSIER123',
+      nom: 'Pièces Troupe 122',
+    });
+  });
+
+  test('sans dossier enregistré, null', () => {
+    assert.equal(stockage.lireDossierDrive(), null);
+  });
+});
+
 describe('rôles retenus par pièce', () => {
   test('aller-retour', () => {
     const id = stockage.enregistrerPiece(PIECE);

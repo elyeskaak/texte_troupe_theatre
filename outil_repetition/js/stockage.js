@@ -38,6 +38,8 @@ export const CLE = Object.freeze({
   reglages: () => `${P}:reglages`,
   session: () => `${P}:session`,
   dernierExport: () => `${P}:dernier-export`,
+  /** Dossier Google Drive retenu (§3.3 de ARCHITECTURE.md) — global, pas par pièce. */
+  dossierDrive: () => `${P}:drive-dossier`,
 });
 
 /** Erreur de stockage, porteuse d'un message affichable tel quel. */
@@ -267,6 +269,18 @@ export function creerStockage(support = undefined) {
     lireSession: () => lireTolerant(CLE.session(), null),
     ecrireSession(session) {
       ecrire(CLE.session(), session);
+    },
+
+    /**
+     * Dossier Google Drive retenu (§3.3), `{ id, nom }` ou `null`.
+     *
+     * Seul l'identifiant et le nom sont conservés — jamais le jeton d'accès,
+     * qui reste en mémoire pour la session en cours et n'a rien à faire dans
+     * un stockage persistant (§3.3 : il expire de toute façon en ~1h).
+     */
+    lireDossierDrive: () => lireTolerant(CLE.dossierDrive(), null),
+    ecrireDossierDrive(dossier) {
+      ecrire(CLE.dossierDrive(), dossier);
     },
 
     // --- export / import -----------------------------------------
