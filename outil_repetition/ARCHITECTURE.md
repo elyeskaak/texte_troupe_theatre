@@ -1288,7 +1288,7 @@ Un commit par étape. Reprend le §13 du cahier, en le précisant.
 | 10 | ✅ *fait* — `voix.js`, récitation contrôlée | **reste à éprouver sur iPhone**, micro compris |
 | 11 | `manifest` ✅, `sw.js` ✅ — **activation de GitHub Pages à faire à la main** | ouverture hors ligne depuis l'écran d'accueil |
 | 12 | `README.md` du sous-projet | — |
-| 13 | ✅ *fait* — `pieces/drive.js`, section « Charger depuis Google Drive » (§3.3, §15 pts 5-7) | 406 tests Node verts ; **reste à éprouver en vrai navigateur** (OAuth, Picker, non testables sans lui) |
+| 13 | ✅ *fait* — `pieces/drive.js`, section « Charger depuis Google Drive » (§3.3, §15 pts 5-7) | 410 tests Node verts ; **éprouvé en vrai sur ordinateur** (connexion, choix du dossier, chargement d'une pièce, après correction du scope — §15 pt 6) ; **reste l'iPhone/iPad** |
 
 L'ordre 4 → 5 → 6 → 7 n'est pas négociable : le pur avant l'impur, la logique
 avant le DOM. Il donne des tests verts avant qu'il y ait quoi que ce soit à

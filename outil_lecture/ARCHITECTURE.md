@@ -1101,7 +1101,7 @@ DOM.
 | 4 | ✅ *fait* — écran de préparation + attribution personnage → slot (§6), reprise de session | import → attribution → démarrage → reprise, vérifié de bout en bout |
 | 5 | ✅ *fait* — fenêtre de contrôle + `BroadcastChannel` (§7) | prénom diffusé, popup bloquée gérée |
 | 6 | ✅ *fait* — `README.md`, `.gitignore` (`outil_lecture/pieces/`), lien depuis le `README.md` racine | relecture |
-| 7 | ✅ *fait* — `import('../pieces/drive.js')` + section « Charger depuis Google Drive » (§4.3, §13 pts 5-7). La publication GitHub Pages était déjà active (le repo entier y est servi depuis `outil_repetition`) | `file://` toujours fonctionnel en repli ; **reste à éprouver Drive en vrai** sur ordinateur et iPhone/iPad |
+| 7 | ✅ *fait* — `import('../pieces/drive.js')` + section « Charger depuis Google Drive » (§4.3, §13 pts 5-7). La publication GitHub Pages était déjà active (le repo entier y est servi depuis `outil_repetition`) | `file://` toujours fonctionnel en repli ; **éprouvé en vrai sur ordinateur** (après correction du filtre de fichiers et du scope, §13 pt 6) ; **reste l'iPhone/iPad** |
 
 **Les six premières étapes sont livrées.** Reste, à l'usage réel
 (vidéoprojecteur, deuxième écran, plusieurs lecteurs), à confirmer la
