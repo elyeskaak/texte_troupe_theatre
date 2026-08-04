@@ -524,6 +524,25 @@ repère d'accessibilité usuel pour un doigt), quelle que soit la largeur
 d'écran, qui ne grandissent que modestement sur un grand écran de
 projection — jamais l'inverse d'un problème qu'on vient de résoudre.
 
+**Deuxième bug, la barre restait invisible malgré la taille corrigée.**
+Deux causes probables, corrigées ensemble faute de pouvoir vérifier sur un
+appareil réel dans cet environnement (aucun navigateur accessible ici) :
+
+1. **Contraste quasi nul.** La barre n'avait ni fond ni bordure vraiment
+   visibles — texte atténué (`--attenue`) sur le fond presque noir de la
+   projection, bordure `#222` sur ce même fond : la barre se distinguait à
+   peine du reste de l'écran, sans qu'il y ait de bug de positionnement.
+   Corrigé avec un fond distinct (`--fond-releve`), une bordure plus
+   visible (`--bordure`) et le texte clair (`--texte-clair`) plutôt
+   qu'atténué.
+2. **La zone de balayage du bas sur iPhone sans bouton (« home
+   indicator »)** peut chevaucher une barre calée en bas sans marge
+   dédiée. `env(safe-area-inset-bottom)` ajoute cette marge — mais
+   l'environnement CSS `env()` ne vaut jamais que zéro sans
+   `viewport-fit=cover` dans la balise `<meta name="viewport">`, ajoutée à
+   cette occasion. Le panneau de sommaire (§8.6), plein écran lui aussi,
+   reçoit la même marge en haut et en bas.
+
 ### 8.5 Pagination des longues tirades
 
 **Révision à l'usage :** une tirade longue, même réduite en taille (§8.1),

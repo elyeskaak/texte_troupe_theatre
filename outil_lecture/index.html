@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Lecture projetée — Troupe 122</title>
 <style>
   /* ------------------------------------------------------------
@@ -341,12 +341,26 @@
     padding: 0 0.3em;
   }
 
+  /*
+   * Retour d'usage : la barre restait invisible sur iPhone. Deux causes
+   * probables, corrigées ensemble faute de pouvoir tester sur un appareil
+   * réel dans cet environnement (aucun navigateur accessible ici) :
+   * (1) aucun fond ni bordure vraiment visibles — un texte atténué sur un
+   * fond presque noir, sur une bordure presque noire, se distinguait à
+   * peine du reste de l'écran ; (2) la zone de balayage du bas (« home
+   * indicator ») sur un iPhone sans bouton peut chevaucher une barre
+   * calée en bas sans marge dédiée. `env(safe-area-inset-bottom)` corrige
+   * le second point — actif uniquement grâce à `viewport-fit=cover` dans
+   * la balise meta viewport, sans quoi il vaut toujours zéro.
+   */
   #barre-progression {
     flex: none;
-    padding: clamp(0.4rem, 0.6vw, 0.9rem) clamp(0.8rem, 1.4vw, 1.4rem);
+    padding: clamp(0.4rem, 0.6vw, 0.9rem) clamp(0.8rem, 1.4vw, 1.4rem)
+      calc(clamp(0.4rem, 0.6vw, 0.9rem) + env(safe-area-inset-bottom, 0px));
     font-size: clamp(0.75rem, 0.9vw, 1rem);
-    color: var(--attenue);
-    border-top: 1px solid #222;
+    color: var(--texte-clair);
+    background: var(--fond-releve);
+    border-top: 1px solid var(--bordure);
     display: flex;
     align-items: center;
     gap: 0.6em;
@@ -382,7 +396,7 @@
     inset: 0;
     background: rgba(8, 8, 11, 0.97);
     overflow-y: auto;
-    padding: 3vh 4vw;
+    padding: max(3vh, env(safe-area-inset-top, 0px)) 4vw max(3vh, env(safe-area-inset-bottom, 0px));
     z-index: 5;
     -webkit-overflow-scrolling: touch;
   }
