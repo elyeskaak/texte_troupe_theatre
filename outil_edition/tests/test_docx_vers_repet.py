@@ -10,10 +10,12 @@ de leur côté ; ces tests portent sur l'assemblage des deux et sur l'absence de
 
 from __future__ import annotations
 
+import io as iolib
 import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parent.parent
@@ -43,6 +45,27 @@ def _ecrire_docx_minimal(chemin: Path, *, nom: str = "JAN", texte: str = "Nous y
 
 class SansDocxEnSortie(unittest.TestCase):
     """L'invariant qui justifie l'existence de ce module."""
+
+    def test_aucune_suggestion_de_regenerer_un_docx(self):
+        """
+        `convertir_fichier` suggère par défaut de lancer l'étape 4, qui écrit
+        un `.docx` — suivie à la lettre, elle en écrirait un second dans le
+        dossier partagé, à côté de la source, sans qu'on sache plus lequel
+        fait foi. C'est arrivé une fois ; ce test garde le silence sur ce
+        point précis.
+        """
+        with tempfile.TemporaryDirectory() as brut:
+            dossier = Path(brut)
+            source = dossier / "source" / "Ma pièce.docx"
+            source.parent.mkdir(parents=True)
+            _ecrire_docx_minimal(source)
+
+            capture = iolib.StringIO()
+            with redirect_stdout(capture):
+                regenerer_repet(source, dossier / "travail")
+
+            self.assertNotIn("Étape suivante", capture.getvalue())
+            self.assertNotIn("--etape docx", capture.getvalue())
 
     def test_aucun_docx_n_est_ecrit(self):
         with tempfile.TemporaryDirectory() as brut:

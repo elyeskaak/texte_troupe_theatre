@@ -12,8 +12,11 @@ attribuée au mauvais personnage, un texte perdu.
 
 from __future__ import annotations
 
+import io as iolib
 import sys
+import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 
 RACINE = Path(__file__).resolve().parent.parent
@@ -21,7 +24,9 @@ RACINE = Path(__file__).resolve().parent.parent
 if str(RACINE) not in sys.path:
     sys.path.insert(0, str(RACINE))
 
-from outils.docx_vers_edit import Paragraphe, convertir  # noqa: E402
+import docx  # noqa: E402
+
+from outils.docx_vers_edit import Paragraphe, convertir, convertir_fichier  # noqa: E402
 from theatre_editor.utils import blocks  # noqa: E402
 
 
@@ -200,6 +205,53 @@ class RienDeSilencieux(unittest.TestCase):
         self.assertEqual(rapport.scenes, 1)
         self.assertEqual(rapport.repliques, 2)
         self.assertEqual(rapport.personnages, {"HUGO.", "JAN."})
+
+
+class AnnonceDeLEtapeSuivante(unittest.TestCase):
+    """
+    La suggestion « python -m theatre_editor.main --etape docx » régénère un
+    `.docx`. Un appelant qui n'en veut jamais — `docx_vers_repet.py` — doit
+    pouvoir la couper : suivie à la lettre par erreur, elle écrit un second
+    `.docx` à côté de la source, dans un dossier partagé, sans qu'on sache
+    plus lequel fait foi. C'est arrivé une fois.
+    """
+
+    def _docx_minimal(self, chemin: Path) -> None:
+        document = docx.Document()
+        document.add_paragraph("ACTE PREMIER", style="Heading 1")
+        personnage = document.add_paragraph()
+        personnage.add_run("JAN").bold = True
+        document.add_paragraph("Bonjour.")
+        document.save(str(chemin))
+
+    def test_annoncee_par_defaut(self):
+        with tempfile.TemporaryDirectory() as brut:
+            dossier = Path(brut)
+            source = dossier / "source" / "Ma pièce.docx"
+            source.parent.mkdir(parents=True)
+            self._docx_minimal(source)
+
+            capture = iolib.StringIO()
+            with redirect_stdout(capture):
+                convertir_fichier(source, dossier / "travail")
+
+            self.assertIn("Étape suivante", capture.getvalue())
+
+    def test_coupee_sur_demande(self):
+        with tempfile.TemporaryDirectory() as brut:
+            dossier = Path(brut)
+            source = dossier / "source" / "Ma pièce.docx"
+            source.parent.mkdir(parents=True)
+            self._docx_minimal(source)
+
+            capture = iolib.StringIO()
+            with redirect_stdout(capture):
+                convertir_fichier(
+                    source, dossier / "travail", annoncer_etape_suivante=False
+                )
+
+            self.assertNotIn("Étape suivante", capture.getvalue())
+            self.assertNotIn("--etape docx", capture.getvalue())
 
 
 class SeuilDeGras(unittest.TestCase):

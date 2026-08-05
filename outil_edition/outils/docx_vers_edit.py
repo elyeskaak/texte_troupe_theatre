@@ -352,12 +352,27 @@ def convertir(paragraphes: list[Paragraphe]) -> tuple[str, Rapport]:
     return "\n".join(lignes) + "\n", rapport
 
 
-def convertir_fichier(chemin_docx: Path, dossier: Path | None = None) -> Path:
+def convertir_fichier(
+    chemin_docx: Path,
+    dossier: Path | None = None,
+    *,
+    annoncer_etape_suivante: bool = True,
+) -> Path:
     """
     Convertit un DOCX et écrit `temp/<Livre>/EDIT.txt`.
 
     Le nom du livre est dérivé du nom du fichier, exactement comme l'étape 1 le
     dérive du PDF : tous les chemins en découlent ensuite mécaniquement.
+
+    Args:
+        chemin_docx: le document à convertir.
+        dossier: dossier de travail. Celui du DOCX par défaut.
+        annoncer_etape_suivante: affiche la suggestion `--etape docx`, qui
+            régénère aussi un `.docx`. À couper quand l'appelant ne veut
+            **jamais** de `.docx` régénéré — `docx_vers_repet.py`, qui existe
+            justement pour ça : suivre cette suggestion à la lettre écrirait
+            un second `.docx` dans le dossier partagé `pieces/`, à côté du
+            DOCX source, sans qu'on sache plus lequel fait foi. C'est arrivé.
     """
     nom_livre = chemin_docx.stem
     base = dossier if dossier is not None else chemin_docx.parent
@@ -399,9 +414,11 @@ def convertir_fichier(chemin_docx: Path, dossier: Path | None = None) -> Path:
         chemin_rapport = chemins.dossier_travail / "CONVERSION.txt"
         io.ecrire_texte_atomique(chemin_rapport, rapport.texte_des_continuations())
         print(f"   à relire             {chemin_rapport}")
-    print()
-    print("Étape suivante :")
-    print(f'   python -m theatre_editor.main --etape docx --dossier "{base}"')
+
+    if annoncer_etape_suivante:
+        print()
+        print("Étape suivante :")
+        print(f'   python -m theatre_editor.main --etape docx --dossier "{base}"')
 
     return chemins.edit
 

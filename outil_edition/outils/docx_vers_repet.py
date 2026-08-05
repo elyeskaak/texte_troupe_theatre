@@ -40,9 +40,10 @@ RACINE = Path(__file__).resolve().parent.parent
 if str(RACINE) not in sys.path:
     sys.path.insert(0, str(RACINE))
 
-from outils.docx_vers_edit import _preparer_console, convertir_fichier  # noqa: E402
+from outils.docx_vers_edit import convertir_fichier  # noqa: E402
 from theatre_editor import config, docx_export, liminaires, repet_export  # noqa: E402
 from theatre_editor.utils import blocks, io  # noqa: E402
+from theatre_editor.utils import logging as journalisation  # noqa: E402
 
 
 def regenerer_repet(chemin_docx: Path, dossier: Path) -> Path:
@@ -66,7 +67,12 @@ def regenerer_repet(chemin_docx: Path, dossier: Path) -> Path:
     Returns:
         Le chemin du `REPET.json` écrit.
     """
-    chemin_edit = convertir_fichier(chemin_docx, dossier)
+    # `annoncer_etape_suivante=False` : la suggestion par défaut de
+    # `convertir_fichier` pointe vers l'étape qui régénère un `.docx` — suivie
+    # à la lettre, elle écrirait un second `.docx` dans le dossier partagé, à
+    # côté du DOCX source. C'est précisément ce que ce module existe pour
+    # éviter (voir le docstring du module).
+    chemin_edit = convertir_fichier(chemin_docx, dossier, annoncer_etape_suivante=False)
 
     chemins = io.resoudre_chemins(chemin_docx.stem, dossier)
     assert chemins.edit == chemin_edit  # les deux dérivations doivent s'accorder
@@ -165,7 +171,7 @@ def main(arguments: list[str] | None = None) -> int:
         ),
     )
 
-    _preparer_console()
+    journalisation.preparer_console()
 
     options = analyseur.parse_args(arguments)
     echec = False
