@@ -883,9 +883,9 @@ Modifiez librement : cette étape est gratuite et reproductible.
             code(
                 """
 config.POLICE_TEXTE = "EB Garamond"
-config.TAILLE_TEXTE_PT = 11
-config.TAILLE_TITRE_ACTE_PT = 16
-config.TAILLE_TITRE_SCENE_PT = 14
+config.TAILLE_TEXTE_PT = 15
+config.TAILLE_TITRE_ACTE_PT = 20
+config.TAILLE_TITRE_SCENE_PT = 18
 config.MARGE_CM = 3.0
 
 config.SAUT_DE_PAGE_AVANT_ACTE = True

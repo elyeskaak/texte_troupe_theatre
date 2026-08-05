@@ -531,10 +531,10 @@ POLICE_TEXTE = "EB Garamond"
 #
 # L'ordre TITRE_ACTE > TITRE_SCENE > TEXTE est vérifié par
 # tests/test_config.py, pour qu'une retouche ne l'aplatisse pas par accident.
-TAILLE_TITRE_OEUVRE_PT = 22
-TAILLE_TITRE_ACTE_PT = 16
-TAILLE_TITRE_SCENE_PT = 14
-TAILLE_TEXTE_PT = 11
+TAILLE_TITRE_OEUVRE_PT = 26
+TAILLE_TITRE_ACTE_PT = 20
+TAILLE_TITRE_SCENE_PT = 18
+TAILLE_TEXTE_PT = 15
 
 # Un intitulé n'est reconnu comme titre de l'œuvre que s'il figure dans les
 # toutes premières lignes du document. Au-delà, ce n'est plus une page de titre.

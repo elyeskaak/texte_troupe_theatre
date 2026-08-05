@@ -1451,9 +1451,9 @@ SEPARATEUR_PAGE   = "\n\n<<<PAGE_BREAK>>>\n\n"
 # ----- DOCX -----------------------------------------------------------
 POLICE_TEXTE            = "EB Garamond"
 # Seuls les titres se détachent par le corps ; le personnage suit le texte.
-TAILLE_TITRE_ACTE_PT    = 16
-TAILLE_TITRE_SCENE_PT   = 14
-TAILLE_TEXTE_PT         = 11
+TAILLE_TITRE_ACTE_PT    = 20
+TAILLE_TITRE_SCENE_PT   = 18
+TAILLE_TEXTE_PT         = 15
 MARGE_CM                = 3.0
 SAUT_DE_PAGE_AVANT_ACTE  = True    # actes seulement
 SAUT_DE_PAGE_AVANT_SCENE = False

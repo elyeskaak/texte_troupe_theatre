@@ -280,10 +280,10 @@ class TestStylesEtMiseEnPage(BaseDocx):
             nom = f"{config.PREFIXE_STYLE}{config.DEFINITIONS_STYLES[cle]['nom']}"
             return self.document.styles[nom].font.size
 
-        self.assertEqual(taille("titre_acte"), Pt(16))
-        self.assertEqual(taille("titre_scene"), Pt(14))
-        self.assertEqual(taille("personnage"), Pt(11))
-        self.assertEqual(taille("texte"), Pt(11))
+        self.assertEqual(taille("titre_acte"), Pt(20))
+        self.assertEqual(taille("titre_scene"), Pt(18))
+        self.assertEqual(taille("personnage"), Pt(15))
+        self.assertEqual(taille("texte"), Pt(15))
 
     def test_police_appliquee_y_compris_ses_variantes(self):
         """

@@ -33,16 +33,16 @@ ALIGNEMENTS_VALIDES = {"centre", "justifie", "gauche", "droite"}
 
 
 class TestHierarchieTypographique(unittest.TestCase):
-    """Les corps demandés : acte 16, scène 14, personnage et texte 11."""
+    """Les corps demandés : acte 20, scène 18, personnage et texte 15."""
 
     def test_ordre_decroissant_des_titres(self):
         self.assertGreater(config.TAILLE_TITRE_ACTE_PT, config.TAILLE_TITRE_SCENE_PT)
         self.assertGreater(config.TAILLE_TITRE_SCENE_PT, config.TAILLE_TEXTE_PT)
 
     def test_valeurs_demandees(self):
-        self.assertEqual(config.TAILLE_TITRE_ACTE_PT, 16)
-        self.assertEqual(config.TAILLE_TITRE_SCENE_PT, 14)
-        self.assertEqual(config.TAILLE_TEXTE_PT, 11)
+        self.assertEqual(config.TAILLE_TITRE_ACTE_PT, 20)
+        self.assertEqual(config.TAILLE_TITRE_SCENE_PT, 18)
+        self.assertEqual(config.TAILLE_TEXTE_PT, 15)
 
     def test_personnage_a_la_taille_du_corps(self):
         """

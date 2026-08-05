@@ -365,9 +365,9 @@ RATIO_MINIMAL_LONGUEUR  = 0.80    # détection de troncature
 NOM_FICHIER_IGNORER     = "ignorer.txt"
 
 POLICE_TEXTE            = "EB Garamond"
-TAILLE_TITRE_ACTE_PT    = 16
-TAILLE_TITRE_SCENE_PT   = 14
-TAILLE_TEXTE_PT         = 11
+TAILLE_TITRE_ACTE_PT    = 20
+TAILLE_TITRE_SCENE_PT   = 18
+TAILLE_TEXTE_PT         = 15
 MARGE_CM                = 3.0
 SAUT_DE_PAGE_AVANT_ACTE = True
 ```
