@@ -46,6 +46,10 @@ def dit(texte):
     return Paragraphe(texte=texte, style="Normal", part_gras=0.0)
 
 
+def italique(texte):
+    return Paragraphe(texte=texte, style="Normal", part_gras=0.0, part_italique=1.0)
+
+
 class Structure(unittest.TestCase):
     def test_la_convention_est_respectee(self):
         texte, _ = convertir([acte("Acte I"), scene("Séquence 1"), nom("HUGO"), dit("Alors ?")])
@@ -205,6 +209,86 @@ class RienDeSilencieux(unittest.TestCase):
         self.assertEqual(rapport.scenes, 1)
         self.assertEqual(rapport.repliques, 2)
         self.assertEqual(rapport.personnages, {"HUGO.", "JAN."})
+
+
+class ParagraphesItaliques(unittest.TestCase):
+    """
+    Cas réel : « La mastication des morts » place la date de naissance et de
+    mort d'un personnage (et parfois son nom de naissance) sous son nom, en
+    paragraphe italique séparé — distinct du monologue qui suit.
+    """
+
+    def test_une_date_sous_le_nom_n_entre_pas_dans_la_replique(self):
+        texte, _ = convertir(
+            [acte("Acte I"), nom("Gilles Rimey"), italique("1949-1952"), dit("On est mort.")]
+        )
+
+        self.assertIn("*1949-1952*", texte)
+        self.assertIn("On est mort.", texte)
+        self.assertNotIn("1949-1952 On est mort.", texte)
+
+    def test_plusieurs_paragraphes_italiques_de_suite_restent_separes(self):
+        """« née Grangeon » est un second paragraphe italique, pas la réplique."""
+        texte, _ = convertir(
+            [
+                acte("Acte I"),
+                nom("Alphonsine Rouart"),
+                italique("1878-1904"),
+                italique("née Grangeon"),
+                dit("Ah le Léon."),
+            ]
+        )
+
+        self.assertIn("*1878-1904*", texte)
+        self.assertIn("*née Grangeon*", texte)
+        self.assertIn("Ah le Léon.", texte)
+
+    def test_le_paragraphe_italique_ne_compte_pas_comme_replique(self):
+        _, rapport = convertir(
+            [acte("Acte I"), nom("HUGO"), italique("1949-1952"), dit("Alors ?")]
+        )
+
+        self.assertEqual(rapport.repliques, 1)
+        self.assertEqual(rapport.continuations, [])
+
+    def test_aucun_dialogue_en_romain_promeut_le_dernier_italique_en_replique(self):
+        """
+        Cas réel : Parfait Letourneux et Frédéric Barret n'ont, dans le DOCX,
+        qu'une date puis un unique paragraphe italique avant le nom suivant —
+        aucun monologue en romain. Le laisser en didascalie perdrait sa
+        réplique ; ce paragraphe est tout ce que le personnage dit.
+        """
+        texte, rapport = convertir(
+            [
+                acte("Acte I"),
+                nom("Parfait Letourneux"),
+                italique("1936-1984"),
+                italique("Parfait Letourneux est un homme"),
+                nom("Bernadette Vinchon"),
+                dit("Ils auraient pu choisir une autre photo."),
+            ]
+        )
+
+        self.assertIn("*1936-1984*", texte)
+        self.assertIn("Parfait Letourneux est un homme", texte)
+        self.assertNotIn("*Parfait Letourneux est un homme*", texte)
+        self.assertEqual(rapport.repliques, 2)
+        self.assertEqual(rapport.avertissements, [])
+
+    def test_classe_en_didascalie_par_le_reste_du_pipeline(self):
+        """Contrôle de bout en bout : la convention `*ainsi*` est bien reconnue."""
+        texte, _ = convertir(
+            [acte("Acte I"), nom("HUGO"), italique("1949-1952"), dit("Alors ?")]
+        )
+        index = blocks.construire_index_structure(texte)
+        classees = blocks.classifier_document(texte, index)
+
+        self.assertTrue(
+            any(
+                ligne.type is blocks.TypeLigne.DIDASCALIE and ligne.texte == "1949-1952"
+                for ligne in classees
+            )
+        )
 
 
 class AnnonceDeLEtapeSuivante(unittest.TestCase):

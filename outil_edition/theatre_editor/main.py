@@ -272,6 +272,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     Returns:
         `0` si tout est terminé, `1` s'il reste quelque chose à reprendre.
     """
+    journalisation.preparer_console()
+
     arguments = construire_analyseur().parse_args(argv)
 
     _appliquer_verbosite(arguments)

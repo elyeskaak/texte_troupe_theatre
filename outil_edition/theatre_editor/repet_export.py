@@ -366,6 +366,19 @@ class _Constructeur:
             self._ajouter_texte(ligne)
             return
 
+        nom_element = TYPES_ELEMENT_SIMPLE.get(ligne.type)
+
+        if nom_element is not None and self._personnages is not None and not self._lignes:
+            # Une didascalie intercalée entre un nom de personnage et sa
+            # réplique — une date de naissance et de mort sous le nom, par
+            # exemple (voir `docx_vers_edit.Paragraphe.italique`) — ne referme
+            # pas l'attribution en cours : aucune réplique n'a encore été
+            # récoltée pour ce personnage. La fermer maintenant le priverait de
+            # sa réplique dès que le dialogue suivrait, sans qu'aucun nom ne le
+            # rouvre entre-temps.
+            self._element({"type": nom_element, "texte": ligne.texte})
+            return
+
         # Tout ce qui n'est pas du texte referme la réplique en cours.
         self._fermer_replique()
 
@@ -389,8 +402,6 @@ class _Constructeur:
                     self._relever_graphie(brut, canonique)
 
             return
-
-        nom_element = TYPES_ELEMENT_SIMPLE.get(ligne.type)
 
         if nom_element is not None:
             self._element({"type": nom_element, "texte": ligne.texte})

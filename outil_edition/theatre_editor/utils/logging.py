@@ -17,6 +17,7 @@ n'utilisant que des imports absolus, il n'y a pas de conflit — un
 
 from __future__ import annotations
 
+import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -38,6 +39,27 @@ _DETAILLE = 2
 # ============================================================
 # 1. AFFICHAGE CONSOLE
 # ============================================================
+
+
+def preparer_console() -> None:
+    """
+    Rend la console capable d'écrire du français — et les symboles de ce module.
+
+    La console Windows par défaut est en cp1252, qui ne sait ni les guillemets
+    typographiques d'un texte de théâtre, ni le `⚠` de `alerte()` ci-dessous.
+    Sans cela, le pipeline s'interrompt sur un `UnicodeEncodeError` **après**
+    avoir fait son travail : le résultat est écrit, mais l'utilisateur ne voit
+    qu'une trace d'erreur et croit à un échec. Le reste du projet tourne dans
+    Colab, en UTF-8, et n'a jamais rencontré ce cas.
+
+    À appeler depuis un point d'entrée (`main()`), et **jamais à l'import** :
+    reconfigurer `sys.stdout` au chargement de ce module en ferait un effet de
+    bord global, subi par tout test qui l'importe — y compris ceux qui
+    capturent la sortie console pour vérifier un message.
+    """
+    for flux in (sys.stdout, sys.stderr):
+        if hasattr(flux, "reconfigure"):
+            flux.reconfigure(encoding="utf-8", errors="replace")
 
 
 def _afficher(message: str, niveau: int = _NORMAL) -> None:

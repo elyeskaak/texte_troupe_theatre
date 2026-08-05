@@ -20,9 +20,10 @@ informations sont dans le fichier, posées par celui qui l'a écrit. Là où
 `outil_coupes/parser.py` devinait à partir de la casse et de la longueur, on se
 contente ici de traduire une structure déclarée.
 
-Deux ajustements sont néanmoins nécessaires, et tous deux sont expliqués au point
-où ils se produisent : le préfixe redondant des titres de scène (§ `_titre_scene`)
-et les pages liminaires (§ `_separer_liminaires`).
+Trois ajustements sont néanmoins nécessaires, et tous trois sont expliqués au
+point où ils se produisent : le préfixe redondant des titres de scène
+(§ `_titre_scene`), les pages liminaires (§ `_separer_liminaires`) et les
+paragraphes entièrement en italique (§ `Paragraphe.italique`).
 """
 
 from __future__ import annotations
@@ -40,11 +41,18 @@ if str(RACINE) not in sys.path:
 
 from theatre_editor import config  # noqa: E402
 from theatre_editor.utils import blocks, io  # noqa: E402
+from theatre_editor.utils import logging as journalisation  # noqa: E402
 
 # Part du texte en gras au-delà de laquelle un paragraphe est tenu pour un nom de
 # personnage. Les noms observés sont à 0,8 ou 1,0 — un correcteur ayant parfois
 # laissé un caractère hors du gras — et les répliques à 0,0.
 SEUIL_GRAS = 0.6
+
+# Même logique, pour l'italique. Une date de naissance et de mort placée sous un
+# nom de personnage (« *1878-1904*, *née Grangeon* ») est portée par un
+# paragraphe entièrement en italique dans le DOCX, distinct du paragraphe de
+# dialogue qui suit. Voir `Paragraphe.italique`.
+SEUIL_ITALIQUE = 0.6
 
 # Préfixe redondant d'un titre de scène : « Acte II - Séquence 3 » → « Séquence 3 ».
 MOTIF_PREFIXE_ACTE = re.compile(
@@ -124,6 +132,7 @@ class Paragraphe:
     texte: str
     style: str
     part_gras: float
+    part_italique: float = 0.0
 
     @property
     def titre_acte(self) -> bool:
@@ -136,6 +145,28 @@ class Paragraphe:
     @property
     def personnage(self) -> bool:
         return not self.titre_acte and not self.titre_scene and self.part_gras >= SEUIL_GRAS
+
+    @property
+    def italique(self) -> bool:
+        """
+        Vrai pour un paragraphe entièrement en italique — ni titre, ni nom.
+
+        Le module ne devine rien (voir le docstring de tête) : il traduit ce
+        que le DOCX porte explicitement. Une date sous un nom de personnage en
+        est l'exemple qui a motivé cette règle — mais le signal est général, et
+        vaut pour toute didascalie ou indication de lieu saisie en paragraphe
+        italique séparé plutôt qu'en incise dans le dialogue.
+
+        Le résultat est écrit `*ainsi*` dans `EDIT.txt` (§8) : la convention
+        déjà comprise par `blocks.py` en fait une didascalie ou un lieu, selon
+        ce qui précède, sans code supplémentaire ici.
+        """
+        return (
+            not self.titre_acte
+            and not self.titre_scene
+            and not self.personnage
+            and self.part_italique >= SEUIL_ITALIQUE
+        )
 
 
 def lire_paragraphes(chemin: Path) -> list[Paragraphe]:
@@ -159,9 +190,15 @@ def lire_paragraphes(chemin: Path) -> list[Paragraphe]:
         runs = paragraphe.runs
         total = sum(len(run.text) for run in runs) or 1
         gras = sum(len(run.text) for run in runs if run.bold) / total
+        italique = sum(len(run.text) for run in runs if run.italic) / total
 
         resultat.append(
-            Paragraphe(texte=texte, style=paragraphe.style.name, part_gras=gras)
+            Paragraphe(
+                texte=texte,
+                style=paragraphe.style.name,
+                part_gras=gras,
+                part_italique=italique,
+            )
         )
 
     return resultat
@@ -252,6 +289,11 @@ def convertir(paragraphes: list[Paragraphe]) -> tuple[str, Rapport]:
     # `lignes` — pour pouvoir y raccorder un paragraphe de continuation.
     personnage_ouvert: str | None = None
     rang_replique: int | None = None
+    # Paragraphes italiques rencontrés depuis la dernière ligne posée, dont le
+    # sort reste incertain tant qu'on n'a pas vu la suite : une date sous un
+    # nom précède presque toujours un dialogue en romain, mais rien ne le
+    # garantit avant coup. Voir `fermer()`.
+    italiques_en_attente: list[str] = []
     # Acte et scène sont suivis séparément, et les messages citent les deux :
     # le préfixe « Acte III - » est retiré des titres de scène (voir
     # `_titre_scene`), si bien que « Séquence 4 » existe une fois par acte. Le
@@ -273,7 +315,31 @@ def convertir(paragraphes: list[Paragraphe]) -> tuple[str, Rapport]:
         return len(lignes) - 1
 
     def fermer(motif: str) -> None:
-        nonlocal personnage_ouvert, rang_replique
+        nonlocal personnage_ouvert, rang_replique, italiques_en_attente
+
+        if italiques_en_attente:
+            if personnage_ouvert is not None and rang_replique is None:
+                # Aucun paragraphe de dialogue en romain n'a suivi le nom :
+                # le document n'offre alors aucun autre candidat pour sa
+                # réplique. Le dernier paragraphe italique est ce que dit le
+                # personnage — « La mastication des morts » a deux rôles
+                # (Parfait Letourneux, Frédéric Barret) réduits à une seule
+                # phrase entièrement en italique, sans monologue en romain
+                # derrière. Le classer en didascalie perdrait sa réplique ;
+                # les paragraphes qui le précèdent, eux, restent une date ou
+                # un surnom sous le nom, le cas courant.
+                *avant, dernier = italiques_en_attente
+
+                for texte in avant:
+                    poser(f"*{texte}*")
+
+                rapport.repliques += 1
+                rang_replique = poser(dernier)
+            else:
+                for texte in italiques_en_attente:
+                    poser(f"*{texte}*")
+
+            italiques_en_attente = []
 
         if personnage_ouvert is not None and rang_replique is None:
             # La scène est nommée dans le message : sans elle, l'avertissement
@@ -312,7 +378,28 @@ def convertir(paragraphes: list[Paragraphe]) -> tuple[str, Rapport]:
             poser(f"**{nom}**")
             continue
 
-        # --- paragraphe de dialogue ---------------------------------
+        if paragraphe.italique:
+            # Mis en attente plutôt que posé : on ne sait pas encore si un
+            # paragraphe de dialogue en romain va suivre (auquel cas ceci est
+            # une date ou un surnom sous le nom, voir `fermer()`) ou si le
+            # personnage se referme sans qu'aucun n'ait suivi (auquel cas ceci
+            # est sa réplique). Ni `personnage_ouvert` ni `rang_replique` ne
+            # bougent : ce paragraphe ne clôt ni n'ouvre encore rien.
+            italiques_en_attente.append(paragraphe.texte)
+            continue
+
+        # --- paragraphe de dialogue (en romain) ----------------------
+        if italiques_en_attente:
+            # Un dialogue en romain suit : les paragraphes italiques en
+            # attente n'étaient donc pas la réplique, mais une date ou un
+            # surnom sous le nom. Sans cette purge, ils resteraient en
+            # attente et se feraient à tort promouvoir en réplique par
+            # `fermer()` au prochain nom.
+            for texte in italiques_en_attente:
+                poser(f"*{texte}*")
+
+            italiques_en_attente = []
+
         if personnage_ouvert is None:
             # Aucun personnage ouvert : la ligne est conservée, jamais jetée, et
             # signalée. `repet_export` la marquera « texte_sans_personnage ».
@@ -423,28 +510,6 @@ def convertir_fichier(
     return chemins.edit
 
 
-def _preparer_console() -> None:
-    """
-    Rend la console capable d'écrire du français.
-
-    La console Windows par défaut est en cp1252, qui ne sait pas écrire les
-    guillemets typographiques d'un texte de théâtre. Sans cela, l'utilitaire
-    s'interrompt sur un `UnicodeEncodeError` **après** avoir écrit son fichier :
-    le travail est fait, mais l'utilisateur voit une trace d'erreur et croit à un
-    échec. Le reste du projet tourne dans Colab, en UTF-8, et n'a jamais rencontré
-    ce cas.
-
-    Appelée depuis `main()` et **jamais à l'import**. Reconfigurer `sys.stdout`
-    au chargement du module en ferait un effet de bord global, subi par tout
-    test qui importe ce fichier — y compris ceux qui capturent la sortie
-    console pour vérifier un message. Un import ne doit rien changer au
-    programme qui l'effectue.
-    """
-    for flux in (sys.stdout, sys.stderr):
-        if hasattr(flux, "reconfigure"):
-            flux.reconfigure(encoding="utf-8", errors="replace")
-
-
 def main(arguments: list[str] | None = None) -> int:
     analyseur = argparse.ArgumentParser(
         description=(
@@ -460,7 +525,7 @@ def main(arguments: list[str] | None = None) -> int:
         help="dossier de travail (celui du DOCX par défaut)",
     )
 
-    _preparer_console()
+    journalisation.preparer_console()
 
     options = analyseur.parse_args(arguments)
 
