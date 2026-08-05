@@ -2,37 +2,37 @@
 
 Contexte : troupe de 10 comédiens (5H/5F), spectacle de 1h30-2h. Critère prioritaire absolu : aucun comédien ne doit se retrouver avec un rôle disproportionné.
 
-## Procédure en 2 étapes obligatoires (avant toute coupe)
+## Source : le `_REPET.json`, jamais le docx/pdf/txt brut
+
+`outil_coupes` lit exclusivement `pieces/<Pièce>_REPET.json` (schéma
+`repetition/2`, produit par `outil_edition`, étape 4 — voir
+`../outil_edition/ARCHITECTURE.md` §5.7). Ce fichier porte déjà des
+personnages canonisés (les variantes de graphie sont fusionnées à la source,
+et signalées dans son champ `avertissements` si c'est le cas) et un texte
+parlé déjà séparé des didascalies. Il n'y a donc plus d'ambiguïté de
+classification à valider à la main avant de compter : si le docx/pdf de la
+pièce a changé, régénérez le `_REPET.json` via `outil_edition` avant de
+relancer une analyse — ne jamais couper sur un `_REPET.json` périmé.
 
 Ne jamais estimer les poids de personnages "à la lecture" pour un texte de plus de quelques pages — toujours passer par `analyze.py`. La lecture reste appropriée pour le jugement dramaturgique (où couper, quelle scène est faible), pas pour le comptage.
 
 ### Étape 1 — Détection
 
 ```bash
-python3 analyze.py detect <chemin\_du\_fichier>
+python analyze.py detect pieces/<Pièce>_REPET.json
 ```
 
-Produit : nombre d'actes/scènes détectés, liste des personnages avec répliques brutes, alerte format classique/moderne, lignes suspectes (didascalies mal classées).
+Produit : nombre d'unités jouables (scènes classiques ou unités séparées par `***` en texte contemporain), personnages avec répliques/mots déjà agrégés, et les avertissements remontés par `outil_edition` (graphies fusionnées, texte sans personnage annoncé, classement de titre incertain).
 
-**Toujours vérifier avant de continuer :**
-
-* variantes du même personnage comptées séparément (ex: "ALCESTE" / "ALC.") → à fusionner
-* noms qui ne sont pas des personnages
-* nombre de scènes cohérent avec le découpage connu
-
-Si fusion nécessaire, créer un `aliases.json` :
-
-```json
-{ "ALC.": "ALCESTE", "LE PRINCE": "PRINCE" }
-```
+**Toujours vérifier avant de continuer :** les avertissements affichés — un classement de titre resté incertain côté `outil_edition` peut signifier qu'une scène entière s'est retrouvée fondue dans la mauvaise unité.
 
 ### Étape 2 — Calcul
 
 ```bash
-python3 analyze.py compute <chemin\_du\_fichier> \[--aliases aliases.json] \[--cast cast.json] \[--target 15000]
+python analyze.py compute pieces/<Pièce>_REPET.json [--cast cast.json] [--target 15000]
 ```
 
-Produit : tableau mots/%/répliques/présence scénique par personnage, avec flags "rôle creux" (< 25% du poids moyen ET < 3% du total) / "rôle hypertrophié" (> 2.5x le poids moyen ET > 15% du total), et un CSV de matrice de présence scène × personnage.
+Produit : tableau mots/%/répliques/présence par unité jouable et par personnage, avec flags "rôle creux" (< 25% du poids moyen ET < 3% du total) / "rôle hypertrophié" (> 2.5x le poids moyen ET > 15% du total), et un CSV de matrice de présence unité × personnage.
 
 **`--cast cast.json`** (distribution déjà connue, doublages inclus) :
 
@@ -71,9 +71,9 @@ Toujours signaler explicitement la fonction identifiée (exposition / farce / in
 
 ## Limites connues
 
-* PDF sans mise en forme préservée : détection moins fiable qu'en .docx ; privilégier le .docx si disponible.
-* Format moderne sans didascalies explicites : présence scénique déduite des seules répliques prononcées (personnage silencieux mais présent = non détecté). À signaler.
-* Titres de personnage complexes (ex: "LE ROI, à part") : peuvent perturber la détection de nom.
+* La présence par unité est déduite des seules répliques prononcées : un personnage présent mais silencieux sur toute une unité n'y apparaît pas. Hérité du `_REPET.json` lui-même, pas de `analyze.py`.
+* Un classement de titre resté incertain côté `outil_edition` (règle 7 par défaut : « personnage ») peut faire apparaître dans le tableau une entrée qui n'est pas un vrai rôle (ex. un titre de pièce mal classé). Toujours croiser avec les avertissements de l'étape 1 avant de traiter une entrée marginale comme un personnage réel.
+* La réplique collective (« TOUS. ») n'est comptée pour aucun personnage précis : elle est ignorée dans les poids et la présence, et seulement signalée en nombre d'unités concernées.
 
 ## Restitution
 
