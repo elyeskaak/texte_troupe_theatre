@@ -89,6 +89,14 @@ MOTIF_ESPACES = re.compile(r"\s+")
 # `nom_personnage` : sans cela, la même personne se dédouble.
 MOTIF_APOSTROPHES = re.compile(r"[’‘‛`´]")
 
+# Didascalie de jeu accolée à un nom de personnage : « BÉNÉDICT [à part] »,
+# « HÉRO (se démasquant) ». Certaines éditions la placent entre crochets — un
+# ajout du traducteur — ou entre parenthèses, en gras avec le nom. C'est une
+# indication de jeu, pas une partie du nom : la laisser dans le label ferait de
+# « BÉNÉDICT [à part] » un rôle distinct de « BÉNÉDICT » et fausserait tout
+# comptage. Voir `separer_nom_et_jeu`.
+MOTIF_JEU_PERSONNAGE = re.compile(r"\s*[\[(]\s*([^\])]+?)\s*[\])]")
+
 # Jonction de plusieurs personnages dans un même label : « X et Y. »,
 # « X ET Y. » ou « X / Y. ». Insensible à la casse, comme le reste de la
 # saisie. Le slash est la convention retenue pour les nouvelles répliques
@@ -107,6 +115,26 @@ JOKER_TOUS = "*"
 # ============================================================
 # 1. IDENTIFIANTS
 # ============================================================
+
+
+def separer_nom_et_jeu(label: str) -> tuple[str, list[str]]:
+    """
+    Sépare le nom d'un personnage des didascalies de jeu qui lui sont accolées.
+
+    « BÉNÉDICT [à part] » → (« BÉNÉDICT », [« à part »]). Le nom rendu reste
+    brut — ni dé-ponctué ni normalisé —, `nom_personnage` s'en charge ensuite.
+    Plusieurs groupes sont rendus dans l'ordre de lecture (« X [à part] (bas) »
+    → [« à part », « bas »]), le cas restant rare.
+
+    Le nom est reconstruit en remplaçant chaque didascalie par une espace plutôt
+    qu'en la supprimant : « X [à part] Y » ne doit pas se recoller en « XY ». Les
+    espaces surnuméraires et un éventuel point resté isolé sont ensuite absorbés
+    par `nom_personnage`.
+    """
+    jeux = [jeu.strip() for jeu in MOTIF_JEU_PERSONNAGE.findall(label)]
+    nom = MOTIF_ESPACES.sub(" ", MOTIF_JEU_PERSONNAGE.sub(" ", label)).strip()
+
+    return nom, jeux
 
 
 def nom_personnage(label: str) -> str:
@@ -129,11 +157,18 @@ def nom_personnage(label: str) -> str:
     l'apostrophe automatiquement, mais pas toujours : la variation est
     inévitable dans un document saisi à la main.
 
+    **La didascalie de jeu accolée est retirée** (« BÉNÉDICT [à part] » →
+    « BÉNÉDICT ») pour la même raison de fond : un rôle ne doit pas se dédoubler
+    selon qu'une réplique porte ou non une indication de jeu. Elle n'est pas
+    perdue pour autant — `_Constructeur` la reverse en tête de réplique. Voir
+    `separer_nom_et_jeu`.
+
     Volontairement **pas** `blocks.normaliser_label()`, qui retire aussi les
     diacritiques : ce nom-là est affiché, et « LE MAÎTRE » ne doit pas devenir
     « LE MAITRE » sur l'écran de choix.
     """
-    sans_ponctuation = blocks.MOTIF_PONCTUATION_FINALE.sub("", label.strip())
+    nom_brut, _ = separer_nom_et_jeu(label)
+    sans_ponctuation = blocks.MOTIF_PONCTUATION_FINALE.sub("", nom_brut.strip())
 
     return MOTIF_APOSTROPHES.sub("'", sans_ponctuation).strip()
 
@@ -346,6 +381,11 @@ class _Constructeur:
         self._personnages: list[str] | None = None
         self._lignes: list[str] = []
 
+        # Didascalie(s) de jeu accolée(s) au nom du personnage courant
+        # (« BÉNÉDICT [à part] »), en attente d'être reversée(s) en tête de sa
+        # réplique. Voir `separer_nom_et_jeu` et `_fermer_replique`.
+        self._jeu_personnage: list[dict[str, Any]] = []
+
         # Comptages, pour la section « personnages » et les identifiants.
         self._repliques: dict[str, int] = {}
         self._mots: dict[str, int] = {}
@@ -393,13 +433,23 @@ class _Constructeur:
         if ligne.type is blocks.TypeLigne.PERSONNAGE:
             self._personnages = noms_personnages(ligne.texte)
 
+            # Didascalie de jeu accolée au nom (« BÉNÉDICT [à part] ») : mise en
+            # attente pour être reversée en tête de la réplique. Retirée du nom
+            # pour ne pas dédoubler le rôle, elle n'est pas perdue.
+            _, jeux = separer_nom_et_jeu(ligne.texte)
+            self._jeu_personnage = [{"avant_mot": 0, "texte": jeu} for jeu in jeux]
+
             # Le joker ne provient d'aucune graphie à surveiller : « TOUS »
             # n'est le nom de personne.
             if self._personnages != [JOKER_TOUS]:
                 for brut, canonique in zip(
                     MOTIF_JONCTION.split(ligne.texte), self._personnages
                 ):
-                    self._relever_graphie(brut, canonique)
+                    # Le jeu est retiré du morceau brut avant relevé : sinon
+                    # « BÉNÉDICT [à part] » passerait pour une graphie de plus
+                    # de « BÉNÉDICT » et déclencherait un faux avertissement.
+                    nom_brut, _ = separer_nom_et_jeu(brut)
+                    self._relever_graphie(nom_brut, canonique)
 
             return
 
@@ -521,9 +571,11 @@ class _Constructeur:
         """Clôt la réplique en cours et l'ajoute à l'unité."""
         personnages = self._personnages
         lignes = self._lignes
+        jeu = self._jeu_personnage
 
         self._personnages = None
         self._lignes = []
+        self._jeu_personnage = []
 
         if personnages is None:
             return
@@ -532,15 +584,23 @@ class _Constructeur:
             # Un personnage annoncé sans réplique : fréquent au théâtre
             # contemporain, où l'unique intervention d'un rôle est une
             # didascalie. Ce n'est pas une anomalie, mais il n'y a rien à
-            # réciter — donc rien à écrire.
+            # réciter — sinon la didascalie de jeu qui était accolée au nom, qui
+            # n'a plus de réplique où se loger et devient donc une didascalie de
+            # l'unité, pour ne pas être perdue.
+            for didascalie in jeu:
+                self._element({"type": "didascalie", "texte": didascalie["texte"]})
             return
 
         parole = separer_parole_et_jeu(lignes)
 
+        # La didascalie de jeu accolée au nom se dit avant le premier mot : elle
+        # précède donc les indications de jeu internes au texte.
+        didascalies = jeu + parole.didascalies
+
         if not parole.texte:
             # La réplique ne contenait qu'un jeu de scène : ses didascalies sont
             # conservées comme éléments de l'unité, sinon elles disparaîtraient.
-            for didascalie in parole.didascalies:
+            for didascalie in didascalies:
                 self._element({"type": "didascalie", "texte": didascalie["texte"]})
             return
 
@@ -556,8 +616,8 @@ class _Constructeur:
             "vers": _est_en_vers(lignes),
         }
 
-        if parole.didascalies:
-            element["didascalies_internes"] = parole.didascalies
+        if didascalies:
+            element["didascalies_internes"] = didascalies
 
         self._element(element)
 

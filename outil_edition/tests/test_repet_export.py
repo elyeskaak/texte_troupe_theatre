@@ -427,6 +427,80 @@ class RepliquesCollectives(unittest.TestCase):
         )
 
 
+class DidascalieDeJeuAccolee(unittest.TestCase):
+    """
+    Certaines éditions accolent au nom une didascalie de jeu, entre crochets
+    (ajout du traducteur) ou parenthèses : « BÉNÉDICT [à part] ». C'est une
+    indication de jeu, pas un rôle distinct — la confondre avec le nom
+    dédoublerait le personnage et fausserait tout comptage d'équilibrage.
+    « Beaucoup de bruit pour rien » comptait ainsi quatre « BÉNÉDICT ».
+    """
+
+    def test_le_nom_est_nettoye_de_sa_didascalie(self):
+        document = construire("**BÉNÉDICT [à part].**\nQuelle assemblée.\n")
+
+        self.assertEqual(repliques(document)[0]["personnages"], ["BÉNÉDICT"])
+
+    def test_la_didascalie_est_reversee_en_tete_de_replique(self):
+        document = construire("**BÉNÉDICT [à part].**\nQuelle assemblée.\n")
+
+        self.assertEqual(
+            repliques(document)[0]["didascalies_internes"],
+            [{"avant_mot": 0, "texte": "à part"}],
+        )
+
+    def test_les_parentheses_valent_les_crochets(self):
+        document = construire("**HÉRO (se démasquant).**\nMe voici.\n")
+        replique = repliques(document)[0]
+
+        self.assertEqual(replique["personnages"], ["HÉRO"])
+        self.assertEqual(replique["didascalies_internes"][0]["texte"], "se démasquant")
+
+    def test_un_role_n_est_pas_dedouble_par_ses_didascalies(self):
+        texte = (
+            "**BÉNÉDICT.**\nBonjour tout le monde.\n\n"
+            "**BÉNÉDICT [à part].**\nQuelle assemblée.\n\n"
+            "**BÉNÉDICT [à part, à Claudio].**\nApprochons.\n"
+        )
+        document = construire(texte)
+
+        self.assertEqual([p["nom"] for p in document["personnages"]], ["BÉNÉDICT"])
+        self.assertEqual(document["personnages"][0]["repliques"], 3)
+
+    def test_aucun_faux_avertissement_de_graphie(self):
+        texte = "**BÉNÉDICT.**\nUn.\n\n**BÉNÉDICT [à part].**\nDeux.\n"
+        document = construire(texte)
+
+        self.assertFalse(
+            [a for a in document["avertissements"] if "graphies" in a],
+            document["avertissements"],
+        )
+
+    def test_la_didascalie_accolee_precede_les_jeux_internes_au_texte(self):
+        document = construire("**BÉNÉDICT [à part].**\nJe *il hésite* crois.\n")
+        jeux = repliques(document)[0]["didascalies_internes"]
+
+        # « à part » se dit avant le premier mot ; « il hésite » après « Je ».
+        self.assertEqual(
+            jeux,
+            [{"avant_mot": 0, "texte": "à part"}, {"avant_mot": 1, "texte": "il hésite"}],
+        )
+
+    def test_l_identifiant_ignore_la_didascalie_accolee(self):
+        """
+        Le jeu accolé n'est pas dans le texte parlé : deux répliques au même
+        texte, l'une neutre l'autre « à part », sont donc vues comme deux
+        occurrences du même énoncé (identifiants distincts par le seul rang),
+        et non comme deux énoncés étrangers.
+        """
+        document = construire(
+            "**BÉNÉDICT.**\nVraiment.\n\n**BÉNÉDICT [à part].**\nVraiment.\n"
+        )
+        identifiants = [replique["id"] for replique in repliques(document)]
+
+        self.assertEqual(len(set(identifiants)), 2)
+
+
 class RienDeJeteEnSilence(unittest.TestCase):
     """
     P3 : aucune anomalie n'est écartée sans trace.
