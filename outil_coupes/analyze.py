@@ -117,15 +117,25 @@ def cmd_compute(path, cast_path=None, target=None):
         print(f"\nℹ️  {unites_avec_tous} unité(s) contiennent une réplique collective (« TOUS. ») "
               "non attribuée à un personnage précis — ignorée dans les comptages et la présence.")
 
-    # matrice de présence, exportée en CSV à côté du fichier source
+    # matrice de présence, exportée en CSV dans le dossier de travail de l'outil.
+    # Jamais dans pieces/ : ce dossier est synchronisé avec Drive et lu par
+    # outil_repetition/outil_lecture — une sortie d'analyse n'y a pas sa place.
+    # csv.writer plutôt qu'un join manuel : un nom de rôle peut contenir une
+    # virgule (« LES GENDARMES, EN CHŒUR ») qui casserait un CSV assemblé à la main.
+    import csv
     import os
+    dossier_sorties = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sorties")
+    os.makedirs(dossier_sorties, exist_ok=True)
+    nom_base = os.path.splitext(os.path.basename(path))[0]
+    out_csv = os.path.join(dossier_sorties, nom_base + "_presence.csv")
     all_chars = [p["nom"] for p in doc["personnages"]]
-    out_csv = os.path.splitext(path)[0] + "_presence.csv"
-    with open(out_csv, "w", encoding="utf-8") as f:
-        f.write("Unite," + ",".join(all_chars) + "\n")
+    with open(out_csv, "w", encoding="utf-8", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Unite"] + all_chars)
         for u in unites:
-            row = [libelle_unite(u)] + ["X" if c in presence[u["id"]] else "" for c in all_chars]
-            f.write(",".join(row) + "\n")
+            writer.writerow(
+                [libelle_unite(u)] + ["X" if c in presence[u["id"]] else "" for c in all_chars]
+            )
     print(f"\nMatrice de présence par unité exportée : {out_csv}")
 
     # -- agrégation par comédien (doublages) --

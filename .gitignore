@@ -66,6 +66,11 @@ gap_1789.txt
 # migré vers le dossier partagé ci-dessus.
 outil_lecture/pieces/
 
+# Dossier de travail de l'outil de coupes : distribution (cast.json) et sorties
+# d'analyse (matrices de présence CSV). Spécifiques à une production donnée, et
+# la matrice contient la présence scène par scène d'un texte sous droits.
+outil_coupes/sorties/
+
 # ============================================================
 # Outillage local
 # ------------------------------------------------------------
