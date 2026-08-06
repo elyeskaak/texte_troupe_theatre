@@ -104,6 +104,39 @@ class AnalyserLigne(unittest.TestCase):
         self.assertEqual(coupes, "tout")
 
 
+class PropagationNomsCoupes(unittest.TestCase):
+    def _lignes(self, texte, coupes):
+        plages = ac.resoudre_plages(texte, coupes)
+        lignes = []
+        offset = 0
+        for brute in texte.splitlines(keepends=True):
+            contenu = brute.rstrip("\n")
+            if contenu.strip():
+                passes = [ac.passe_a_position(offset + i, plages) for i in range(len(contenu))]
+                type_ligne, frags = ac.analyser_ligne(contenu, passes)
+                lignes.append(ac._Ligne(type_ligne, frags))
+            offset += len(brute)
+        ac._propager_noms_coupes(lignes)
+        return lignes
+
+    def test_nom_coupe_si_toute_la_replique_est_coupee(self):
+        texte = "**JAN.**\nBonjour tout le monde.\n\n**MARTHA.**\nSalut.\n"
+        lignes = self._lignes(texte, [{"passe": 1, "texte": "Bonjour tout le monde."}])
+        self.assertTrue(ac._entierement_coupee(lignes[0].fragments))  # JAN. emporté
+        self.assertFalse(ac._entierement_coupee(lignes[2].fragments))  # MARTHA. conservé
+
+    def test_nom_conserve_si_replique_partiellement_coupee(self):
+        texte = "**JAN.**\nBonjour tout le monde vraiment.\n"
+        lignes = self._lignes(texte, [{"passe": 1, "texte": " vraiment"}])
+        self.assertFalse(ac._entierement_coupee(lignes[0].fragments))
+
+    def test_titre_acte_non_emporte(self):
+        # un acte suivi d'une didascalie coupée ne doit pas être coupé
+        texte = "**ACTE I.**\n\n*Une rue déserte.*\n"
+        lignes = self._lignes(texte, [{"passe": 1, "texte": "Une rue déserte."}])
+        self.assertFalse(ac._entierement_coupee(lignes[0].fragments))
+
+
 try:
     import docx  # noqa: F401
 
@@ -132,7 +165,9 @@ class GenerationDocx(unittest.TestCase):
             document.save(str(chemin))
             xml = zipfile.ZipFile(chemin).read("word/document.xml").decode("utf-8")
 
-        self.assertEqual(xml.count("<w:del "), 2)
+        # 3 suppressions : « , vraiment » (passe 1, coupe partielle → JAN. reste),
+        # puis « Je pars. » dont le nom « MARTHA. » est emporté par propagation (passe 2).
+        self.assertEqual(xml.count("<w:del "), 3)
         self.assertIn("Coupe passe 1", xml)
         self.assertIn("Coupe passe 2", xml)
         self.assertIn("C00000", xml)

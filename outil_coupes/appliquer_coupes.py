@@ -242,6 +242,47 @@ def _ajouter_fragment(paragraphe, fragment: Fragment, date_iso: str) -> None:
     paragraphe._p.append(element_del)
 
 
+@dataclass
+class _Ligne:
+    """Une ligne significative du texte, prête à être rendue en paragraphe."""
+
+    type: str
+    fragments: list[Fragment]
+
+
+def _entierement_coupee(fragments: list[Fragment]) -> bool:
+    """Vrai si tout le texte visible de la ligne est coupé."""
+    utiles = [f for f in fragments if f.texte]
+    return bool(utiles) and all(f.passe for f in utiles)
+
+
+def _propager_noms_coupes(lignes: list[_Ligne]) -> None:
+    """
+    Coupe le nom d'un personnage dont toute la réplique est coupée.
+
+    Sans cela, retirer l'intégralité d'une réplique laisserait son nom seul,
+    orphelin au-dessus du vide. Un nom de personnage est un `**…**` immédiatement
+    suivi de lignes de dialogue ; s'il n'est plus suivi que de dialogue entièrement
+    coupé, il n'a plus de réplique et disparaît avec elle, dans la même couleur.
+    Un titre d'acte ou de scène, lui, n'est jamais suivi directement de dialogue :
+    il n'est donc jamais emporté par cette règle.
+    """
+    for i, ligne in enumerate(lignes):
+        if ligne.type != "titre" or _entierement_coupee(ligne.fragments):
+            continue
+
+        repliques = []
+        j = i + 1
+        while j < len(lignes) and lignes[j].type == "replique":
+            repliques.append(lignes[j])
+            j += 1
+
+        if repliques and all(_entierement_coupee(r.fragments) for r in repliques):
+            passe = next(f.passe for f in repliques[0].fragments if f.texte)
+            for fragment in ligne.fragments:
+                fragment.passe = passe
+
+
 def construire_document(texte: str, plages: list[Plage]):
     """Construit le document Word à partir du texte source et des plages coupées."""
     from docx import Document
@@ -250,22 +291,24 @@ def construire_document(texte: str, plages: list[Plage]):
     document = Document()
     date_iso = datetime.now().isoformat(timespec="seconds")
 
+    lignes: list[_Ligne] = []
     offset = 0
-    for ligne in texte.splitlines(keepends=True):
-        longueur = len(ligne)
-        contenu = ligne.rstrip("\n")
-
+    for ligne_brute in texte.splitlines(keepends=True):
+        contenu = ligne_brute.rstrip("\n")
         if contenu.strip():
             passes = [passe_a_position(offset + i, plages) for i in range(len(contenu))]
             type_ligne, fragments = analyser_ligne(contenu, passes)
+            lignes.append(_Ligne(type_ligne, fragments))
+        offset += len(ligne_brute)
 
-            paragraphe = document.add_paragraph()
-            if type_ligne in ("titre", "separateur"):
-                paragraphe.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            for fragment in fragments:
-                _ajouter_fragment(paragraphe, fragment, date_iso)
+    _propager_noms_coupes(lignes)
 
-        offset += longueur
+    for ligne in lignes:
+        paragraphe = document.add_paragraph()
+        if ligne.type in ("titre", "separateur"):
+            paragraphe.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        for fragment in ligne.fragments:
+            _ajouter_fragment(paragraphe, fragment, date_iso)
 
     return document
 
