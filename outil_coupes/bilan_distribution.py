@@ -193,6 +193,17 @@ def matrice_html(scenes, cast, alias, chemin, titre="Présence par scène"):
     maxi = max((sum(case.values()) for c in comediens for case in cellules[c].values()), default=1)
     totaux = {c: sum(sum(case.values()) for case in cellules[c].values()) for c in comediens}
 
+    # changements de costume RAPIDES (rôles disjoints, scènes consécutives d'un
+    # même acte) : bordure rouge à droite de la case qui précède le changement.
+    rapides = set()
+    for c in comediens:
+        presents = sorted(cellules[c])
+        for a, b in zip(presents, presents[1:]):
+            if (b == a + 1
+                    and set(cellules[c][a]).isdisjoint(cellules[c][b])
+                    and scenes[a][0].split()[:2] == scenes[b][0].split()[:2]):
+                rapides.add((c, a))
+
     entete = "".join(f"<th>{_court(l)}</th>" for l, _ in scenes)
     corps = []
     for c in comediens:
@@ -205,7 +216,10 @@ def matrice_html(scenes, cast, alias, chemin, titre="Présence par scène"):
                 contenu = "<br>".join(
                     f"{r.title()} <b>{m}</b>" for r, m in sorted(case.items(), key=lambda x: -x[1])
                 )
-                cellules_html.append(f'<td style="background:{bg};color:{fg}">{contenu}</td>')
+                style = f"background:{bg};color:{fg}"
+                if (c, i) in rapides:
+                    style += ";border-right:3px solid #d00000"
+                cellules_html.append(f'<td style="{style}" title="{"changement rapide →" if (c,i) in rapides else ""}">{contenu}</td>')
             else:
                 cellules_html.append('<td class="vide"></td>')
         roles = " · ".join(r.title() for r in cast[c])
@@ -225,7 +239,7 @@ def matrice_html(scenes, cast, alias, chemin, titre="Présence par scène"):
  small{{color:#999;font-weight:normal}}
 </style></head><body>
 <h1>{titre}</h1>
-<p>Chaque case : le·s rôle·s joué·s dans la scène et le nombre de mots de dialogue (après coupes). Le vert est d'autant plus soutenu que la scène est chargée pour ce·tte comédien·ne ; une case vide = absent·e.</p>
+<p>Chaque case : le·s rôle·s joué·s dans la scène et le nombre de mots de dialogue (après coupes). Le vert est d'autant plus soutenu que la scène est chargée pour ce·tte comédien·ne ; une case vide = absent·e. Une <span style="border-right:3px solid #d00000;padding-right:3px">bordure rouge</span> à droite d'une case = changement de costume <b>rapide</b> (rôle différent dans la scène suivante du même acte).</p>
 <table><thead><tr><th>Comédien</th>{entete}<th>Total</th></tr></thead>
 <tbody>{"".join(corps)}</tbody></table>
 </body></html>"""
