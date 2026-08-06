@@ -20,6 +20,7 @@ sur son point le plus structurant : le format d'entrée.
 6. [Attribution des personnages aux slots (remplace `#CAST`)](#6-attribution-des-personnages-aux-slots-remplace-cast)
 7. [La fenêtre de contrôle et sa synchronisation](#7-la-fenêtre-de-contrôle-et-sa-synchronisation)
 8. [Rendu projeté](#8-rendu-projeté)
+   - [8bis. Page de titre et distribution d'origine (liminaires)](#8bis-page-de-titre-et-distribution-dorigine-liminaires)
 9. [Navigation](#9-navigation)
 10. [Persistance](#10-persistance)
 11. [Gestion des erreurs](#11-gestion-des-erreurs)
@@ -805,6 +806,38 @@ L'écran d'attribution (§6) n'a besoin d'aucun changement : `piece.personnages`
 liste déjà chaque personnage individuellement, qu'il parle seul ou en groupe
 dans telle ou telle réplique — l'attribution reste un slot par personnage,
 jamais par groupe.
+
+### 8bis. Page de titre et distribution d'origine (liminaires)
+
+**Bug corrigé à l'usage :** le `REPET.json` porte, depuis `repet_export.py`
+côté `outil_edition`, un champ `liminaires` — titre de l'œuvre, intitulé
+« PERSONNAGES. », liste des rôles telle qu'imprimée — que ni `outil_lecture`
+ni `outil_repetition` ne lisaient jamais. Cette page de titre disparaissait
+donc silencieusement à l'import, sans qu'aucune erreur ne le signale (violation
+de P2 : ce n'était pas une erreur, mais un contenu de l'auteur tout de même
+perdu de vue).
+
+**Choix de l'emplacement : l'écran de préparation, jamais la projection.**
+`repet_export.py` documente son intention (« que l'outil affiche à
+l'accueil ») : c'est un rappel avant de commencer, pas du texte à réciter.
+L'insérer dans la liste plate (§5) aurait exigé de le rendre navigable au
+clavier pendant une lecture publique — fouiller la distribution d'origine à
+coups de flèche devant un public n'a aucun sens — et aurait décalé tous les
+index déjà persistés (`lecture:v1:session`, §10) pour les pièces déjà lues.
+`construireApercuLiminaires` monte donc une carte à part, « Page de titre »,
+juste sous l'import (§6), purement informative : jamais consultée par
+`aplatirEnElements`, jamais comptée dans le sommaire (§8.6) ni dans une
+position sauvegardée.
+
+**Types inconnus, jamais une erreur.** `repet_export.py` peut produire sept
+types (`titre_oeuvre`, `titre_secondaire`, `epigraphe`, `attribution`,
+`note`, `distribution`, `entree_distribution`) ; `_classeLiminaire` déduit
+une classe CSS de chacun (`liminaire-titre-oeuvre`, etc.), mais un type
+non prévu ici retombe simplement sur une classe sans règle dédiée — texte
+affiché sans mise en forme distincte, jamais une pièce refusée pour un
+détail cosmétique (P2, appliqué avec discernement : `liminaires` reste
+optionnel dans `validerRepet`, seul son champ `texte` est requis quand il
+est présent).
 
 ---
 

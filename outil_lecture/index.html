@@ -99,6 +99,27 @@
     display: inline-block; width: 0.9em; height: 0.9em; border-radius: 50%;
     margin-right: 0.4em; vertical-align: middle;
   }
+
+  /* Page de titre et distribution d'origine (§8bis). Reprend la hiérarchie
+     typographique du DOCX édité (Theatre_Titre_Acte, Theatre_Distribution,
+     §9.3 de ARCHITECTURE.md d'outil_edition) plutôt que d'en inventer une. */
+  #corps-liminaires .liminaire-titre-oeuvre {
+    font-size: 1.3rem; font-weight: bold; text-align: center;
+    margin: 0 0 0.5rem;
+  }
+  #corps-liminaires .liminaire-titre-secondaire {
+    text-align: center; color: var(--attenue); margin: 0 0 0.9rem;
+  }
+  #corps-liminaires .liminaire-distribution {
+    text-transform: uppercase; letter-spacing: 0.05em; color: var(--attenue);
+    font-weight: bold; margin: 1rem 0 0.4rem; text-align: center;
+  }
+  #corps-liminaires .liminaire-entree-distribution { margin: 0 0 0.3rem; }
+  #corps-liminaires .liminaire-epigraphe { font-style: italic; margin: 0.6rem 0; }
+  #corps-liminaires .liminaire-attribution {
+    text-align: right; color: var(--attenue); margin: 0 0 0.6rem;
+  }
+  #corps-liminaires .liminaire-note { color: var(--attenue); font-size: 0.9rem; }
   #bouton-demarrer, #bouton-demarrer-solo {
     background: var(--accent); border-color: var(--accent); color: #0b0b0e;
     font-weight: bold;
@@ -463,6 +484,14 @@
     </div>
   </section>
 
+  <!-- Page de titre et distribution d'origine (liminaires, §8bis de
+       ARCHITECTURE.md) : purement informatif, jamais navigable pendant la
+       lecture projetée — voir §8bis pour la raison de ce choix. -->
+  <section id="section-liminaires" hidden>
+    <h2>Page de titre</h2>
+    <div id="corps-liminaires"></div>
+  </section>
+
   <section id="section-mode">
     <h2>2. Mode de lecture</h2>
     <label class="interrupteur">
@@ -688,6 +717,24 @@ function validerRepet(donnees) {
 
     if (erreur) {
       return _refusValidation(erreur);
+    }
+  }
+
+  // `liminaires` (titre de l'œuvre, distribution d'origine, §8bis) est
+  // absent des exports antérieurs à son introduction dans outil_edition :
+  // optionnel, jamais requis. S'il est présent, chaque entrée doit porter un
+  // texte, sans quoi l'écran de préparation afficherait une ligne vide.
+  if (donnees.liminaires !== undefined) {
+    if (!Array.isArray(donnees.liminaires)) {
+      return _refusValidation('le champ « liminaires », présent, n’est pas un tableau.');
+    }
+
+    for (let i = 0; i < donnees.liminaires.length; i += 1) {
+      const item = donnees.liminaires[i];
+
+      if (item === null || typeof item !== 'object' || typeof item.texte !== 'string') {
+        return _refusValidation(`liminaire ${i + 1} : champ « texte » absent.`);
+      }
     }
   }
 
@@ -1778,6 +1825,42 @@ function construireTableAttribution(corps, personnages, castInitial, prenoms) {
   }
 }
 
+/**
+ * Affiche la page de titre et la distribution d'origine (§8bis) : `titre`,
+ * `distribution` et `entree_distribution`, entre autres, produits par
+ * `outil_edition` et jusqu'ici présents dans le `REPET.json` sans jamais être
+ * montrés (retour d'usage : cette page liminaire disparaissait
+ * silencieusement à l'import — P2). Purement informatif, sur l'écran de
+ * préparation seulement : jamais injecté dans la liste plate qui navigue
+ * pendant la lecture projetée, pour ne pas mélanger front-matter éditoriale
+ * et texte que l'on récite (§5).
+ *
+ * @param {string} type un des types de `TYPES_LIMINAIRES` d'outil_edition —
+ *   un type inconnu retombe simplement sur une classe CSS sans règle dédiée,
+ *   jamais une erreur (P2 : ce n'est que de la mise en forme).
+ */
+function _classeLiminaire(type) {
+  return `liminaire-${String(type).replace(/_/g, '-')}`;
+}
+
+function construireApercuLiminaires(conteneur, section, liminaires) {
+  conteneur.innerHTML = '';
+
+  if (!Array.isArray(liminaires) || liminaires.length === 0) {
+    section.hidden = true;
+    return;
+  }
+
+  for (const item of liminaires) {
+    const paragraphe = document.createElement('p');
+    paragraphe.className = _classeLiminaire(item.type);
+    paragraphe.textContent = item.texte;
+    conteneur.appendChild(paragraphe);
+  }
+
+  section.hidden = false;
+}
+
 /** Lit l'attribution courante depuis la table (§6 : uniquement les slots choisis). */
 function lireCastDepuisTable(corps) {
   const cast = {};
@@ -2000,6 +2083,8 @@ if (MODE_FENETRE === 'projection') (() => {
   const sectionControleFenetre = document.getElementById('section-controle-fenetre');
   const corpsAttribution = document.getElementById('corps-attribution');
   const erreurAttribution = document.getElementById('erreur-attribution');
+  const sectionLiminaires = document.getElementById('section-liminaires');
+  const corpsLiminaires = document.getElementById('corps-liminaires');
   const boutonDemarrer = document.getElementById('bouton-demarrer');
   const sectionReprise = document.getElementById('section-reprise');
   const messageReprise = document.getElementById('message-reprise');
@@ -2595,6 +2680,8 @@ if (MODE_FENETRE === 'projection') (() => {
     piece = resultat.piece;
     personnagesCourants = piece.personnages;
 
+    construireApercuLiminaires(corpsLiminaires, sectionLiminaires, piece.liminaires);
+
     // La table d'attribution ne sert qu'en mode distribution (§6) : en mode
     // solo, rien à construire, le bouton de démarrage direct suffit (branché
     // dans appliquerModeAffichage).
@@ -2617,6 +2704,7 @@ if (MODE_FENETRE === 'projection') (() => {
 
     erreurImport.hidden = true;
     sectionAttribution.hidden = true;
+    sectionLiminaires.hidden = true;
 
     const lecteur = new FileReader();
 
