@@ -41,6 +41,11 @@ class ResoudrePlages(unittest.TestCase):
         with self.assertRaises(ValueError):
             ac.resoudre_plages(self.TEXTE, coupes)
 
+    def test_ancre_droite_matche_apostrophe_typographique(self):
+        texte = "Je l’ai vu hier soir."  # apostrophe typographique dans le document
+        plages = ac.resoudre_plages(texte, [{"passe": 1, "texte": "l'ai vu"}])  # ancre droite
+        self.assertEqual(texte[plages[0].debut:plages[0].fin], "l’ai vu")
+
 
 class PasseAPosition(unittest.TestCase):
     def test_dedans_et_dehors(self):

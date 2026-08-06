@@ -60,6 +60,26 @@ class Plage:
     passe: int
 
 
+# Normalisations appliquées avant de chercher une ancre. Toutes remplacent un
+# caractère par un autre de **même longueur** : les offsets restent donc valides
+# sur le texte d'origine. On peut ainsi écrire les ancres simplement — apostrophe
+# droite, espaces ordinaires — sans se soucier de la graphie exacte du document :
+#
+# - apostrophes typographiques → droite (le document mêle les deux) ;
+# - saut de ligne → espace : une réplique en vers est faite de paragraphes
+#   séparés, donc de sauts de ligne ; une ancre écrite d'un trait les traverse ;
+# - espace insécable → espace : la typographie française en met avant « ! ? : ; »
+#   et dans les guillemets, invisibles à la saisie d'une ancre.
+_NORMALISATION = {
+    0x2019: "'", 0x2018: "'", 0x02BC: "'",
+    0x0A: " ", 0x0D: " ", 0x00A0: " ", 0x202F: " ",
+}
+
+
+def _normaliser(texte: str) -> str:
+    return texte.translate(_NORMALISATION)
+
+
 def _localiser_unique(texte: str, motif: str, etiquette: str) -> int:
     premiere = texte.find(motif)
     if premiere == -1:
@@ -74,6 +94,7 @@ def _localiser_unique(texte: str, motif: str, etiquette: str) -> int:
 
 def resoudre_plages(texte: str, coupes: list[dict]) -> list[Plage]:
     """Convertit les coupes en plages de caractères, triées et sans chevauchement."""
+    texte = _normaliser(texte)
     plages: list[Plage] = []
 
     for numero, coupe in enumerate(coupes, start=1):
@@ -82,11 +103,11 @@ def resoudre_plages(texte: str, coupes: list[dict]) -> list[Plage]:
             raise ValueError(f"coupe {numero} : passe {passe!r} inconnue (attendu 1 ou 2)")
 
         if "texte" in coupe:
-            debut = _localiser_unique(texte, coupe["texte"], f"coupe {numero}")
+            debut = _localiser_unique(texte, _normaliser(coupe["texte"]), f"coupe {numero}")
             fin = debut + len(coupe["texte"])
         else:
-            debut = _localiser_unique(texte, coupe["debut"], f"coupe {numero}, début")
-            fin = _localiser_unique(texte, coupe["fin"], f"coupe {numero}, fin") + len(coupe["fin"])
+            debut = _localiser_unique(texte, _normaliser(coupe["debut"]), f"coupe {numero}, début")
+            fin = _localiser_unique(texte, _normaliser(coupe["fin"]), f"coupe {numero}, fin") + len(coupe["fin"])
             if fin <= debut:
                 raise ValueError(f"coupe {numero} : « fin » précède « début »")
 
