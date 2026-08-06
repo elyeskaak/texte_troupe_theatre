@@ -1737,20 +1737,44 @@ def fin_des_liminaires(texte: str, index: IndexStructure) -> int:
     comptent pas : ce sont précisément ceux que la passe des liminaires doit
     trancher, et s'arrêter à eux reviendrait à ne rien lui soumettre.
 
+    **Un titre éclaté sur plusieurs lignes ne doit pas non plus arrêter le
+    balayage.** Un titre long est parfois composé d'une ligne grasse isolée par
+    fragment — « LA MORT. » / « DE. » / « DANTON. » — et le dernier fragment
+    peut, par malchance, être le nom d'un vrai personnage reconnu avec
+    certitude ailleurs dans le livre. Rien ne distingue alors ce « DANTON. »
+    de celui, bien plus loin, qui ouvre réellement sa première réplique — sauf
+    ceci : une vraie réplique n'est jamais précédée d'une autre ligne grasse
+    isolée sans le moindre texte entre les deux, alors qu'un titre éclaté ne
+    l'est que de cela. Deux lignes grasses isolées consécutives, ni l'une ni
+    l'autre reconnue comme titre d'acte ou de scène, sont donc traitées comme
+    la suite d'un même titre plutôt que comme le début de la pièce.
+
     Returns:
         Le nombre de lignes à soumettre, plafonné par `LIGNES_LIMINAIRES`.
     """
     ouvre_la_piece = {TypeLigne.TITRE_ACTE, TypeLigne.PERSONNAGE}
     sures = {Confiance.CERTAINE, Confiance.PROBABLE}
+    divise_un_titre = {TypeLigne.TITRE_ACTE, TypeLigne.TITRE_SCENE}
+
+    precedente_gras_isolee_ambigue = False
 
     for numero, ligne in enumerate(texte.split("\n")):
-        contenu = contenu_gras(ligne.strip())
+        ligne_strip = ligne.strip()
+
+        if not ligne_strip:
+            # Une ligne vide sépare deux fragments d'un même titre éclaté sans
+            # y mettre de texte : elle ne doit pas remettre à zéro la chaîne.
+            continue
+
+        contenu_isole = contenu_gras(ligne_strip)
+        contenu = contenu_isole
 
         if contenu is None:
             dedouble = dedoubler_replique_en_ligne(ligne)
             contenu = dedouble.nom if dedouble else None
 
         if contenu is None:
+            precedente_gras_isolee_ambigue = False
             continue
 
         classement = index.classements.get(normaliser_label(contenu))
@@ -1759,8 +1783,13 @@ def fin_des_liminaires(texte: str, index: IndexStructure) -> int:
             classement is not None
             and classement.type in ouvre_la_piece
             and classement.confiance in sures
+            and not precedente_gras_isolee_ambigue
         ):
             return min(numero, config.LIGNES_LIMINAIRES)
+
+        precedente_gras_isolee_ambigue = bool(contenu_isole) and (
+            classement is None or classement.type not in divise_un_titre
+        )
 
     return min(len(texte.split("\n")), config.LIGNES_LIMINAIRES)
 

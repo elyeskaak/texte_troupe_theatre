@@ -1184,6 +1184,36 @@ Trois propriétés complètent la protection :
 - **dégradation propre** — sans `LIMINAIRES.json`, l'étape 4 se comporte
   exactement comme avant. Un échec de cette étape ne bloque rien.
 
+**Bug corrigé à l'usage : un titre éclaté sur plusieurs lignes grasses
+peut faire croire que la pièce a commencé avant même la distribution.**
+`fin_des_liminaires()` arrête de soumettre des lignes à l'étape 2c dès la
+première ligne grasse reconnue avec certitude comme un titre d'acte ou un nom
+de personnage — c'est ce qui borne l'appel (ci-dessus). Mais un long titre
+imprimé sur plusieurs lignes séparées, chacune seule et grasse — *La Mort. /
+De. / Danton.*, ou *Beaucoup de bruit. / Pour rien.* — peut voir son **dernier
+fragment** coïncider, lettre pour lettre, avec le nom d'un vrai personnage de
+la pièce. Rien ne distingue alors ce fragment-là du nom qui, bien plus loin,
+ouvre réellement sa première réplique : les deux sont reconnus avec la même
+certitude. Conséquence observée sur *La Mort de Danton* (Büchner) : la passe
+s'arrêtait à « **DANTON.** » — le dernier fragment du titre — et tout le bloc
+de mentions d'éditeur qui suivait (traducteur, préfacier, année) devenait,
+dans le DOCX comme dans le `REPET.json`, la **première réplique de Danton**.
+Ni la distribution ni le reste du titre n'étaient jamais soumis à l'étape 2c,
+puisque le balayage s'était arrêté avant.
+
+La correction ne touche pas la règle d'arrêt elle-même — elle reste correcte
+pour l'immense majorité des livres, où un nom de personnage n'est jamais
+précédé d'une autre ligne grasse isolée sans texte entre les deux (entre deux
+personnages, il y a toujours au moins la réplique du précédent). C'est
+précisément ce motif, absent partout ailleurs, qui distingue un titre éclaté :
+deux lignes grasses isolées **consécutives**, sans le moindre texte entre
+elles, sont donc traitées comme la suite d'un même titre plutôt que comme le
+début de la pièce — sauf si l'une d'elles est elle-même un titre d'acte ou de
+scène reconnu avec certitude, seul cas où la chaîne doit malgré tout s'arrêter
+(un acte ou une scène ne fait jamais partie d'un titre d'œuvre). Vérifié sans
+régression sur les neuf pièces déjà éditées du dépôt : seules ces deux-là
+changent de frontière, toutes les autres restent identiques lignes pour ligne.
+
 ### 9.7 Page blanche, ou modèle qui renonce ?
 
 Deux réponses inattendues du modèle d'OCR, de conséquences opposées.

@@ -172,6 +172,45 @@ class TestFinDesLiminaires(unittest.TestCase):
 
         self.assertEqual(blocks.fin_des_liminaires(texte, index), 0)
 
+    def test_titre_eclate_sur_plusieurs_lignes_grasses_n_arrete_pas(self):
+        """
+        Cas réel (Büchner, « La Mort de Danton ») : un titre imprimé sur
+        plusieurs lignes grasses isolées et consécutives — « LA MORT. » /
+        « DE. » / « DANTON. » — ne doit pas être pris pour le début de la
+        pièce au seul motif que son dernier fragment coïncide avec le nom
+        d'un vrai personnage. Sans la protection, le balayage s'arrêtait à
+        « DANTON. » et les mentions d'éditeur qui suivaient devenaient sa
+        première réplique.
+        """
+        texte = (
+            "**LA MORT.**\n"
+            "\n"
+            "**DE.**\n"
+            "\n"
+            "**DANTON.**\n"
+            "\n"
+            "Mentions d'éditeur, traducteur, année.\n"
+            "\n"
+            "**PERSONNAGES**\n"
+            "Danton. Julie.\n"
+            "\n"
+            "**DANTON.**\n"
+            "Bonjour.\n"
+            "**JULIE.**\n"
+            "Bonjour.\n"
+            "**DANTON.**\n"
+            "Encore.\n"
+        )
+
+        index = blocks.construire_index_structure(texte)
+        fin = blocks.fin_des_liminaires(texte, index)
+
+        lignes = texte.split("\n")
+
+        self.assertEqual(lignes[fin], "**DANTON.**")
+        # La vraie première réplique, pas le fragment de titre (ligne 4).
+        self.assertGreater(fin, 8)
+
 
 # ============================================================
 # 3. UN SEUL APPEL, MIS EN CACHE
