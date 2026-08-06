@@ -93,6 +93,23 @@ Le format d'origine est préservé (on part du `.docx` source). L'alignement des
 
 C'est le moyen concret d'appliquer la règle « recalculer après chaque passe » à quatre mains : le relecteur voit ses coupes conservées et n'a plus qu'à trancher les propositions supplémentaires.
 
+### Bilan d'une distribution après coupes
+
+`bilan_distribution.py` applique la règle « recalculer après chaque passe » à la distribution : il juge l'équilibre et la faisabilité sur le texte **réellement coupé**, pas sur le REPET intégral.
+
+    python bilan_distribution.py <source.docx> cast.json \
+        [--coupes coupes.json] [--relecteur relecteur.docx] [--alias "UN SEIGNEUR=ANTONIO"]
+
+Il produit :
+
+* l'**équilibre par comédien** — mots de dialogue restants, %, écart à la cible ; les rôles non distribués sont signalés ;
+* les **conflits de présence** — deux rôles d'un même comédien qui *parlent* dans la même scène : bloquant, un comédien ne peut se dédoubler ;
+* les **changements de costume** — rôle différent d'une scène à la scène qui l'enchaîne, marqués « RAPIDE » dans le même acte.
+
+`--alias "UN SEIGNEUR=ANTONIO"` déclare qu'un rôle anonyme est joué sous les traits d'un rôle déjà tenu par le même comédien (même costume) : il ne compte alors pas comme un changement — utile quand la mise en scène confie une réplique orpheline à un personnage présent.
+
+Limite assumée : la présence est déduite des répliques (qui **parle**). Un personnage présent mais muet échappe à l'analyse — à recouper avec les entrées/sorties. C'est une aide au repérage, pas un substitut au conducteur de la mise en scène.
+
 
 
 ## Limites connues
