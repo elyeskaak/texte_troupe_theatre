@@ -71,8 +71,8 @@ def parcourir(document, coupe, alias):
     nom en gras rencontré ; un titre d'acte/scène le remet à zéro.
     """
     poids: dict[str, int] = {}
-    scenes: list[tuple[str, set[str]]] = []
-    acte, label, presents, courant, offset = "", None, set(), None, 0
+    scenes: list[tuple[str, dict[str, int]]] = []  # (scène, {personnage: mots dits dans la scène})
+    acte, label, presents, courant, offset = "", None, {}, None, 0
 
     for para in document.paragraphs:
         runs = [r for r in para.runs if r.text]
@@ -87,7 +87,7 @@ def parcourir(document, coupe, alias):
             elif _TITRE.match(s):
                 if label:
                     scenes.append((label, presents))
-                label, presents, courant = f"{acte} {s.rstrip('.')}", set(), None
+                label, presents, courant = f"{acte} {s.rstrip('.')}", {}, None
             else:
                 courant = [_canoniser(n, alias) for n in _JONCTION.split(texte)]
         elif s and not ital and courant:
@@ -100,7 +100,7 @@ def parcourir(document, coupe, alias):
                         for perso in courant:
                             if perso and perso != "TOUS":
                                 poids[perso] = poids.get(perso, 0) + m
-                                presents.add(perso)
+                                presents[perso] = presents.get(perso, 0) + m
                 o += len(r.text)
         offset += sum(len(r.text) for r in para.runs) + 1
 
@@ -165,6 +165,73 @@ def afficher_faisabilite(scenes, cast, alias):
                       f"{scenes[b][0]} [{'/'.join(sorted(sc[b]))}]{tag}")
 
 
+def _court(label: str) -> str:
+    m = re.match(r"ACTE\s+(\S+)\s+Sc[eè]ne\s+(\S+)", label, re.IGNORECASE)
+    return f"{m.group(1)}.{m.group(2)}" if m else label
+
+
+def _couleur(t: float) -> tuple[str, str]:
+    """Blanc (rien) → vert foncé (charge maximale) ; texte clair quand le fond est sombre."""
+    t = max(0.0, min(1.0, t))
+    r, g, b = (int(255 + t * (c - 255)) for c in (30, 125, 60))
+    return f"rgb({r},{g},{b})", ("#fff" if t > 0.55 else "#222")
+
+
+def matrice_html(scenes, cast, alias, chemin, titre="Présence par scène"):
+    """Écrit une matrice comédiens × scènes : rôles joués, mots, heatmap de charge."""
+    role2com = {_canoniser(r, alias): com for com, roles in cast.items() for r in roles}
+    comediens = sorted(cast)
+
+    cellules: dict[str, dict[int, dict[str, int]]] = {c: {} for c in comediens}
+    for i, (_, persos) in enumerate(scenes):
+        for perso, mots in persos.items():
+            com = role2com.get(perso)
+            if com:
+                case = cellules[com].setdefault(i, {})
+                case[perso] = case.get(perso, 0) + mots
+
+    maxi = max((sum(case.values()) for c in comediens for case in cellules[c].values()), default=1)
+    totaux = {c: sum(sum(case.values()) for case in cellules[c].values()) for c in comediens}
+
+    entete = "".join(f"<th>{_court(l)}</th>" for l, _ in scenes)
+    corps = []
+    for c in comediens:
+        cellules_html = []
+        for i in range(len(scenes)):
+            case = cellules[c].get(i)
+            if case:
+                tot = sum(case.values())
+                bg, fg = _couleur(tot / maxi)
+                contenu = "<br>".join(
+                    f"{r.title()} <b>{m}</b>" for r, m in sorted(case.items(), key=lambda x: -x[1])
+                )
+                cellules_html.append(f'<td style="background:{bg};color:{fg}">{contenu}</td>')
+            else:
+                cellules_html.append('<td class="vide"></td>')
+        roles = " · ".join(r.title() for r in cast[c])
+        corps.append(
+            f'<tr><th>{c}<br><small>{roles}</small></th>{"".join(cellules_html)}'
+            f'<td class="tot">{totaux[c]}</td></tr>'
+        )
+
+    html = f"""<!doctype html><html lang="fr"><head><meta charset="utf-8"><title>{titre}</title>
+<style>
+ body{{font-family:"Segoe UI",system-ui,sans-serif;margin:1.5rem;color:#222}}
+ h1{{font-size:1.15rem;margin:0 0 .2rem}} p{{color:#666;margin:.2rem 0 1rem;font-size:13px}}
+ table{{border-collapse:collapse;font-size:12px}}
+ th,td{{border:1px solid #e0e0e0;padding:4px 7px;text-align:center;vertical-align:middle}}
+ thead th{{background:#f4f4f4}} td.vide{{background:#fbfbfb}}
+ td.tot{{font-weight:bold;background:#eef2ff}} tbody th{{text-align:left;white-space:nowrap;background:#f4f4f4}}
+ small{{color:#999;font-weight:normal}}
+</style></head><body>
+<h1>{titre}</h1>
+<p>Chaque case : le·s rôle·s joué·s dans la scène et le nombre de mots de dialogue (après coupes). Le vert est d'autant plus soutenu que la scène est chargée pour ce·tte comédien·ne ; une case vide = absent·e.</p>
+<table><thead><tr><th>Comédien</th>{entete}<th>Total</th></tr></thead>
+<tbody>{"".join(corps)}</tbody></table>
+</body></html>"""
+    Path(chemin).write_text(html, encoding="utf-8")
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description="Bilan d'une distribution après coupes.")
     p.add_argument("source")
@@ -172,6 +239,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--coupes")
     p.add_argument("--relecteur")
     p.add_argument("--alias", action="append", default=[], metavar="A=B")
+    p.add_argument("--matrice", metavar="FICHIER.html", help="écrit la matrice visuelle présence × scène")
     options = p.parse_args(argv)
 
     alias = {}
@@ -188,6 +256,9 @@ def main(argv: list[str] | None = None) -> int:
     cast = json.load(open(options.cast, encoding="utf-8"))
     afficher_equilibre(poids, cast, alias)
     afficher_faisabilite(scenes, cast, alias)
+    if options.matrice:
+        matrice_html(scenes, cast, alias, options.matrice)
+        print(f"\nMatrice visuelle écrite : {options.matrice}")
     return 0
 
 

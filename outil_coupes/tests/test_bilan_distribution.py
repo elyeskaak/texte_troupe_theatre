@@ -65,8 +65,10 @@ class Parcourir(unittest.TestCase):
         poids, scenes = bd.parcourir(self.doc, coupe, {})
         self.assertEqual(poids["JAN"], 5 + 2)   # « Bonjour tout le monde ici » + « Encore moi »
         self.assertEqual(poids["MARTHA"], 3)    # « Salut à toi »
-        self.assertEqual(scenes[0][1], {"JAN", "MARTHA"})
-        self.assertEqual(scenes[1][1], {"JAN"})
+        # chaque scène porte les mots dits par personnage dans la scène
+        self.assertEqual(set(scenes[0][1]), {"JAN", "MARTHA"})
+        self.assertEqual(scenes[0][1]["JAN"], 5)
+        self.assertEqual(scenes[1][1], {"JAN": 2})
 
     def test_les_mots_coupes_ne_comptent_plus(self):
         coupe = [False] * len(self.texte)
