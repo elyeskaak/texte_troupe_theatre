@@ -236,7 +236,7 @@ def propager_noms(paras: list[InfoParagraphe], plages: list[Plage]) -> list[Plag
 # ============================================================
 
 
-def _nouveau_run(rpr, texte: str, *, supprime: bool, passe: int, date_iso: str):
+def _nouveau_run(rpr, texte: str, *, supprime: bool, passe: int, date_iso: str, couleurs, auteurs):
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
@@ -247,7 +247,7 @@ def _nouveau_run(rpr, texte: str, *, supprime: bool, passe: int, date_iso: str):
             for ancien in proprietes.findall(qn("w:color")):
                 proprietes.remove(ancien)
             couleur = OxmlElement("w:color")
-            couleur.set(qn("w:val"), COULEURS[passe])
+            couleur.set(qn("w:val"), couleurs[passe])
             proprietes.append(couleur)
         run.append(proprietes)
 
@@ -261,14 +261,22 @@ def _nouveau_run(rpr, texte: str, *, supprime: bool, passe: int, date_iso: str):
 
     element_del = OxmlElement("w:del")
     element_del.set(qn("w:id"), str(next(_compteur_revision)))
-    element_del.set(qn("w:author"), AUTEURS[passe])
+    element_del.set(qn("w:author"), auteurs[passe])
     element_del.set(qn("w:date"), date_iso)
     element_del.append(run)
     return element_del
 
 
-def appliquer_sur_run(info: InfoRun, plages: list[Plage], date_iso: str) -> None:
-    """Découpe un run selon les plages et enveloppe les portions coupées."""
+def appliquer_sur_run(info: InfoRun, plages: list[Plage], date_iso: str,
+                      couleurs=COULEURS, auteurs=AUTEURS) -> None:
+    """
+    Découpe un run selon les plages et enveloppe les portions coupées.
+
+    `couleurs`/`auteurs` mappent une catégorie de coupe (la valeur `passe` d'une
+    `Plage`) vers une couleur hex et un nom d'auteur de révision. Ils sont
+    paramétrables pour que `fusion_coupes` puisse ajouter une 3ᵉ catégorie sans
+    modifier les tables globales.
+    """
     from docx.oxml.ns import qn
 
     texte = info.run.text
@@ -288,7 +296,8 @@ def appliquer_sur_run(info: InfoRun, plages: list[Plage], date_iso: str) -> None
     rpr = element.find(qn("w:rPr"))
     for seg_texte, passe in segments:
         element.addprevious(
-            _nouveau_run(rpr, seg_texte, supprime=bool(passe), passe=passe, date_iso=date_iso)
+            _nouveau_run(rpr, seg_texte, supprime=bool(passe), passe=passe,
+                         date_iso=date_iso, couleurs=couleurs, auteurs=auteurs)
         )
     element.getparent().remove(element)
 
