@@ -145,6 +145,13 @@ class CmdComputeTests(unittest.TestCase):
         with redirect_stdout(sortie):
             analyze.cmd_compute(str(chemin), cast_path, target)
 
+        # cmd_compute écrit toujours la matrice dans outil_coupes/sorties/ : on
+        # la supprime après chaque test pour ne pas polluer ce dossier de travail.
+        csv_path = (
+            Path(analyze.__file__).resolve().parent / "sorties" / (chemin.stem + "_presence.csv")
+        )
+        self.addCleanup(csv_path.unlink, missing_ok=True)
+
         return chemin, sortie.getvalue()
 
     def test_flags_role_hypertrophie_et_roles_creux(self):
@@ -159,7 +166,12 @@ class CmdComputeTests(unittest.TestCase):
     def test_exclut_le_joker_tous_de_la_presence(self):
         with TemporaryDirectory() as tmp:
             chemin, texte = self._executer(tmp)
-            csv_path = chemin.with_name(chemin.stem + "_presence.csv")
+            # Le CSV est écrit dans outil_coupes/sorties/ (voir _executer), jamais
+            # à côté du REPET source qui vit dans le dossier Drive partagé.
+            csv_path = (
+                Path(analyze.__file__).resolve().parent
+                / "sorties" / (chemin.stem + "_presence.csv")
+            )
             with open(csv_path, encoding="utf-8") as f:
                 lignes = list(csv.reader(f))
 

@@ -65,7 +65,20 @@ Toujours signaler explicitement la fonction identifiée (exposition / farce / in
 
 ## Format de restitution des coupes
 
-* .docx avec suivi des modifications Word (`<w:del>`/`<w:ins>`), texte intégral conservé et visible en barré.
+`.docx` à suivi de modifications Word (`<w:del>`), texte intégral conservé et visible en barré : on relit dans Word et on accepte/rejette chaque coupe. Rien n'est effacé.
+
+`appliquer_coupes.py` produit ce fichier à partir du texte source (`EDIT.txt`, convention typographique) et d'un fichier de coupes `sorties/coupes_<pièce>.json` — une liste de `{passe, debut, fin}` (couper de la 1ʳᵉ occurrence de `debut` jusqu'à la fin de `fin`) ou `{passe, texte}` (couper ce passage exact) :
+
+    python appliquer_coupes.py <EDIT.txt> sorties/coupes_<pièce>.json --sortie <pièce>_coupes.docx
+
+Une ancre introuvable ou ambiguë arrête le programme : une coupe mal ancrée doit se voir, pas se poser au hasard.
+
+Les coupes se mènent en **deux passes**, distinguées dans le `.docx` par leur couleur (deux auteurs de révision distincts, donc acceptables/rejetables séparément dans Word) :
+
+* 🔴 **passe 1, rouge** — coupes structurelles (scènes/tirades entières chez les surchargés) ;
+* 🔵 **passe 2, bleu** — rabotage fin pour atteindre la cible exacte.
+
+Le registre lisible des coupes validées, scène par scène, vit dans `sorties/coupes_<pièce>.md` (avec la distribution `cast.json` et les matrices de présence). Ce dossier `sorties/` est un espace de travail par production, non versionné.
 
 
 
