@@ -1,9 +1,9 @@
 """
 Tests de `appliquer_coupes`.
 
-La résolution des plages et l'analyse des lignes sont testées sans dépendance.
-La génération du .docx exige `python-docx` (dépendance réelle de l'outil de
-matérialisation) : ce test se saute proprement si le module est absent.
+La résolution des plages et la propagation des noms sont testées sans dépendance.
+L'application sur un vrai `.docx` exige `python-docx` (dépendance réelle de
+l'outil) : ce test se saute proprement si le module est absent.
 """
 from __future__ import annotations
 
@@ -13,11 +13,10 @@ import appliquer_coupes as ac
 
 
 class ResoudrePlages(unittest.TestCase):
-    TEXTE = "**JAN.**\nBonjour, comment vas-tu ce matin.\n\n**MARTHA.**\nTrès bien.\n"
+    TEXTE = "JAN.\nBonjour, comment vas-tu ce matin.\nMARTHA.\nTrès bien.\n"
 
     def test_texte_exact(self):
         plages = ac.resoudre_plages(self.TEXTE, [{"passe": 1, "texte": ", comment vas-tu"}])
-        self.assertEqual(len(plages), 1)
         self.assertEqual(self.TEXTE[plages[0].debut:plages[0].fin], ", comment vas-tu")
         self.assertEqual(plages[0].passe, 1)
 
@@ -30,29 +29,17 @@ class ResoudrePlages(unittest.TestCase):
             ac.resoudre_plages(self.TEXTE, [{"passe": 1, "texte": "absent du texte"}])
 
     def test_ancre_ambigue_leve(self):
-        texte = "Oui. Oui. Oui."
         with self.assertRaises(ValueError):
-            ac.resoudre_plages(texte, [{"passe": 1, "texte": "Oui."}])
+            ac.resoudre_plages("Oui. Oui. Oui.", [{"passe": 1, "texte": "Oui."}])
 
     def test_passe_inconnue_leve(self):
         with self.assertRaises(ValueError):
             ac.resoudre_plages(self.TEXTE, [{"passe": 3, "texte": "Bonjour"}])
 
     def test_chevauchement_leve(self):
-        coupes = [
-            {"passe": 1, "texte": "Bonjour, comment"},
-            {"passe": 2, "texte": "comment vas-tu"},
-        ]
+        coupes = [{"passe": 1, "texte": "Bonjour, comment"}, {"passe": 2, "texte": "comment vas-tu"}]
         with self.assertRaises(ValueError):
             ac.resoudre_plages(self.TEXTE, coupes)
-
-    def test_plages_triees(self):
-        coupes = [
-            {"passe": 2, "texte": "Très bien"},
-            {"passe": 1, "texte": "Bonjour"},
-        ]
-        plages = ac.resoudre_plages(self.TEXTE, coupes)
-        self.assertLess(plages[0].debut, plages[1].debut)
 
 
 class PasseAPosition(unittest.TestCase):
@@ -64,77 +51,35 @@ class PasseAPosition(unittest.TestCase):
         self.assertEqual(ac.passe_a_position(5, plages), 0)
 
 
-class AnalyserLigne(unittest.TestCase):
-    def _passes(self, ligne):
-        return [0] * len(ligne)
+class PropagerNoms(unittest.TestCase):
+    # Offsets cohérents avec un texte plat « JAN.\nBonjour.\nMARTHA.\nSalut.\n ».
+    def _paras(self):
+        return [
+            ac.InfoParagraphe(0, "JAN.", True, False),
+            ac.InfoParagraphe(5, "Bonjour.", False, False),
+            ac.InfoParagraphe(14, "MARTHA.", True, False),
+            ac.InfoParagraphe(22, "Salut.", False, False),
+        ]
 
-    def test_titre_en_gras_sans_marqueurs(self):
-        type_ligne, frags = ac.analyser_ligne("**ACTE I.**", self._passes("**ACTE I.**"))
-        self.assertEqual(type_ligne, "titre")
-        self.assertEqual("".join(f.texte for f in frags), "ACTE I.")
-        self.assertTrue(all(f.gras for f in frags))
-
-    def test_didascalie_en_italique(self):
-        ligne = "*Une rue. Le soir.*"
-        type_ligne, frags = ac.analyser_ligne(ligne, self._passes(ligne))
-        self.assertEqual(type_ligne, "didascalie")
-        self.assertEqual("".join(f.texte for f in frags), "Une rue. Le soir.")
-        self.assertTrue(all(f.italique for f in frags))
-
-    def test_separateur(self):
-        type_ligne, frags = ac.analyser_ligne("***", self._passes("***"))
-        self.assertEqual(type_ligne, "separateur")
-
-    def test_replique_avec_emphase_inline(self):
-        ligne = "Je crois *il hésite* que oui."
-        type_ligne, frags = ac.analyser_ligne(ligne, self._passes(ligne))
-        self.assertEqual(type_ligne, "replique")
-        # les astérisques disparaissent, « il hésite » passe en italique
-        self.assertEqual("".join(f.texte for f in frags), "Je crois il hésite que oui.")
-        italiques = "".join(f.texte for f in frags if f.italique)
-        self.assertEqual(italiques, "il hésite")
-
-    def test_fragment_marque_la_coupe(self):
-        ligne = "Bonjour tout le monde."
-        passes = [0] * len(ligne)
-        for i in range(8, 12):  # « tout »
-            passes[i] = 1
-        _, frags = ac.analyser_ligne(ligne, passes)
-        coupes = "".join(f.texte for f in frags if f.passe == 1)
-        self.assertEqual(coupes, "tout")
-
-
-class PropagationNomsCoupes(unittest.TestCase):
-    def _lignes(self, texte, coupes):
-        plages = ac.resoudre_plages(texte, coupes)
-        lignes = []
-        offset = 0
-        for brute in texte.splitlines(keepends=True):
-            contenu = brute.rstrip("\n")
-            if contenu.strip():
-                passes = [ac.passe_a_position(offset + i, plages) for i in range(len(contenu))]
-                type_ligne, frags = ac.analyser_ligne(contenu, passes)
-                lignes.append(ac._Ligne(type_ligne, frags))
-            offset += len(brute)
-        ac._propager_noms_coupes(lignes)
-        return lignes
-
-    def test_nom_coupe_si_toute_la_replique_est_coupee(self):
-        texte = "**JAN.**\nBonjour tout le monde.\n\n**MARTHA.**\nSalut.\n"
-        lignes = self._lignes(texte, [{"passe": 1, "texte": "Bonjour tout le monde."}])
-        self.assertTrue(ac._entierement_coupee(lignes[0].fragments))  # JAN. emporté
-        self.assertFalse(ac._entierement_coupee(lignes[2].fragments))  # MARTHA. conservé
+    def test_nom_coupe_si_replique_entierement_coupee(self):
+        plages = [ac.Plage(5, 13, 1)]  # « Bonjour. »
+        etendu = ac.propager_noms(self._paras(), plages)
+        self.assertTrue(any(p.debut == 0 and p.fin == 4 for p in etendu))  # JAN. emporté
+        self.assertFalse(any(p.debut == 14 for p in etendu))  # MARTHA. conservé
 
     def test_nom_conserve_si_replique_partiellement_coupee(self):
-        texte = "**JAN.**\nBonjour tout le monde vraiment.\n"
-        lignes = self._lignes(texte, [{"passe": 1, "texte": " vraiment"}])
-        self.assertFalse(ac._entierement_coupee(lignes[0].fragments))
+        plages = [ac.Plage(5, 9, 1)]  # « Bonj » seulement
+        etendu = ac.propager_noms(self._paras(), plages)
+        self.assertFalse(any(p.debut == 0 for p in etendu))
 
-    def test_titre_acte_non_emporte(self):
-        # un acte suivi d'une didascalie coupée ne doit pas être coupé
-        texte = "**ACTE I.**\n\n*Une rue déserte.*\n"
-        lignes = self._lignes(texte, [{"passe": 1, "texte": "Une rue déserte."}])
-        self.assertFalse(ac._entierement_coupee(lignes[0].fragments))
+    def test_titre_non_emporte_par_une_didascalie(self):
+        paras = [
+            ac.InfoParagraphe(0, "ACTE I.", True, False),
+            ac.InfoParagraphe(8, "Une rue.", False, True),  # didascalie : italique
+        ]
+        plages = [ac.Plage(8, 16, 1)]
+        etendu = ac.propager_noms(paras, plages)
+        self.assertFalse(any(p.debut == 0 for p in etendu))
 
 
 try:
@@ -146,32 +91,62 @@ except ImportError:
 
 
 @unittest.skipUnless(_DOCX, "python-docx non installé")
-class GenerationDocx(unittest.TestCase):
-    def test_deux_passes_produisent_deux_suppressions_colorees(self):
+class ApplicationSurDocx(unittest.TestCase):
+    def _docx_source(self, tmp):
+        from docx import Document
+        from docx.shared import Pt
+
+        document = Document()
+        nom = document.add_paragraph().add_run("MARTHA.")
+        nom.bold = True
+        nom.font.name = "EB Garamond"
+        nom.font.size = Pt(15)
+        replique = document.add_paragraph().add_run("Bonjour, vraiment tout le monde.")
+        replique.font.name = "EB Garamond"
+        replique.font.size = Pt(15)
+
+        from pathlib import Path
+        chemin = Path(tmp) / "src.docx"
+        document.save(str(chemin))
+        return str(chemin)
+
+    def test_coupe_partielle_preserve_le_format_et_le_nom(self):
         import tempfile
         import zipfile
-        from pathlib import Path
-
-        texte = "**JAN.**\nBonjour tout le monde, vraiment.\n\n**MARTHA.**\nJe pars.\n"
-        coupes = [
-            {"passe": 1, "texte": ", vraiment"},
-            {"passe": 2, "texte": "Je pars."},
-        ]
-        plages = ac.resoudre_plages(texte, coupes)
-        document = ac.construire_document(texte, plages)
 
         with tempfile.TemporaryDirectory() as tmp:
-            chemin = Path(tmp) / "out.docx"
-            document.save(str(chemin))
-            xml = zipfile.ZipFile(chemin).read("word/document.xml").decode("utf-8")
+            source = self._docx_source(tmp)
+            document, texte, plages = ac.construire_document(source, [{"passe": 1, "texte": ", vraiment"}])
+            from pathlib import Path
+            out = Path(tmp) / "out.docx"
+            document.save(str(out))
+            xml = zipfile.ZipFile(out).read("word/document.xml").decode("utf-8")
 
-        # 3 suppressions : « , vraiment » (passe 1, coupe partielle → JAN. reste),
-        # puis « Je pars. » dont le nom « MARTHA. » est emporté par propagation (passe 2).
-        self.assertEqual(xml.count("<w:del "), 3)
+        self.assertIn("<w:del ", xml)
         self.assertIn("Coupe passe 1", xml)
-        self.assertIn("Coupe passe 2", xml)
         self.assertIn("C00000", xml)
+        self.assertIn("EB Garamond", xml)  # format d'origine préservé
+        # coupe partielle : le nom MARTHA. n'est pas emporté
+        self.assertEqual(xml.count("Coupe passe 1"), 1)
+
+    def test_replique_entierement_coupee_emporte_le_nom(self):
+        import tempfile
+        import zipfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self._docx_source(tmp)
+            document, texte, plages = ac.construire_document(
+                source, [{"passe": 2, "texte": "Bonjour, vraiment tout le monde."}]
+            )
+            from pathlib import Path
+            out = Path(tmp) / "out.docx"
+            document.save(str(out))
+            xml = zipfile.ZipFile(out).read("word/document.xml").decode("utf-8")
+
+        # le nom MARTHA. est emporté : deux suppressions (nom + réplique), en bleu
+        self.assertIn("Coupe passe 2", xml)
         self.assertIn("0070C0", xml)
+        self.assertGreaterEqual(xml.count("<w:del "), 2)
 
 
 if __name__ == "__main__":

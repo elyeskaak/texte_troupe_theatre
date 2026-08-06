@@ -1,41 +1,35 @@
 """
-Matérialise des coupes sur le texte d'une pièce en un `.docx` à suivi de
-modifications Word — le texte intégral est conservé, les passages coupés
-apparaissent barrés, colorés selon la passe de coupe.
+Matérialise des coupes sur le `.docx` d'une pièce, **en préservant son format**.
 
-C'est le format de restitution imposé par `DOCTRINE.md` : rien n'est effacé, on
-relit dans Word et on accepte/rejette chaque coupe. Ici, deux séries de coupes
-coexistent, distinguées par la couleur et par l'auteur de révision, pour qu'on
-puisse traiter les deux niveaux indépendamment :
+L'outil ne régénère rien : il ouvre le `.docx` mis en forme d'origine (police,
+tailles, marges, styles) et se contente d'y **envelopper les passages coupés
+dans une marque de suppression Word** (`<w:del>`). Le texte intégral reste, en
+barré, dans exactement la même mise en forme qu'avant — c'est le format de
+restitution imposé par `DOCTRINE.md`. On relit dans Word et on accepte/rejette
+chaque coupe.
 
-- **passe 1** (coupes structurelles validées en premier) → rouge, auteur « Coupe passe 1 » ;
+Deux séries de coupes coexistent, distinguées par la couleur et par l'auteur de
+révision (Word colore par auteur ; on force en plus la couleur du texte barré) :
+
+- **passe 1** (coupes structurelles) → rouge, auteur « Coupe passe 1 » ;
 - **passe 2** (rabotage fin) → bleu, auteur « Coupe passe 2 ».
 
 Usage :
 
-    python appliquer_coupes.py <source.txt> <coupes.json> --sortie <fichier.docx>
+    python appliquer_coupes.py <source.docx> <coupes.json> --sortie <fichier.docx>
 
-`source.txt` est l'`EDIT.txt` de la pièce (convention typographique : `**titre
-ou personnage**`, `*didascalie*`, `***` séparateur, texte nu pour les répliques).
-
-`coupes.json` :
-
-    {
-      "coupes": [
-        {"passe": 1, "debut": "A-t-il fondu en larmes", "fin": "voir pleurer !"},
-        {"passe": 2, "texte": "un passage exact à retirer en entier"}
-      ]
-    }
-
-Chaque coupe désigne une plage du texte source, soit par un couple `debut`/`fin`
-(de la première occurrence de `debut` jusqu'à la fin de `fin`), soit par un
-`texte` exact. Toute ancre introuvable ou ambiguë (présente plusieurs fois)
+`coupes.json` : `{"coupes": [{"passe": 1, "debut": "…", "fin": "…"}, …]}`. Chaque
+coupe désigne une plage du texte, par un couple `debut`/`fin` (de la première
+occurrence de `debut` jusqu'à la fin de `fin`) ou par un `texte` exact. Le texte
+sur lequel les ancres sont cherchées est la concaténation des runs du document,
+paragraphes séparés par un saut de ligne. Une ancre introuvable ou ambiguë
 arrête le programme : une coupe mal ancrée doit se voir, pas se poser au hasard.
 """
 
 from __future__ import annotations
 
 import argparse
+import copy
 import itertools
 import json
 import re
@@ -43,15 +37,9 @@ import sys
 from dataclasses import dataclass
 from datetime import datetime
 
-# La console Windows par défaut (cp1252) ne sait pas encoder les guillemets
-# typographiques ni les accents du texte : sans ceci, un message d'erreur citant
-# une ancre planterait au lieu de s'afficher.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-# Une couleur et un auteur de révision par passe. Word colore les marques de
-# révision par auteur ; on force en plus la couleur du texte barré, pour que la
-# distinction tienne quel que soit le réglage d'affichage du lecteur.
 COULEURS = {1: "C00000", 2: "0070C0"}  # rouge, bleu
 AUTEURS = {1: "Coupe passe 1", 2: "Coupe passe 2"}
 
@@ -65,7 +53,7 @@ _compteur_revision = itertools.count(1)
 
 @dataclass(frozen=True)
 class Plage:
-    """Une coupe résolue : intervalle [debut, fin) du texte, et sa passe."""
+    """Une coupe résolue : intervalle [debut, fin) du texte plat, et sa passe."""
 
     debut: int
     fin: int
@@ -73,7 +61,6 @@ class Plage:
 
 
 def _localiser_unique(texte: str, motif: str, etiquette: str) -> int:
-    """Position de l'unique occurrence de `motif`, ou erreur explicite."""
     premiere = texte.find(motif)
     if premiere == -1:
         raise ValueError(f"ancre introuvable ({etiquette}) : « {motif[:60]} »")
@@ -99,8 +86,7 @@ def resoudre_plages(texte: str, coupes: list[dict]) -> list[Plage]:
             fin = debut + len(coupe["texte"])
         else:
             debut = _localiser_unique(texte, coupe["debut"], f"coupe {numero}, début")
-            pos_fin = _localiser_unique(texte, coupe["fin"], f"coupe {numero}, fin")
-            fin = pos_fin + len(coupe["fin"])
+            fin = _localiser_unique(texte, coupe["fin"], f"coupe {numero}, fin") + len(coupe["fin"])
             if fin <= debut:
                 raise ValueError(f"coupe {numero} : « fin » précède « début »")
 
@@ -110,15 +96,13 @@ def resoudre_plages(texte: str, coupes: list[dict]) -> list[Plage]:
     for precedente, suivante in zip(plages, plages[1:]):
         if suivante.debut < precedente.fin:
             raise ValueError(
-                "deux coupes se chevauchent — vérifiez le registre "
-                f"(fin {precedente.fin} > début {suivante.debut})"
+                f"deux coupes se chevauchent (fin {precedente.fin} > début {suivante.debut})"
             )
-
     return plages
 
 
 def passe_a_position(position: int, plages: list[Plage]) -> int:
-    """Passe de coupe couvrant cette position (0 si le caractère est conservé)."""
+    """Passe de coupe couvrant cette position (0 si conservée)."""
     for plage in plages:
         if plage.debut <= position < plage.fin:
             return plage.passe
@@ -126,225 +110,207 @@ def passe_a_position(position: int, plages: list[Plage]) -> int:
 
 
 # ============================================================
-# 2. DÉCOUPAGE D'UNE LIGNE EN FRAGMENTS STYLÉS
+# 2. LECTURE DU DOCX : TEXTE PLAT, RUNS, PARAGRAPHES
 # ============================================================
 
 
 @dataclass
-class Fragment:
-    """Un morceau de ligne homogène : même style et même statut de coupe."""
+class InfoRun:
+    offset: int
+    run: object  # docx.text.run.Run
 
+
+@dataclass
+class InfoParagraphe:
+    offset: int
     texte: str
     gras: bool
     italique: bool
-    passe: int  # 0 = conservé
 
 
-def _fragments(
-    contenu: str,
-    passes: list[int],
-    *,
-    gras: bool,
-    inline_italique: bool,
-    italique_base: bool = False,
-) -> list[Fragment]:
+def _est_gras(paragraphe) -> bool:
+    runs = [r for r in paragraphe.runs if r.text]
+    return bool(runs) and all(r.bold for r in runs)
+
+
+def _est_italique(paragraphe) -> bool:
+    runs = [r for r in paragraphe.runs if r.text]
+    return bool(runs) and all(r.italic for r in runs)
+
+
+def lire_document(document):
     """
-    Découpe `contenu` en fragments homogènes.
+    Concatène les runs en un texte plat et note l'emplacement de chacun.
 
-    `passes[i]` donne la passe de coupe du caractère `contenu[i]`. Si
-    `inline_italique`, les `*` basculent l'italique et ne s'affichent pas (usage
-    des répliques). `italique_base` fixe l'italique de départ : à `True` pour une
-    didascalie, dont tout le contenu est en italique.
+    Les paragraphes sont séparés par un saut de ligne — les ancres de dialogue,
+    elles, n'en contiennent pas, mais une coupe peut ainsi couvrir plusieurs
+    paragraphes consécutifs (nom + réplique, ou plusieurs répliques).
     """
-    fragments: list[Fragment] = []
-    italique = italique_base
+    parts: list[str] = []
+    runs: list[InfoRun] = []
+    paras: list[InfoParagraphe] = []
+    offset = 0
 
-    for caractere, passe in zip(contenu, passes):
-        if inline_italique and caractere == "*":
-            italique = not italique
-            continue
-
-        if fragments and fragments[-1].gras == gras and fragments[-1].italique == italique \
-                and fragments[-1].passe == passe:
-            fragments[-1].texte += caractere
-        else:
-            fragments.append(Fragment(caractere, gras, italique, passe))
-
-    return fragments
-
-
-def analyser_ligne(ligne: str, passes: list[int]) -> tuple[str, list[Fragment]]:
-    """
-    Classe une ligne (convention typographique) et la découpe en fragments.
-
-    Retourne le type (`titre`, `didascalie`, `separateur`, `replique`) et les
-    fragments à rendre, marqueurs `**`/`*` retirés.
-    """
-    strip = ligne.strip()
-
-    if strip == "***":
-        return "separateur", [Fragment("* * *", False, False, max(passes) if passes else 0)]
-
-    if len(strip) >= 4 and strip.startswith("**") and strip.endswith("**"):
-        return "titre", _fragments(strip[2:-2], passes[2:-2], gras=True, inline_italique=False)
-
-    if len(strip) >= 2 and strip.startswith("*") and strip.endswith("*"):
-        return "didascalie", _fragments(
-            strip[1:-1], passes[1:-1], gras=False, inline_italique=False, italique_base=True
+    for paragraphe in document.paragraphs:
+        debut_para = offset
+        texte_para: list[str] = []
+        for run in paragraphe.runs:
+            if run.text:
+                runs.append(InfoRun(offset, run))
+                parts.append(run.text)
+                texte_para.append(run.text)
+                offset += len(run.text)
+        paras.append(
+            InfoParagraphe(debut_para, "".join(texte_para),
+                           _est_gras(paragraphe), _est_italique(paragraphe))
         )
+        parts.append("\n")
+        offset += 1
 
-    return "replique", _fragments(strip, passes, gras=False, inline_italique=True)
+    return "".join(parts), runs, paras
 
 
 # ============================================================
-# 3. GÉNÉRATION DU DOCX À SUIVI DE MODIFICATIONS
+# 3. PROPAGATION : COUPER LE NOM D'UN PERSONNAGE ENTIÈREMENT COUPÉ
 # ============================================================
 
 
-def _ajouter_fragment(paragraphe, fragment: Fragment, date_iso: str) -> None:
-    """Ajoute un fragment au paragraphe : run normal, ou run supprimé si coupé."""
-    from docx.oxml import OxmlElement
-    from docx.oxml.ns import qn
-
-    if not fragment.texte:
-        return
-
-    if fragment.passe == 0:
-        run = paragraphe.add_run(fragment.texte)
-        run.bold = fragment.gras or None
-        run.italic = fragment.italique or None
-        return
-
-    # Run supprimé : <w:del><w:r><w:delText>… enveloppé dans une marque de
-    # révision. python-docx n'a pas d'API pour cela, on construit l'XML.
-    element_del = OxmlElement("w:del")
-    element_del.set(qn("w:id"), str(next(_compteur_revision)))
-    element_del.set(qn("w:author"), AUTEURS[fragment.passe])
-    element_del.set(qn("w:date"), date_iso)
-
-    run = OxmlElement("w:r")
-    proprietes = OxmlElement("w:rPr")
-    if fragment.gras:
-        proprietes.append(OxmlElement("w:b"))
-    if fragment.italique:
-        proprietes.append(OxmlElement("w:i"))
-    couleur = OxmlElement("w:color")
-    couleur.set(qn("w:val"), COULEURS[fragment.passe])
-    proprietes.append(couleur)
-    run.append(proprietes)
-
-    texte_supprime = OxmlElement("w:delText")
-    texte_supprime.set(qn("xml:space"), "preserve")
-    texte_supprime.text = fragment.texte
-    run.append(texte_supprime)
-
-    element_del.append(run)
-    paragraphe._p.append(element_del)
+def _para_entierement_coupe(para: InfoParagraphe, plages: list[Plage]) -> bool:
+    if not para.texte:
+        return False
+    return all(passe_a_position(para.offset + i, plages) for i in range(len(para.texte)))
 
 
-@dataclass
-class _Ligne:
-    """Une ligne significative du texte, prête à être rendue en paragraphe."""
-
-    type: str
-    fragments: list[Fragment]
-
-
-def _entierement_coupee(fragments: list[Fragment]) -> bool:
-    """Vrai si tout le texte visible de la ligne est coupé."""
-    utiles = [f for f in fragments if f.texte]
-    return bool(utiles) and all(f.passe for f in utiles)
-
-
-def _propager_noms_coupes(lignes: list[_Ligne]) -> None:
+def propager_noms(paras: list[InfoParagraphe], plages: list[Plage]) -> list[Plage]:
     """
-    Coupe le nom d'un personnage dont toute la réplique est coupée.
+    Ajoute une plage couvrant le nom d'un personnage dont toute la réplique est coupée.
 
-    Sans cela, retirer l'intégralité d'une réplique laisserait son nom seul,
-    orphelin au-dessus du vide. Un nom de personnage est un `**…**` immédiatement
-    suivi de lignes de dialogue ; s'il n'est plus suivi que de dialogue entièrement
-    coupé, il n'a plus de réplique et disparaît avec elle, dans la même couleur.
-    Un titre d'acte ou de scène, lui, n'est jamais suivi directement de dialogue :
-    il n'est donc jamais emporté par cette règle.
+    Un nom de personnage est un paragraphe en gras suivi de paragraphes de
+    dialogue (ni gras ni italique). S'ils sont tous entièrement coupés, le nom
+    n'a plus de réplique et doit disparaître avec elle, dans la même couleur. Les
+    titres d'acte ou de scène (gras aussi) ne sont jamais suivis directement de
+    dialogue : ils ne sont donc pas emportés.
     """
-    for i, ligne in enumerate(lignes):
-        if ligne.type != "titre" or _entierement_coupee(ligne.fragments):
+    ajouts: list[Plage] = []
+
+    for i, para in enumerate(paras):
+        if not para.gras or not para.texte or _para_entierement_coupe(para, plages):
             continue
 
         repliques = []
         j = i + 1
-        while j < len(lignes) and lignes[j].type == "replique":
-            repliques.append(lignes[j])
+        while j < len(paras) and not paras[j].gras and not paras[j].italique and paras[j].texte:
+            repliques.append(paras[j])
             j += 1
 
-        if repliques and all(_entierement_coupee(r.fragments) for r in repliques):
-            passe = next(f.passe for f in repliques[0].fragments if f.texte)
-            for fragment in ligne.fragments:
-                fragment.passe = passe
+        if repliques and all(_para_entierement_coupe(r, plages) for r in repliques):
+            passe = passe_a_position(repliques[0].offset, plages)
+            ajouts.append(Plage(para.offset, para.offset + len(para.texte), passe))
+
+    return sorted(plages + ajouts, key=lambda p: p.debut)
 
 
-def construire_document(texte: str, plages: list[Plage]):
-    """Construit le document Word à partir du texte source et des plages coupées."""
+# ============================================================
+# 4. APPLICATION : ENVELOPPER LES RUNS COUPÉS DANS <w:del>
+# ============================================================
+
+
+def _nouveau_run(rpr, texte: str, *, supprime: bool, passe: int, date_iso: str):
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    run = OxmlElement("w:r")
+    if rpr is not None:
+        proprietes = copy.deepcopy(rpr)
+        if supprime:
+            for ancien in proprietes.findall(qn("w:color")):
+                proprietes.remove(ancien)
+            couleur = OxmlElement("w:color")
+            couleur.set(qn("w:val"), COULEURS[passe])
+            proprietes.append(couleur)
+        run.append(proprietes)
+
+    element_texte = OxmlElement("w:delText" if supprime else "w:t")
+    element_texte.set(qn("xml:space"), "preserve")
+    element_texte.text = texte
+    run.append(element_texte)
+
+    if not supprime:
+        return run
+
+    element_del = OxmlElement("w:del")
+    element_del.set(qn("w:id"), str(next(_compteur_revision)))
+    element_del.set(qn("w:author"), AUTEURS[passe])
+    element_del.set(qn("w:date"), date_iso)
+    element_del.append(run)
+    return element_del
+
+
+def appliquer_sur_run(info: InfoRun, plages: list[Plage], date_iso: str) -> None:
+    """Découpe un run selon les plages et enveloppe les portions coupées."""
+    from docx.oxml.ns import qn
+
+    texte = info.run.text
+    passes = [passe_a_position(info.offset + i, plages) for i in range(len(texte))]
+    if not any(passes):
+        return
+
+    # segments consécutifs de même passe
+    segments: list[list] = []
+    for caractere, passe in zip(texte, passes):
+        if segments and segments[-1][1] == passe:
+            segments[-1][0] += caractere
+        else:
+            segments.append([caractere, passe])
+
+    element = info.run._element
+    rpr = element.find(qn("w:rPr"))
+    for seg_texte, passe in segments:
+        element.addprevious(
+            _nouveau_run(rpr, seg_texte, supprime=bool(passe), passe=passe, date_iso=date_iso)
+        )
+    element.getparent().remove(element)
+
+
+def construire_document(source: str, coupes: list[dict]):
+    """Ouvre le DOCX source, applique les coupes, retourne le document modifié."""
     from docx import Document
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
 
-    document = Document()
+    document = Document(source)
+    texte, runs, paras = lire_document(document)
+    plages = resoudre_plages(texte, coupes)
+    plages = propager_noms(paras, plages)
+
     date_iso = datetime.now().isoformat(timespec="seconds")
+    for info in runs:
+        appliquer_sur_run(info, plages, date_iso)
 
-    lignes: list[_Ligne] = []
-    offset = 0
-    for ligne_brute in texte.splitlines(keepends=True):
-        contenu = ligne_brute.rstrip("\n")
-        if contenu.strip():
-            passes = [passe_a_position(offset + i, plages) for i in range(len(contenu))]
-            type_ligne, fragments = analyser_ligne(contenu, passes)
-            lignes.append(_Ligne(type_ligne, fragments))
-        offset += len(ligne_brute)
-
-    _propager_noms_coupes(lignes)
-
-    for ligne in lignes:
-        paragraphe = document.add_paragraph()
-        if ligne.type in ("titre", "separateur"):
-            paragraphe.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        for fragment in ligne.fragments:
-            _ajouter_fragment(paragraphe, fragment, date_iso)
-
-    return document
+    return document, texte, plages
 
 
 # ============================================================
-# 4. POINT D'ENTRÉE
+# 5. POINT D'ENTRÉE
 # ============================================================
-
-
-def charger_coupes(chemin: str) -> list[dict]:
-    with open(chemin, encoding="utf-8") as f:
-        return json.load(f)["coupes"]
 
 
 def main(argv: list[str] | None = None) -> int:
-    analyseur = argparse.ArgumentParser(description=__doc__.splitlines()[1])
-    analyseur.add_argument("source", help="EDIT.txt de la pièce")
+    analyseur = argparse.ArgumentParser(description="Matérialise des coupes en .docx à suivi de modifications.")
+    analyseur.add_argument("source", help="le .docx mis en forme d'origine")
     analyseur.add_argument("coupes", help="fichier JSON des coupes")
     analyseur.add_argument("--sortie", required=True, help="chemin du .docx à écrire")
     options = analyseur.parse_args(argv)
 
-    with open(options.source, encoding="utf-8") as f:
-        texte = f.read()
+    with open(options.coupes, encoding="utf-8") as f:
+        coupes = json.load(f)["coupes"]
 
-    plages = resoudre_plages(texte, charger_coupes(options.coupes))
-
-    document = construire_document(texte, plages)
+    document, texte, plages = construire_document(options.source, coupes)
     document.save(options.sortie)
 
-    mots_coupes = sum(
-        len(re.findall(r"\S+", texte[p.debut:p.fin])) for p in plages
-    )
+    mots = sum(len(re.findall(r"\S+", texte[p.debut:p.fin])) for p in plages)
     par_passe = {passe: sum(1 for p in plages if p.passe == passe) for passe in (1, 2)}
     print(f"{options.sortie} écrit.")
-    print(f"{len(plages)} coupes ({par_passe[1]} en passe 1, {par_passe[2]} en passe 2), "
-          f"~{mots_coupes} mots barrés.")
+    print(f"{len(plages)} coupes après propagation ({par_passe[1]} passe 1, {par_passe[2]} passe 2), "
+          f"~{mots} mots barrés.")
     return 0
 
 

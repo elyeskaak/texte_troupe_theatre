@@ -67,11 +67,11 @@ Toujours signaler explicitement la fonction identifiée (exposition / farce / in
 
 `.docx` à suivi de modifications Word (`<w:del>`), texte intégral conservé et visible en barré : on relit dans Word et on accepte/rejette chaque coupe. Rien n'est effacé.
 
-`appliquer_coupes.py` produit ce fichier à partir du texte source (`EDIT.txt`, convention typographique) et d'un fichier de coupes `sorties/coupes_<pièce>.json` — une liste de `{passe, debut, fin}` (couper de la 1ʳᵉ occurrence de `debut` jusqu'à la fin de `fin`) ou `{passe, texte}` (couper ce passage exact) :
+`appliquer_coupes.py` produit ce fichier **à partir du `.docx` mis en forme d'origine** : il n'y insère que les marques de suppression, sans toucher à la police, aux tailles ni aux styles — le format est préservé par construction, pas reproduit à l'approximation. Les coupes sont décrites dans `sorties/coupes_<pièce>.json` — une liste de `{passe, debut, fin}` (couper de la 1ʳᵉ occurrence de `debut` jusqu'à la fin de `fin`) ou `{passe, texte}` (couper ce passage exact) :
 
-    python appliquer_coupes.py <EDIT.txt> sorties/coupes_<pièce>.json --sortie <pièce>_coupes.docx
+    python appliquer_coupes.py <Pièce.docx> sorties/coupes_<pièce>.json --sortie <Pièce>_coupes.docx
 
-Une ancre introuvable ou ambiguë arrête le programme : une coupe mal ancrée doit se voir, pas se poser au hasard.
+Les ancres sont cherchées dans la concaténation des runs du document (paragraphes séparés par un saut de ligne). Une ancre introuvable ou ambiguë arrête le programme : une coupe mal ancrée doit se voir, pas se poser au hasard. Un nom de personnage dont toute la réplique est coupée est emporté avec elle.
 
 Les coupes se mènent en **deux passes**, distinguées dans le `.docx` par leur couleur (deux auteurs de révision distincts, donc acceptables/rejetables séparément dans Word) :
 
