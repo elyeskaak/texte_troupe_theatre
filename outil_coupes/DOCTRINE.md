@@ -80,6 +80,19 @@ Les coupes se mènent en **deux passes**, distinguées dans le `.docx` par leur 
 
 Le registre lisible des coupes validées, scène par scène, vit dans `sorties/coupes_<pièce>.md` (avec la distribution `cast.json` et les matrices de présence). Ce dossier `sorties/` est un espace de travail par production, non versionné.
 
+### Relecture croisée : fusionner coupes humaines et calculées
+
+Quand un relecteur a déjà proposé ses coupes dans un `.docx` (suivi de modifications), `fusion_coupes.py` les superpose aux coupes calculées, en trois couleurs, sur le texte source — pour arbitrer d'un coup d'œil :
+
+    python fusion_coupes.py <source.docx> <relecteur.docx> sorties/coupes_<pièce>.json --sortie <fusion.docx>
+
+* les coupes du **relecteur → vert**, et **prioritaires** : un passage coupé par les deux lui revient ;
+* mes coupes **passe 1 → rouge**, **passe 2 → bleu** — elles ne marquent donc que *mes ajouts*, ce que le relecteur n'avait pas coupé.
+
+Le format d'origine est préservé (on part du `.docx` source). L'alignement des coupes du relecteur sur la source tolère ses propres retouches (insertions, corrections) : rapide par lignes, puis fin caractère par caractère sur les seules lignes qu'il a modifiées. On relit ensuite **le rouge et le bleu** dans Word — le vert est déjà la décision du relecteur.
+
+C'est le moyen concret d'appliquer la règle « recalculer après chaque passe » à quatre mains : le relecteur voit ses coupes conservées et n'a plus qu'à trancher les propositions supplémentaires.
+
 
 
 ## Limites connues
